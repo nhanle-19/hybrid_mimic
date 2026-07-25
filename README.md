@@ -41,8 +41,7 @@ RL/PD baseline.
 This repository is the Isaac Lab training implementation for HybridMimic and also includes evaluation utilities. It
 is based on the
 [BeyondMimic motion-tracking training repository](https://github.com/HybridRobotics/whole_body_tracking), which
-provides the underlying motion-tracking environment and RSL-RL training structure. If you use this repository,
-please cite both HybridMimic and BeyondMimic as described in the [Citation](#citation) section.
+provides the underlying motion-tracking environment and RSL-RL training structure.
 
 ## Installation
 
