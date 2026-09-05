@@ -10,6 +10,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+from pathlib import Path
 import numpy as np
 
 from isaaclab.app import AppLauncher
@@ -307,15 +308,20 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, joi
             ):
                 log[k] = np.stack(log[k], axis=0)
 
-            np.savez("/tmp/motion.npz", **log)
-            print("[INFO]: Converted training motion saved locally: /tmp/motion.npz", flush=True)
+            output_dir = Path(__file__).resolve().parents[1] / "retargeted_motion"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / f"{Path(args_cli.output_name).name}_training.npz"
+            np.savez(output_path, **log)
+            print(f"[INFO]: Converted training motion saved locally: {output_path}", flush=True)
 
             import wandb
 
             COLLECTION = args_cli.output_name
             run = wandb.init(project="csv_to_npz", name=COLLECTION)
             print(f"[INFO]: Logging motion to wandb: {COLLECTION}")
-            run.log_artifact(artifact_or_path="/tmp/motion.npz", name=COLLECTION, type="motions")
+            artifact = wandb.Artifact(name=COLLECTION, type="motions")
+            artifact.add_file(str(output_path), name="motion.npz")
+            run.log_artifact(artifact)
             artifact_path = f"{run.entity}/{run.project}/{COLLECTION}:latest"
             run.finish()
             print(f"[INFO]: Motion uploaded. Train with --registry_name {artifact_path}", flush=True)

@@ -77,11 +77,11 @@ Remove `--headless` to run with the Isaac Sim GUI.
 
 ### Train from a local motion file
 
-The converter saves `/tmp/motion.npz` before uploading to W&B. After conversion
-completes, save the converted training file alongside the raw retargeted motion:
+The converter saves `retargeted_motion/<output_name>_training.npz` in the
+repository before uploading to W&B. For the G18 command above, this is:
 
-```bash
-cp /tmp/motion.npz retargeted_motion/g18_push_kick_right_t1_training.npz
+```text
+retargeted_motion/g18_push_kick_right_t1_training.npz
 ```
 
 For training on another machine, transfer this converted file to that machine
