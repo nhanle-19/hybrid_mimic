@@ -78,11 +78,10 @@ Remove `--headless` to run with the Isaac Sim GUI.
 ### Train from a local motion file
 
 The converter saves `/tmp/motion.npz` before uploading to W&B. After conversion
-completes, copy it to a persistent location:
+completes, save the converted training file alongside the raw retargeted motion:
 
 ```bash
-mkdir -p data/retargeted
-cp /tmp/motion.npz data/retargeted/g18_push_kick_right_t1_training.npz
+cp /tmp/motion.npz retargeted_motion/g18_push_kick_right_t1_training.npz
 ```
 
 For training on another machine, transfer this converted file to that machine
@@ -91,7 +90,7 @@ first. Use `--motion_file` instead of `--registry_name`:
 ```bash
 python scripts/rsl_rl/train.py \
   --task Tracking-Momentum-T1-v0 \
-  --motion_file data/retargeted/g18_push_kick_right_t1_training.npz \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --num_envs 1024 \
   --headless \
   --logger tensorboard \
@@ -101,6 +100,26 @@ python scripts/rsl_rl/train.py \
 This command needs no W&B authentication. The input must be the converted file
 containing joint velocities and body transforms; the raw retargeted NPZ and
 terminal logs cannot be used directly for training.
+
+### Validate the pipeline with the PD baseline
+
+Run a short check with the original `Tracking-Flat-T1-v0` task before training
+the momentum controller:
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task Tracking-Flat-T1-v0 \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --num_envs 64 \
+  --max_iterations 20 \
+  --headless \
+  --logger tensorboard \
+  --run_name pd_pipeline_check
+```
+
+Check that PPO iterations complete with finite losses and a checkpoint is saved
+under `logs/rsl_rl/t1_flat/`. For full baseline training, remove
+`--max_iterations 20` and increase `--num_envs` as GPU memory allows.
 
 ## Play
 
