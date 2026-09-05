@@ -27,6 +27,36 @@ wandb login
 
 Run all commands below from the repository root.
 
+## Convert a retargeted motion
+
+In your Isaac Lab environment, convert the retargeted G18 kick into the training
+format and upload it to W&B. As an alternative to `wandb login`, use this Bash
+prompt to pass the API key directly to the conversion command:
+
+```bash
+read -rsp "W&B API key: " WANDB_API_KEY
+echo
+
+WANDB_API_KEY="$WANDB_API_KEY" python scripts/csv_to_npz.py \
+  --input_file retargeted_motion/g18_push_kick_right_t1.npz \
+  --input_fps 30 \
+  --output_fps 50 \
+  --output_name g18_push_kick_right_t1 \
+  --headless
+```
+
+Wait for the W&B upload to finish, then stop the replay with Ctrl+C. The key
+remains a shell variable and is passed to this command without `export`.
+A detached tmux pane keeps its shell and variables alive until the shell exits.
+
+The source motion is approximately 29.7406 FPS; the converter currently uses
+integer input FPS, so `--input_fps 30` makes playback approximately 0.9% faster.
+
+For training, use `--registry_name ENTITY/csv_to_npz/g18_push_kick_right_t1:latest`,
+replacing `ENTITY` with the W&B username or team that owns the artifact. To use
+the key in the same shell, prefix the training command with
+`WANDB_API_KEY="$WANDB_API_KEY"` as above.
+
 ## Train
 
 Use the new Momentum WBC task with the existing RSL-RL training script:
@@ -44,6 +74,33 @@ python scripts/rsl_rl/train.py \
 If the artifact path does not include an alias, the training script appends `:latest`.
 
 Remove `--headless` to run with the Isaac Sim GUI.
+
+### Train from a local motion file
+
+The converter saves `/tmp/motion.npz` before uploading to W&B. After conversion
+completes, copy it to a persistent location:
+
+```bash
+mkdir -p data/retargeted
+cp /tmp/motion.npz data/retargeted/g18_push_kick_right_t1_training.npz
+```
+
+For training on another machine, transfer this converted file to that machine
+first. Use `--motion_file` instead of `--registry_name`:
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task Tracking-Momentum-T1-v0 \
+  --motion_file data/retargeted/g18_push_kick_right_t1_training.npz \
+  --num_envs 1024 \
+  --headless \
+  --logger tensorboard \
+  --run_name momentum_g18_push_kick_right
+```
+
+This command needs no W&B authentication. The input must be the converted file
+containing joint velocities and body transforms; the raw retargeted NPZ and
+terminal logs cannot be used directly for training.
 
 ## Play
 
