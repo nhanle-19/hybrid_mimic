@@ -42,3 +42,7 @@ _build
 artifacts/
 data/
 eval_data/
+
+# Local SMPL-X motion dataset
+/ACCAD/
+/models_smplx_v1_1/
