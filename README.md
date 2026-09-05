@@ -101,25 +101,29 @@ This command needs no W&B authentication. The input must be the converted file
 containing joint velocities and body transforms; the raw retargeted NPZ and
 terminal logs cannot be used directly for training.
 
-### Validate the pipeline with the PD baseline
+### Train the PD baseline (W&B logging)
 
-Run a short check with the original `Tracking-Flat-T1-v0` task before training
-the momentum controller:
+Use the original `Tracking-Flat-T1-v0` task with the local converted motion and
+log training metrics to W&B. Enter the API key in the same Bash terminal:
 
 ```bash
-python scripts/rsl_rl/train.py \
+read -rsp "W&B API key: " WANDB_API_KEY
+echo
+
+WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
   --task Tracking-Flat-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --num_envs 64 \
-  --max_iterations 20 \
+  --num_envs 1024 \
   --headless \
-  --logger tensorboard \
-  --run_name pd_pipeline_check
+  --logger wandb \
+  --log_project_name hybrid_mimic \
+  --run_name pd_g18_push_kick_right
 ```
 
-Check that PPO iterations complete with finite losses and a checkpoint is saved
-under `logs/rsl_rl/t1_flat/`. For full baseline training, remove
-`--max_iterations 20` and increase `--num_envs` as GPU memory allows.
+This runs the full configured iteration count. For a short pipeline check, use
+`--num_envs 64 --max_iterations 20 --run_name pd_pipeline_check` instead.
+Check that PPO iterations complete with finite losses and checkpoints are saved
+under `logs/rsl_rl/t1_flat/`.
 
 ## Play
 
