@@ -11,15 +11,76 @@ The new task IDs are:
 
 ## Setup
 
-Install Isaac Lab v2.1.0 with the same Python environment you use to run Isaac Sim.
+Use the following target stack in one Conda environment:
+
+| Component | Version |
+| --- | --- |
+| Python | 3.10 |
+| Isaac Sim | 4.5.0 |
+| Isaac Lab | 2.2.0 (Git tag `v2.2.0`) |
+| PyTorch | 2.7.0, CUDA 12.8 wheel (`cu128`) |
+| torchvision | 0.22.0, CUDA 12.8 wheel (`cu128`) |
+| RSL-RL (`rsl-rl-lib`) | 2.3.3 |
+| NumPy | 1.26.4 (`numpy<2` required) |
+| W&B | `wandb>=0.19` (project requirement) |
+
+Isaac Lab 2.2.0 supports Isaac Sim 4.5 and supplies the quaternion inverse and
+filtered contact-force history APIs used by the tasks. See the
+[release notes](https://github.com/isaac-sim/IsaacLab/releases/tag/v2.2.0) and
+[RSL-RL dependency definitions](https://github.com/isaac-sim/IsaacLab/blob/v2.2.0/source/isaaclab_rl/setup.py).
+This is the migration target; full project training on this stack has not yet
+been validated. Run the short PD pipeline check below before full training.
+
+### Migrate an existing Conda environment
+
+These commands assume `hybridmimic` already contains Isaac Sim 4.5.0. Clone it
+to retain the existing environment, and disable user-site packages in the clone
+to avoid loading conflicting packages from `~/.local`:
+
+```bash
+conda create -n hybridmimic22 --clone hybridmimic
+conda activate hybridmimic22
+conda env config vars set PYTHONNOUSERSITE=1
+conda deactivate
+conda activate hybridmimic22
+```
+
+From the project repository root, download Isaac Lab alongside the project:
+
+```bash
+cd ..
+git clone --branch v2.2.0 --depth 1 \
+  https://github.com/isaac-sim/IsaacLab.git IsaacLab-2.2.0
+cd IsaacLab-2.2.0
+
+python -m pip install \
+  "torch==2.7.0" "torchvision==0.22.0" \
+  --index-url https://download.pytorch.org/whl/cu128
+
+python -m pip install "numpy==1.26.4" \
+  -e source/isaaclab \
+  -e source/isaaclab_assets \
+  -e source/isaaclab_tasks \
+  -e source/isaaclab_mimic \
+  -e "source/isaaclab_rl[rsl_rl]"
+
+cd ../hybrid_mimic
+```
+
+This installs the Python packages without invoking the Isaac Lab installer's
+system-package installation step. The CUDA wheel requires a compatible NVIDIA
+driver. To return to the previous environment, run `conda activate hybridmimic`.
 
 From the repository root, install this package in editable mode:
 
 ```bash
 python -m pip install -e source/whole_body_tracking
+python -m pip check
 ```
 
-Training uses Weights & Biases motion artifacts, so authenticate before training:
+Resolve reported dependency conflicts before training. For W&B artifact access
+or W&B logging, authenticate with the command below or use the per-command API
+key examples later in this README:
 
 ```bash
 wandb login
