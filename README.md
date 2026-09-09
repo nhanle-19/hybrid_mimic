@@ -100,21 +100,16 @@ python -c "import sys, site, rsl_rl; print(sys.executable); print('User packages
 User packages should be disabled (`False`), and RSL-RL should load from the
 `hybridmimic` environment rather than another project's editable checkout.
 
-Resolve reported dependency conflicts before training. For W&B artifact access
-or W&B logging, authenticate with the command below or use the per-command API
-key examples later in this README:
-
-```bash
-wandb login
-```
+Resolve reported dependency conflicts before training. The examples below pass
+the W&B API key to each command explicitly.
 
 Run all commands below from the repository root.
 
 ## Convert a retargeted motion
 
 In your Isaac Lab environment, convert the retargeted G18 kick into the training
-format and upload it to W&B. As an alternative to `wandb login`, use this Bash
-prompt to pass the API key directly to the conversion command:
+format and upload it to W&B. Use this Bash prompt to pass the API key directly
+to the conversion command:
 
 ```bash
 read -rsp "W&B API key: " WANDB_API_KEY
@@ -142,15 +137,23 @@ the key in the same shell, prefix the training command with
 
 ## Train
 
+All training examples use W&B logging in the `hybrid_mimic` project. Activate
+`hybridmimic` before running them. Each example prompts for an API key and
+passes it to that training process with `WANDB_API_KEY="$WANDB_API_KEY"`.
+The motion source (local NPZ or W&B artifact) is independent of the logger.
+
 Use the new Momentum WBC task with the existing RSL-RL training script:
 
 ```bash
-python scripts/rsl_rl/train.py \
+read -rsp "W&B API key: " WANDB_API_KEY
+echo
+
+WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
   --task Tracking-Momentum-T1-v0 \
   --registry_name ENTITY/PROJECT/MOTION_ARTIFACT:latest \
   --headless \
   --logger wandb \
-  --log_project_name PROJECT_NAME \
+  --log_project_name hybrid_mimic \
   --run_name RUN_NAME
 ```
 
@@ -171,23 +174,29 @@ For training on another machine, transfer this converted file to that machine
 first. Use `--motion_file` instead of `--registry_name`:
 
 ```bash
-python scripts/rsl_rl/train.py \
+read -rsp "W&B API key: " WANDB_API_KEY
+echo
+
+WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
   --task Tracking-Momentum-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --num_envs 1024 \
+  --max_iterations 30000 \
   --headless \
-  --logger tensorboard \
+  --logger wandb \
+  --log_project_name hybrid_mimic \
   --run_name momentum_g18_push_kick_right
 ```
 
-This command needs no W&B authentication. The input must be the converted file
+This loads the motion locally and logs training metrics to W&B using the API
+key supplied to the command. The input must be the converted file
 containing joint velocities and body transforms; the raw retargeted NPZ and
 terminal logs cannot be used directly for training.
 
-### Train the PD baseline (W&B logging)
+### Train the PD baseline
 
 Use the original `Tracking-Flat-T1-v0` task with the local converted motion and
-log training metrics to W&B. Enter the API key in the same Bash terminal:
+log training metrics to the same W&B project:
 
 ```bash
 read -rsp "W&B API key: " WANDB_API_KEY
