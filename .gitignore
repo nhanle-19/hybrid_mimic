@@ -29,6 +29,28 @@
 docker/artifacts/
 *.tmp
 
+# Generated checkpoints, policy exports, and logs (including outside logs/)
+**/checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.log
+*.log.*
+events.out.tfevents.*
+
+# Generated video recordings
+*.mp4
+*.webm
+*.avi
+*.mov
+*.mkv
+
+# Reference trajectories are training inputs: do not blanket-ignore *.npz.
+# Keep reference files in retargeted_motion/; generated evaluation NPZs belong
+# in eval_data/, which is ignored below.
+
 # Isaac-Sim packman
 _isaac_sim*
 _repo

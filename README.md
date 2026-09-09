@@ -11,11 +11,11 @@ The new task IDs are:
 
 ## Setup
 
-Use the following target stack in one Conda environment:
+Use a dedicated Conda environment named `hybridmimic` with the following stack:
 
 | Component | Version |
 | --- | --- |
-| Python | 3.10 |
+| Python | 3.10.21 |
 | Isaac Sim | 4.5.0 |
 | Isaac Lab | 2.2.0 (Git tag `v2.2.0`) |
 | PyTorch | 2.7.0, CUDA 12.8 wheel (`cu128`) |
@@ -28,21 +28,35 @@ Isaac Lab 2.2.0 supports Isaac Sim 4.5 and supplies the quaternion inverse and
 filtered contact-force history APIs used by the tasks. See the
 [release notes](https://github.com/isaac-sim/IsaacLab/releases/tag/v2.2.0) and
 [RSL-RL dependency definitions](https://github.com/isaac-sim/IsaacLab/blob/v2.2.0/source/isaaclab_rl/setup.py).
-This is the migration target; full project training on this stack has not yet
-been validated. Run the short PD pipeline check below before full training.
+The reported server training environment uses Python 3.10.21, Isaac Sim
+4.5.0.0, the Isaac Lab 2.2.0 checkout (`isaaclab` package 0.44.9 and
+`isaaclab_rl` package 0.2.3), RSL-RL 2.3.3, and PyTorch 2.7.0+cu128.
+The remaining pins above are repository setup requirements, not a complete
+server dependency snapshot. Exact reproduction also requires the server's
+dependency freeze and any source modifications. A fresh local installation
+still needs the short PD pipeline check below before full training.
 
-### Migrate an existing Conda environment
+### Create a fresh Conda environment
 
-These commands assume `hybridmimic` already contains Isaac Sim 4.5.0. Clone it
-to retain the existing environment, and disable user-site packages in the clone
-to avoid loading conflicting packages from `~/.local`:
+Run these commands on the local machine. If `hybridmimic` already exists,
+inspect it before proceeding; these instructions do not remove existing
+environments. Disable user-site packages to avoid loading conflicting packages
+or editable checkouts from `~/.local`:
 
 ```bash
-conda create -n hybridmimic22 --clone hybridmimic
-conda activate hybridmimic22
+conda create -n hybridmimic python=3.10.21 pip -y
+conda activate hybridmimic
 conda env config vars set PYTHONNOUSERSITE=1
 conda deactivate
-conda activate hybridmimic22
+conda activate hybridmimic
+
+python -m pip install --upgrade pip
+python -m pip install \
+  "torch==2.7.0" "torchvision==0.22.0" \
+  --index-url https://download.pytorch.org/whl/cu128
+python -m pip install \
+  "isaacsim[all,extscache]==4.5.0" \
+  --extra-index-url https://pypi.nvidia.com
 ```
 
 From the project repository root, download Isaac Lab alongside the project:
@@ -50,26 +64,24 @@ From the project repository root, download Isaac Lab alongside the project:
 ```bash
 cd ..
 git clone --branch v2.2.0 --depth 1 \
-  https://github.com/isaac-sim/IsaacLab.git IsaacLab-2.2.0
-cd IsaacLab-2.2.0
-
-python -m pip install \
-  "torch==2.7.0" "torchvision==0.22.0" \
-  --index-url https://download.pytorch.org/whl/cu128
+  https://github.com/isaac-sim/IsaacLab.git IsaacLab-hybridmimic-2.2.0
+cd IsaacLab-hybridmimic-2.2.0
 
 python -m pip install "numpy==1.26.4" \
+  "torch==2.7.0" "torchvision==0.22.0" "rsl-rl-lib==2.3.3" \
   -e source/isaaclab \
   -e source/isaaclab_assets \
   -e source/isaaclab_tasks \
   -e source/isaaclab_mimic \
-  -e "source/isaaclab_rl[rsl_rl]"
+  -e source/isaaclab_rl
 
 cd ../hybrid_mimic
 ```
 
 This installs the Python packages without invoking the Isaac Lab installer's
 system-package installation step. The CUDA wheel requires a compatible NVIDIA
-driver. To return to the previous environment, run `conda activate hybridmimic`.
+driver. Installation references: [Isaac Sim 4.5](https://docs.isaacsim.omniverse.nvidia.com/4.5.0/installation/install_python.html)
+and [PyTorch previous versions](https://pytorch.org/get-started/previous-versions/).
 
 From the repository root, install this package in editable mode:
 
@@ -77,6 +89,16 @@ From the repository root, install this package in editable mode:
 python -m pip install -e source/whole_body_tracking
 python -m pip check
 ```
+
+Verify versions and import locations in the activated environment:
+
+```bash
+python -m pip show isaacsim isaaclab isaaclab-rl rsl-rl-lib torch
+python -c "import sys, site, rsl_rl; print(sys.executable); print('User packages enabled:', site.ENABLE_USER_SITE); print(rsl_rl.__file__)"
+```
+
+User packages should be disabled (`False`), and RSL-RL should load from the
+`hybridmimic` environment rather than another project's editable checkout.
 
 Resolve reported dependency conflicts before training. For W&B artifact access
 or W&B logging, authenticate with the command below or use the per-command API
@@ -205,6 +227,26 @@ Optional flags:
 ```
 
 Playback also exports the loaded policy to ONNX in the checkpoint run directory.
+
+## Record the reference motion
+
+Replay the converted training NPZ directly on T1 and record one full motion
+cycle, without a policy or physics stepping:
+
+```bash
+conda activate hybridmimic
+python scripts/replay_npz.py \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --headless --video \
+  --output_file eval_data/g18_reference.mp4
+```
+
+The recording starts at frame zero, uses the NPZ's FPS, and exits after the
+last frame. Add `--video_length 500` to cap the recording at 500 frames.
+Omit `--headless --video` for looping interactive playback. The existing
+`--registry_name ENTITY/PROJECT/ARTIFACT:latest` input remains available as an
+alternative to `--motion_file`. Use the converted `_training.npz`, which has
+full-body transforms and velocities; raw retargeted files need conversion first.
 
 ## Tracking Evaluation
 
