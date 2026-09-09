@@ -141,6 +141,9 @@ All training examples use W&B logging in the `hybrid_mimic` project. Activate
 `hybridmimic` before running them. Each example prompts for an API key and
 passes it to that training process with `WANDB_API_KEY="$WANDB_API_KEY"`.
 The motion source (local NPZ or W&B artifact) is independent of the logger.
+`CUDA_VISIBLE_DEVICES=0` selects GPU 0 for each training process; change `0` to
+the GPU index you want to use. Training defaults to 30,000 iterations; use
+`--max_iterations` only to override that default.
 
 Use the new Momentum WBC task with the existing RSL-RL training script:
 
@@ -148,7 +151,7 @@ Use the new Momentum WBC task with the existing RSL-RL training script:
 read -rsp "W&B API key: " WANDB_API_KEY
 echo
 
-WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
+CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
   --task Tracking-Momentum-T1-v0 \
   --registry_name ENTITY/PROJECT/MOTION_ARTIFACT:latest \
   --headless \
@@ -177,11 +180,10 @@ first. Use `--motion_file` instead of `--registry_name`:
 read -rsp "W&B API key: " WANDB_API_KEY
 echo
 
-WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
+CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
   --task Tracking-Momentum-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --num_envs 1024 \
-  --max_iterations 30000 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
@@ -202,7 +204,7 @@ log training metrics to the same W&B project:
 read -rsp "W&B API key: " WANDB_API_KEY
 echo
 
-WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
+CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
   --task Tracking-Flat-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --num_envs 1024 \
