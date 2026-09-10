@@ -111,7 +111,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
 
     # create isaac environment
-    if args_cli.task in ("Tracking-Hybrid-T1-v0", "Tracking-Momentum-T1-v0"):
+    if args_cli.task in ("Tracking-Hybrid-T1-v0", "Tracking-FloatingModel-T1-v0"):
         env_cfg.decimation = 10
         env_cfg.sim.dt = 0.02 / 10
     env_cfg.decimation = 10
@@ -164,8 +164,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # Simulate for 700 timesteps
     if args_cli.task == "Tracking-Hybrid-T1-v0":
         eval_name = "eval_data/hybrid_eval_data.npz"
-    elif args_cli.task == "Tracking-Momentum-T1-v0":
-        eval_name = "eval_data/momentum_eval_data.npz"
+    elif args_cli.task == "Tracking-FloatingModel-T1-v0":
+        eval_name = "eval_data/floating_model_eval_data.npz"
     else:
         eval_name = "eval_data/pd_eval_data.npz"
 

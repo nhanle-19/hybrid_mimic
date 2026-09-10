@@ -4,8 +4,8 @@ from whole_body_tracking.tasks.tracking.config.t1_hybrid.controller_cfg import T
 
 
 @configclass
-class T1MomentumControllerCfg(T1HybridControllerCfg):
-    """T1 parameters for the momentum-based whole-body controller."""
+class T1FloatingModelControllerCfg(T1HybridControllerCfg):
+    """T1 parameters for the floating-base whole-body controller."""
 
     joint_position_gain: float = 40.0
     joint_velocity_gain: float = 4.0

@@ -22,6 +22,7 @@ parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--motion_file", type=str, default=None, help="Path to the motion file.")
 parser.add_argument("--checkpoint_no", type=int, default=None, help="Checkpoint number to load.")
 parser.add_argument("--debug_observations", action="store_true", help="Print the first environment's observation vector every step.")
+parser.add_argument("--record_contacts", action="store_true", help="Save control-rate normal contact forces and available model wrenches in the evaluation NPZ.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -67,7 +68,9 @@ body_names = [
 ]
 
 def _get_body_indexes(command, body_names: list[str] | None) -> list[int]:
-    return [i for i, name in enumerate(command.cfg.body_names) if (body_names is None) or (name in body_names)]
+    if body_names is None:
+        return list(range(len(command.cfg.body_names)))
+    return [command.cfg.body_names.index(name) for name in body_names]
 
 @hydra_task_config(args_cli.task, "rsl_rl_cfg_entry_point")
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlOnPolicyRunnerCfg):
@@ -194,6 +197,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     total_steps = min(duration, args_cli.video_length) if args_cli.video else duration
     progress_interval = max(1, total_steps // 5)
+    contact_samples = {}
+    contact_metadata = {}
+    if args_cli.record_contacts:
+        contact_sensor = env.unwrapped.scene.sensors["contact_forces"]
+        contact_metadata = {
+            "contact_body_names": np.asarray(contact_sensor.body_names),
+            "control_dt": np.asarray(env.unwrapped.step_dt),
+            "contact_force_description": np.asarray("Isaac Lab 2.2 net normal contact forces; excludes friction; sampled after env.step"),
+        }
+        controller = getattr(env.unwrapped, "hybrid_controller", None)
+        if controller is not None:
+            contact_metadata["model_contact_body_names"] = np.asarray(controller.end_effector_names)
+        print("[INFO] Recording contact diagnostics at the control rate.", flush=True)
     print(f"[INFO] Starting evaluation: {env_cfg.scene.num_envs} environments, {total_steps} steps.", flush=True)
     for c in range(duration):
         # run everything in inference mode
@@ -218,6 +234,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             command = env.unwrapped.command_manager.get_term("motion")
             action_ = env.unwrapped.action_manager.get_term("joint_pos")
             obs, _, _, _ = env.step(actions)
+            if args_cli.record_contacts:
+                sample = {
+                    "contact_net_forces_w": contact_sensor.data.net_forces_w,
+                    "contact_sample_reset": env.unwrapped.reset_buf,
+                }
+                model_info = getattr(env.unwrapped, "hybrid_rew_info", None)
+                if model_info is not None:
+                    # Wrenches are predictions from the final physics substep,
+                    # not measured forces or a control-interval average.
+                    sample["model_contact_wrench_w"] = model_info["grf"].reshape(env_cfg.scene.num_envs, -1, 6)
+                    sample["model_force_logits"] = model_info["w"]
+                for key, value in sample.items():
+                    contact_samples.setdefault(key, []).append(value.detach().cpu().numpy().copy())
             body_ids = _get_body_indexes(command, body_names)
 
             
@@ -252,7 +281,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 break
     eval_name = "eval_data/tracking_play_data.npz"
     os.makedirs(os.path.dirname(eval_name), exist_ok=True)
+    contact_output = {key: np.stack(values) for key, values in contact_samples.items()}
+    contact_output.update(contact_metadata)
     np.savez(eval_name, **{
+                            **contact_output,
+                            "body_names": np.asarray(body_names),
                             "sim_action": sim_action,
                             "sim_pos": sim_pos,
                             "sim_vel": sim_vel,

@@ -1,13 +1,26 @@
-# HybridMimic Momentum WBC Task
+# HybridMimic Floating Model Task
 
-This repository variant adds a new HybridMimic task for the Booster T1 that keeps the same RSL-RL training structure as the hybrid controller task, but replaces the centroidal controller with a momentum-based whole-body controller inspired by Koolen et al., *Design of a Momentum-Based Control Framework and Application to the Humanoid Robot Atlas*.
+The separate **Atlas-style centroidal controller** is available as
+`Tracking-Atlas-T1-v0` and `Tracking-Atlas-T1-Eval-v0`. It uses physical point
+contacts, an inequality-constrained QP, and a new 29-action policy interface.
+See [the formulation, tests, evaluation commands, and documented deviations](docs/atlas_controller.md).
+The `floating_model` task remains the baseline.
+
+This repository variant adds a new HybridMimic task for the Booster T1 that keeps the same RSL-RL training structure as the hybrid controller task, but replaces the centroidal controller with a floating-base whole-body controller inspired by Koolen et al., *Design of a Momentum-Based Control Framework and Application to the Humanoid Robot Atlas*.
 
 The new task IDs are:
 
 | Use | Task |
 | --- | --- |
-| Training | `Tracking-Momentum-T1-v0` |
-| Evaluation | `Tracking-Momentum-T1-Eval-v0` |
+| Training | `Tracking-FloatingModel-T1-v0` |
+| Evaluation | `Tracking-FloatingModel-T1-Eval-v0` |
+
+The task formerly named `momentum` is now `floating_model`. New training runs
+use `logs/rsl_rl/t1_floating_model/`. To evaluate or resume a checkpoint saved
+under the old experiment folder, use the new task ID and add
+`--experiment_name t1_momentum`. Existing run directories and comparison NPZs
+retain their original names. The comparison plotter accepts `--floating_model`
+(`--momentum` remains an alias) and labels this controller as "Floating model".
 
 ## Setup
 
@@ -145,14 +158,14 @@ The motion source (local NPZ or W&B artifact) is independent of the logger.
 the GPU index you want to use. Training defaults to 30,000 iterations; use
 `--max_iterations` only to override that default.
 
-Use the new Momentum WBC task with the existing RSL-RL training script:
+Use the new Floating Model task with the existing RSL-RL training script:
 
 ```bash
 read -rsp "W&B API key: " WANDB_API_KEY
 echo
 
 CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
-  --task Tracking-Momentum-T1-v0 \
+  --task Tracking-FloatingModel-T1-v0 \
   --registry_name ENTITY/PROJECT/MOTION_ARTIFACT:latest \
   --headless \
   --logger wandb \
@@ -181,13 +194,13 @@ read -rsp "W&B API key: " WANDB_API_KEY
 echo
 
 CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
-  --task Tracking-Momentum-T1-v0 \
+  --task Tracking-FloatingModel-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --num_envs 1024 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
-  --run_name momentum_g18_push_kick_right
+  --run_name floating_model_g18_push_kick_right
 ```
 
 This loads the motion locally and logs training metrics to W&B using the API
@@ -221,11 +234,11 @@ under `logs/rsl_rl/t1_flat/`.
 
 ## Play
 
-To load and visualize a trained Momentum WBC policy from a W&B run:
+To load and visualize a trained Floating Model policy from a W&B run:
 
 ```bash
 python scripts/rsl_rl/play.py \
-  --task Tracking-Momentum-T1-v0 \
+  --task Tracking-FloatingModel-T1-v0 \
   --num_envs 2 \
   --wandb_path ENTITY/PROJECT/RUN_ID
 ```
@@ -267,7 +280,7 @@ Use the evaluation task for repeatable motion-tracking rollouts:
 mkdir -p eval_data
 
 python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-Momentum-T1-Eval-v0 \
+  --task Tracking-FloatingModel-T1-Eval-v0 \
   --num_envs 2 \
   --wandb_path ENTITY/PROJECT/RUN_ID \
   --headless
@@ -277,7 +290,7 @@ To evaluate a specific checkpoint:
 
 ```bash
 python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-Momentum-T1-Eval-v0 \
+  --task Tracking-FloatingModel-T1-Eval-v0 \
   --num_envs 2 \
   --wandb_path ENTITY/PROJECT/RUN_ID \
   --checkpoint_no ITERATION \
@@ -290,9 +303,9 @@ Tracking data is written to:
 eval_data/tracking_play_data.npz
 ```
 
-### Compare PD and momentum with video recording
+### Compare PD and floating_model with video recording
 
-Run these commands from the repository root to evaluate the local PD and momentum
+Run these commands from the repository root to evaluate the local PD and floating_model
 runs below. Both use the same reference motion and checkpoint iteration.
 Each evaluation overwrites `eval_data/tracking_play_data.npz`, so copy its output
 before running the other controller:
@@ -311,8 +324,9 @@ python scripts/rsl_rl/tracking_play.py \
 cp eval_data/tracking_play_data.npz eval_data/comparison/pd.npz
 
 python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-Momentum-T1-Eval-v0 \
+  --task Tracking-FloatingModel-T1-Eval-v0 \
   --num_envs 2 \
+  --experiment_name t1_momentum \
   --load_run 2026-09-09_00-17-56_momentum_g18_push_kick_right \
   --checkpoint model_29999.pt \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
@@ -339,6 +353,55 @@ frames from legacy recordings. Time uses the default 0.02-second control interva
 not a confidence interval. Absolute joint power is mechanical effort, not electrical
 consumption. These plots describe the saved rollouts and do not measure failure rates.
 
+### Contact-model diagnostics
+
+Plot each foot's height, horizontal speed, vertical velocity, and angular speed:
+
+```bash
+python scripts/plot_contact_diagnostics.py
+```
+
+The existing NPZs contain only kinematic proxies, not measured contact states.
+The plotter uses saved body-name metadata when available. For legacy T1 files it
+corrects the old evaluator's order (trunk, left foot, right foot, left hand,
+right hand); new evaluations explicitly save the requested body order.
+
+To add normal contact-force measurements and floating_model QP wrench predictions,
+rerun evaluation with `--record_contacts`:
+
+```bash
+python scripts/rsl_rl/tracking_play.py \
+  --task Tracking-FloatingModel-T1-Eval-v0 \
+  --num_envs 2 \
+  --experiment_name t1_momentum \
+  --load_run 2026-09-09_00-17-56_momentum_g18_push_kick_right \
+  --checkpoint model_29999.pt \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --headless --record_contacts &&
+cp eval_data/tracking_play_data.npz eval_data/comparison/momentum_contacts.npz
+
+python scripts/plot_contact_diagnostics.py \
+  --input eval_data/comparison/momentum_contacts.npz
+```
+
+Figures go to `eval_data/comparison/contact_plots/`, one per environment.
+Green shading marks net normal force magnitude above 10 N (override with
+`--contact_threshold`); red lines mark reset samples, which should be excluded
+from physical interpretation. Sensor forces are sampled after each control step;
+QP predictions come from the final physics substep. This 50 Hz recording can miss
+brief impacts; impact and acceleration-residual studies need physics-rate logging.
+Isaac Lab 2.2 `net_forces_w` contains summed normal forces, not friction forces or
+contact moments. It cannot establish a measured friction ratio or center of pressure.
+The sensor is not ground-filtered, so other collisions can also activate it.
+
+The current floating_model QP enforces floating-base dynamics, but does not impose
+`J_c qdd + Jdot_c qdot = 0`, unilateral/friction constraints, or a support polygon.
+It includes a penalized auxiliary base wrench and wrench variables for every
+configured end effector, without explicit contact activation. Compare predicted
+normal forces with measured contact timing before attributing tracking errors to
+a rigid flat-foot constraint. Motion during force-detected contact can motivate
+investigating sliding or rocking, but body velocity is not sole-point slip velocity.
+
 ## Impulse Evaluation
 
 Use `eval_env.py` to measure recovery from randomized external pushes:
@@ -347,39 +410,39 @@ Use `eval_env.py` to measure recovery from randomized external pushes:
 mkdir -p eval_data
 
 python scripts/rsl_rl/eval_env.py \
-  --task Tracking-Momentum-T1-v0 \
+  --task Tracking-FloatingModel-T1-v0 \
   --num_envs 36 \
   --wandb_path ENTITY/PROJECT/RUN_ID \
   --headless
 ```
 
-Momentum WBC impulse results are written to:
+Floating Model impulse results are written to:
 
 ```text
-eval_data/momentum_eval_data.npz
+eval_data/floating_model_eval_data.npz
 ```
 
 ## Implementation
 
-The Momentum WBC task is implemented as a sibling of the original hybrid task, so the existing flat and centroidal-hybrid tasks are left unchanged.
+The Floating Model task is implemented as a sibling of the original hybrid task, so the existing flat and centroidal-hybrid tasks are left unchanged.
 
 Task registration lives in:
 
 ```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_momentum/__init__.py
+source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/__init__.py
 ```
 
 It registers:
 
 ```text
-Tracking-Momentum-T1-v0
-Tracking-Momentum-T1-Eval-v0
+Tracking-FloatingModel-T1-v0
+Tracking-FloatingModel-T1-Eval-v0
 ```
 
 The task config lives in:
 
 ```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_momentum/flat_env_cfg.py
+source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/flat_env_cfg.py
 ```
 
 It subclasses the existing T1 hybrid config so the new task keeps the same robot, observations, action layout, rewards, command setup, and RSL-RL structure.
@@ -387,15 +450,15 @@ It subclasses the existing T1 hybrid config so the new task keeps the same robot
 The environment lives in:
 
 ```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_momentum/momentum_env.py
+source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/floating_model_env.py
 ```
 
-`MomentumWBCEnv` subclasses the existing `HybridEnv` and overrides only `_initialize_hybrid_runtime()`. That swap replaces the original `HybridController` with `MomentumBasedWholeBodyController`, while preserving the existing step loop, action manager, reward bookkeeping, and PD-plus-feedforward torque application.
+`FloatingModelEnv` subclasses the existing `HybridEnv` and overrides only `_initialize_hybrid_runtime()`. That swap replaces the original `HybridController` with `FloatingModelController`, while preserving the existing step loop, action manager, reward bookkeeping, and PD-plus-feedforward torque application.
 
 The controller lives in:
 
 ```text
-source/whole_body_tracking/whole_body_tracking/utils/momentum_wbc.py
+source/whole_body_tracking/whole_body_tracking/utils/floating_model.py
 ```
 
 The controller keeps the same policy action format as the hybrid task:
@@ -428,19 +491,19 @@ The resulting feedforward torque is clamped by Isaac joint effort limits and pas
 Controller tuning parameters live in:
 
 ```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_momentum/controller_cfg.py
+source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/controller_cfg.py
 ```
 
 The RSL-RL config lives in:
 
 ```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_momentum/agents/rsl_rl_ppo_cfg.py
+source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/agents/rsl_rl_ppo_cfg.py
 ```
 
 It inherits the hybrid PPO settings and changes the experiment name to:
 
 ```text
-t1_momentum
+t1_floating_model
 ```
 
 Impulse evaluation was updated in:
@@ -449,7 +512,7 @@ Impulse evaluation was updated in:
 scripts/rsl_rl/eval_env.py
 ```
 
-so `Tracking-Momentum-T1-v0` writes its own result file instead of being grouped with the PD baseline.
+so `Tracking-FloatingModel-T1-v0` writes its own result file instead of being grouped with the PD baseline.
 
 ## Notes
 
@@ -464,4 +527,4 @@ root_physx_view.get_coriolis_and_centrifugal_compensation_forces()
 root_physx_view.get_jacobians()
 ```
 
-If your Isaac Lab build does not expose generalized mass matrices, the task will raise a clear runtime error when the Momentum WBC controller initializes.
+If your Isaac Lab build does not expose generalized mass matrices, the task will raise a clear runtime error when the Floating Model controller initializes.

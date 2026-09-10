@@ -1,4 +1,4 @@
-"""Plot PD and momentum tracking NPZs without launching Isaac Sim."""
+"""Plot PD and floating_model tracking NPZs without launching Isaac Sim."""
 
 import argparse
 import csv
@@ -12,11 +12,22 @@ import numpy as np
 
 BODY_NAMES = ["Trunk", "Left hand", "Right hand", "Left foot", "Right foot"]
 KEYS = ["sim_pos", "ref_pos", "sim_vel", "ref_vel", "joint_torque", "joint_vel"]
+BODY_LINK_NAMES = ["Trunk", "left_hand_link", "right_hand_link", "left_foot_link", "right_foot_link"]
+# Legacy tracking_play selected bodies in task-config order, not requested order.
+LEGACY_BODY_NAMES = ["Trunk", "left_foot_link", "right_foot_link", "left_hand_link", "right_hand_link"]
+
+
+def body_order(archive):
+    names = list(archive["body_names"]) if "body_names" in archive else LEGACY_BODY_NAMES
+    return [names.index(name) for name in BODY_LINK_NAMES]
 
 
 def load_data(path):
     with np.load(path, allow_pickle=False) as archive:
         data = {key: archive[key] for key in KEYS}
+        order = body_order(archive)
+    for key in KEYS[:4]:
+        data[key] = data[key][:, :, order]
     shape = data["sim_pos"].shape
     if len(shape) != 4 or shape[2:] != (5, 3):
         raise ValueError(f"{path}: expected body arrays shaped (steps, envs, 5, 3)")
@@ -38,22 +49,22 @@ def load_data(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pd", type=Path, default=Path("eval_data/comparison/pd.npz"))
-    parser.add_argument("--momentum", type=Path, default=Path("eval_data/comparison/momentum.npz"))
+    parser.add_argument("--floating_model", "--momentum", dest="floating_model", type=Path, default=Path("eval_data/comparison/momentum.npz"))
     parser.add_argument("--output_dir", type=Path, default=Path("eval_data/comparison/plots"))
     parser.add_argument("--dt", type=float, default=0.02, help="Control interval in seconds.")
     args = parser.parse_args()
     if args.dt <= 0:
         parser.error("--dt must be positive")
-    runs = {"PD": load_data(args.pd), "Momentum": load_data(args.momentum)}
-    if runs["PD"]["ref_pos"].shape != runs["Momentum"]["ref_pos"].shape:
+    runs = {"PD": load_data(args.pd), "Floating model": load_data(args.floating_model)}
+    if runs["PD"]["ref_pos"].shape != runs["Floating model"]["ref_pos"].shape:
         raise ValueError("Evaluations must have matching frame and environment counts")
     for key in ["ref_pos", "ref_vel"]:
-        if not np.allclose(runs["PD"][key], runs["Momentum"][key], atol=1e-5, rtol=1e-5):
+        if not np.allclose(runs["PD"][key], runs["Floating model"][key], atol=1e-5, rtol=1e-5):
             raise ValueError(f"Reference trajectories differ ({key}); use matching motion and resets")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     steps, envs = runs["PD"]["sim_pos"].shape[:2]
     time = (np.arange(steps) + 1) * args.dt
-    colors = {"PD": "#2563eb", "Momentum": "#e07818"}
+    colors = {"PD": "#2563eb", "Floating model": "#e07818"}
     plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
 
     def save(fig, name):

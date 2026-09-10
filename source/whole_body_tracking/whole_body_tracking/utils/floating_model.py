@@ -1,4 +1,4 @@
-"""Momentum-based whole-body controller used by the T1 momentum task.
+"""Floating-base whole-body controller used by the T1 floating_model task.
 
 The controller follows the structure of Koolen et al.'s momentum-based control
 framework: solve a QP for desired generalized accelerations and contact wrenches,
@@ -13,20 +13,20 @@ import torch
 from whole_body_tracking.utils.hybrid import ctrl2components, f_mag_q, highlvlPD, schur_solve
 
 
-class MomentumBasedWholeBodyController:
+class FloatingModelController:
     """Runtime whole-body controller parameters resolved from an Isaac articulation."""
 
     def __init__(self, articulation, cfg):
         requested_body_names = list(cfg.end_effector_body_names)
         if not requested_body_names:
-            raise ValueError("Momentum WBC requires at least one configured end effector.")
+            raise ValueError("Floating Model requires at least one configured end effector.")
         end_effector_ids, resolved_body_names = articulation.find_bodies(
             requested_body_names,
             preserve_order=True,
         )
         if resolved_body_names != requested_body_names:
             raise ValueError(
-                "Failed to resolve Momentum WBC end effectors in the configured order: "
+                "Failed to resolve Floating Model end effectors in the configured order: "
                 f"requested={requested_body_names}, resolved={resolved_body_names}."
             )
 
@@ -43,7 +43,7 @@ class MomentumBasedWholeBodyController:
                 f"{self.torque_limits.shape[-1]} != {self.joint_count}."
             )
         if not torch.all(torch.isfinite(self.torque_limits) & (self.torque_limits > 0)):
-            raise ValueError("Momentum WBC requires finite, positive effort limits for every articulation joint.")
+            raise ValueError("Floating Model requires finite, positive effort limits for every articulation joint.")
 
         joint_names = list(articulation.joint_names)
         configured_cost_names = set(cfg.torque_limits_cost)
@@ -51,7 +51,7 @@ class MomentumBasedWholeBodyController:
         extra_cost_names = configured_cost_names - set(joint_names)
         if missing_cost_names or extra_cost_names:
             raise ValueError(
-                "Momentum WBC torque cost limits must match the Isaac articulation joints exactly: "
+                "Floating Model torque cost limits must match the Isaac articulation joints exactly: "
                 f"missing={sorted(missing_cost_names)}, extra={sorted(extra_cost_names)}."
             )
         torque_limits_cost = torch.tensor(
@@ -60,7 +60,7 @@ class MomentumBasedWholeBodyController:
             dtype=self.torque_limits.dtype,
         )
         if not torch.all(torch.isfinite(torque_limits_cost) & (torque_limits_cost > 0)):
-            raise ValueError("Momentum WBC torque cost limits must be finite and positive.")
+            raise ValueError("Floating Model torque cost limits must be finite and positive.")
         self.torque_limits_cost = torque_limits_cost.unsqueeze(0).expand_as(self.torque_limits)
 
         self.desired_linear_velocity_scale = cfg.desired_linear_velocity_scale
@@ -96,7 +96,7 @@ class MomentumBasedWholeBodyController:
         nle,
         lcc_rand,
     ):
-        return momentum_wbc_step(
+        return floating_model_step(
             self.articulation,
             com_vel,
             jacs,
@@ -130,13 +130,13 @@ class MomentumBasedWholeBodyController:
 def _generalized_mass_matrix(articulation, expected_dim: int) -> torch.Tensor:
     if not hasattr(articulation.root_physx_view, "get_generalized_mass_matrices"):
         raise AttributeError(
-            "Momentum WBC requires root_physx_view.get_generalized_mass_matrices(), "
+            "Floating Model requires root_physx_view.get_generalized_mass_matrices(), "
             "which is not available on this Isaac articulation."
         )
     mass_matrix = articulation.root_physx_view.get_generalized_mass_matrices()
     if mass_matrix.shape[-2:] != (expected_dim, expected_dim):
         raise ValueError(
-            "Unexpected generalized mass matrix shape for Momentum WBC: "
+            "Unexpected generalized mass matrix shape for Floating Model: "
             f"expected (..., {expected_dim}, {expected_dim}), received {mass_matrix.shape}."
         )
     return mass_matrix
@@ -146,7 +146,7 @@ def _full_bias_forces(articulation, expected_dim: int) -> torch.Tensor:
     gravity = articulation.root_physx_view.get_gravity_compensation_forces()
     if gravity.shape[-1] != expected_dim:
         raise ValueError(
-            "Unexpected gravity compensation shape for Momentum WBC: "
+            "Unexpected gravity compensation shape for Floating Model: "
             f"expected (..., {expected_dim}), received {gravity.shape}."
         )
 
@@ -176,7 +176,7 @@ def _contact_jacobians(
     return torch.cat([unaccounted_jac, selected_jacs], dim=1)
 
 
-def momentum_wbc_step(
+def floating_model_step(
     articulation,
     com_vel,
     jacs,

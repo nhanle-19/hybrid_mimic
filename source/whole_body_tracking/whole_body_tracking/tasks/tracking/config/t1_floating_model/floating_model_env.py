@@ -6,15 +6,15 @@ from whole_body_tracking.tasks.tracking.config.t1_hybrid.hybrid_env import (
     get_pd_gains_in_dof_order,
     make_dof_ordered_jointpos_and_action_scale,
 )
-from whole_body_tracking.utils import momentum_wbc
+from whole_body_tracking.utils import floating_model
 
 
-class MomentumWBCEnv(HybridEnv):
-    """HybridMimic environment using a momentum-based whole-body controller."""
+class FloatingModelEnv(HybridEnv):
+    """HybridMimic environment using a floating-base whole-body controller."""
 
     def _initialize_hybrid_runtime(self):
         robot = self.scene["robot"]
-        self.hybrid_controller = momentum_wbc.MomentumBasedWholeBodyController(robot, self.cfg.hybrid_controller)
+        self.hybrid_controller = floating_model.FloatingModelController(robot, self.cfg.hybrid_controller)
         self.hybrid_rew_info = None
         self.sensor_cfg = SceneEntityCfg(
             "contact_forces",
