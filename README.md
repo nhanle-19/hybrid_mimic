@@ -290,6 +290,55 @@ Tracking data is written to:
 eval_data/tracking_play_data.npz
 ```
 
+### Compare PD and momentum with video recording
+
+Run these commands from the repository root to evaluate the local PD and momentum
+runs below. Both use the same reference motion and checkpoint iteration.
+Each evaluation overwrites `eval_data/tracking_play_data.npz`, so copy its output
+before running the other controller:
+
+```bash
+conda activate hybridmimic
+mkdir -p eval_data/comparison
+
+python scripts/rsl_rl/tracking_play.py \
+  --task Tracking-Flat-T1-Eval-v0 \
+  --num_envs 2 \
+  --load_run 2026-09-07_19-19-43_momentum_g18_push_kick_right \
+  --checkpoint model_29999.pt \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --headless --video --video_length 500 &&
+cp eval_data/tracking_play_data.npz eval_data/comparison/pd.npz
+
+python scripts/rsl_rl/tracking_play.py \
+  --task Tracking-Momentum-T1-Eval-v0 \
+  --num_envs 2 \
+  --load_run 2026-09-09_00-17-56_momentum_g18_push_kick_right \
+  --checkpoint model_29999.pt \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --headless --video --video_length 500 &&
+cp eval_data/tracking_play_data.npz eval_data/comparison/momentum.npz
+```
+
+The PD run is under `logs/rsl_rl/t1_flat`, despite having `momentum` in its name.
+Videos are saved in each run's `videos/play/` directory. The `&&` copies the data
+only when evaluation exits successfully; if shutdown fails after saving data,
+verify the output belongs to that evaluation and copy it before starting the next run.
+
+After both NPZ files are saved, generate comparison plots without launching Isaac Sim:
+
+```bash
+python scripts/compare_tracking.py
+```
+
+This writes `tracking_errors.png`, `body_position_rmse.png`, `kick_height.png`,
+`control_effort.png`, and `metrics.csv` to `eval_data/comparison/plots/`.
+The script checks that reference trajectories match and trims trailing zero-filled
+frames from legacy recordings. Time uses the default 0.02-second control interval
+(override with `--dt` if needed). Shading shows the range across environments,
+not a confidence interval. Absolute joint power is mechanical effort, not electrical
+consumption. These plots describe the saved rollouts and do not measure failure rates.
+
 ## Impulse Evaluation
 
 Use `eval_env.py` to measure recovery from randomized external pushes:

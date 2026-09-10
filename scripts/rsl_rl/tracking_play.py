@@ -21,6 +21,7 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of enviro
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--motion_file", type=str, default=None, help="Path to the motion file.")
 parser.add_argument("--checkpoint_no", type=int, default=None, help="Checkpoint number to load.")
+parser.add_argument("--debug_observations", action="store_true", help="Print the first environment's observation vector every step.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -53,7 +54,6 @@ from isaaclab.envs import (
     ManagerBasedRLEnvCfg,
     multi_agent_to_single_agent,
 )
-from isaaclab.utils.dict import print_dict
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
@@ -133,8 +133,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             "video_length": args_cli.video_length,
             "disable_logger": True,
         }
-        print("[INFO] Recording videos during training.")
-        print_dict(video_kwargs, nesting=4)
+        print(f"[INFO] Recording evaluation video to: {video_kwargs['video_folder']}")
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # convert to single-agent instance if required by the RL algorithm
@@ -147,6 +146,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # load previously trained model
     ppo_runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     ppo_runner.load(resume_path)
+    print("[INFO] Policy loaded.", flush=True)
 
     # obtain the trained policy for inference
     policy = ppo_runner.get_inference_policy(device=env.unwrapped.device)
@@ -160,6 +160,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         filename="policy.onnx",
     )
     attach_onnx_metadata(env.unwrapped, args_cli.wandb_path if args_cli.wandb_path else "none", export_model_dir)
+    print(f"[INFO] Policy exported to: {export_model_dir}/policy.onnx", flush=True)
     # reset environment
     obs, _ = env.get_observations()
     motion_cmd = env.unwrapped.command_manager.get_term("motion")
@@ -191,6 +192,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     sim_joint_torque_nle = np.zeros((duration, env_cfg.scene.num_envs, 23))
     sim_des_joint_pos = np.zeros((duration, env_cfg.scene.num_envs, 23))
 
+    total_steps = min(duration, args_cli.video_length) if args_cli.video else duration
+    progress_interval = max(1, total_steps // 5)
+    print(f"[INFO] Starting evaluation: {env_cfg.scene.num_envs} environments, {total_steps} steps.", flush=True)
     for c in range(duration):
         # run everything in inference mode
         with torch.inference_mode():
@@ -207,7 +211,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if sim_obs is None:
                 sim_obs = np.zeros((duration, env_cfg.scene.num_envs, pol_obs.shape[-1]))
             sim_obs[c, :, :] = pol_obs.cpu().numpy()
-            print(pol_obs.cpu().numpy()[0, :])
+            if args_cli.debug_observations:
+                print(sim_obs[c, 0, :])
 
             robot = env.unwrapped.scene["robot"]
             command = env.unwrapped.command_manager.get_term("motion")
@@ -238,12 +243,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             except:
                 pass
         #jnt_pos = obs["policy"][0, 61:84]
+        if (c + 1) % progress_interval == 0 or c + 1 == total_steps:
+            print(f"[INFO] Evaluation progress: {c + 1}/{total_steps} steps.", flush=True)
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
     eval_name = "eval_data/tracking_play_data.npz"
+    os.makedirs(os.path.dirname(eval_name), exist_ok=True)
     np.savez(eval_name, **{
                             "sim_action": sim_action,
                             "sim_pos": sim_pos,
@@ -262,8 +270,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                             "sim_des_joint_pos": sim_des_joint_pos
                            })
 
-    # close the simulator
+    print(f"[INFO] Evaluation data saved to: {os.path.abspath(eval_name)}", flush=True)
+    # Closing the video wrapper flushes any unfinished recording.
     env.close()
+    if args_cli.video:
+        print(f"[INFO] Video recording finalized in: {video_kwargs['video_folder']}", flush=True)
+    print("[INFO] Evaluation complete.", flush=True)
 
 
 
