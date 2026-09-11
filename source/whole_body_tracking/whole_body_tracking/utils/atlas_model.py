@@ -73,16 +73,18 @@ class AtlasModel:
         bias = np.asarray(d.nle).copy()
         ag = pin.computeCentroidalMap(m, d, q).copy()
         dag = pin.computeCentroidalMapTimeVariation(m, d, q, v).copy()
+        pin.centerOfMass(m, d, q, v)
         pin.forwardKinematics(m, d, q, v, np.zeros(m.nv))
         pin.computeJointJacobiansTimeVariation(m, d, q, v)
         pin.updateFramePlacements(m, d)
-        pin.centerOfMass(m, d, q, v)
         frames = {}
         for name, fid in self.frame_ids.items():
             jac = pin.getFrameJacobian(m, d, fid, pin.LOCAL_WORLD_ALIGNED).copy()
-            djac = pin.getFrameJacobianTimeVariation(m, d, fid, pin.LOCAL_WORLD_ALIGNED).copy()
+            # At zero generalized acceleration, classical frame acceleration
+            # is dJ @ v for the world-aligned linear/angular velocity Jacobian.
+            frame_bias = pin.getFrameClassicalAcceleration(m, d, fid, pin.LOCAL_WORLD_ALIGNED).vector.copy()
             frames[name] = dict(position=d.oMf[fid].translation.copy(), rotation=d.oMf[fid].rotation.copy(),
-                                J=jac, bias=djac@v, velocity=jac@v)
+                                J=jac, bias=frame_bias, velocity=jac@v)
         # Independent body-sum momentum, rather than defining actual h as Ag@v.
         momentum = np.zeros(6)
         for jid in range(1, m.njoints):

@@ -1,1 +1,1 @@
-"""Policies for the 29-action Atlas task require retraining."""
+"""Atlas uses the HybridMimic 57-action policy interface."""

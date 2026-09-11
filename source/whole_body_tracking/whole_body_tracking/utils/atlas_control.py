@@ -65,12 +65,24 @@ def swing_tasks(state, reference, active, gains=None):
     return tasks
 
 
+def hybrid_balance_tasks(state, linear_acceleration, angular_acceleration, base_weight):
+    """Balance targets only: no reference/policy joint-posture tracking in the QP."""
+    base = state['frames']['Trunk']
+    desired = np.r_[linear_acceleration, angular_acceleration]
+    task = MotionTask(base['J'], desired-base['bias'], base_weight, 'base')
+    nominal = np.zeros(state['M'].shape[0])
+    nominal[:6] = np.linalg.solve(base['J'][:, :6], desired-base['bias'])
+    return state['Ag']@nominal+state['Ag_bias'], [task]
+
+
 def force_diagnostics(result, state, torque_limits):
     """Fixed-size output; absent feet have exactly zero forces, undefined CoP NaN."""
     forces = np.zeros((2, 4, 3)); normal = np.zeros((2, 4)); tangent = np.zeros((2, 4))
     utilization = np.zeros((2, 4)); cop = np.full((2, 2), np.nan)
     active = np.zeros(2, dtype=bool)
     for contact in result['contacts']:
+        if contact.body not in FEET:
+            continue
         index = FEET.index(contact.body)
         active[index] = True
         normal_axis = np.asarray(contact.normal)/np.linalg.norm(contact.normal)
@@ -88,4 +100,4 @@ def force_diagnostics(result, state, torque_limits):
             cop[index] = np.sum(local[:, :2]*fn[:, None], axis=0)/fn.sum()
     return dict(point_forces=forces, normal_forces=normal, tangential_forces=tangent,
                 friction_utilization=utilization, cop=cop, active_contact=active,
-                torque_utilization=np.abs(result['torque'])/torque_limits)
+                torque_utilization=np.abs(result.get('total_torque', result['torque']))/torque_limits)

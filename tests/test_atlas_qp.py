@@ -138,3 +138,86 @@ def test_tilted_reference_keeps_low_foot_in_contact(model):
     state['frames'][FEET[0]]['rotation'] = pin.exp3(np.array([0., .3, 0.]))
     state['frames'][FEET[1]]['position'][2] += .3
     np.testing.assert_array_equal(reference_contact_schedule([state]*10), [[True, False]]*10)
+
+
+def hybrid_objective(model):
+    return dict(base_body='Trunk', base_weight=.001,
+                contact_weights={f: .001 for f in FEET}, angular_force_scale=20.,
+                torque_reference=np.zeros(23), torque_weights=np.ones(23))
+
+
+def test_hybrid_torque_reference_and_base_wrench(model):
+    """Hybrid mode must use policy torque references, not silently drop them."""
+    state = state_at_rest(model)
+    solver = AtlasQP(np.full(23, 60.))
+    objective = hybrid_objective(model)
+    baseline = solver.solve(state, np.zeros(6), [], hybrid=objective)
+    objective['torque_reference'] = np.linspace(-5., 5., 23)
+    changed = solver.solve(state, np.zeros(6), [], hybrid=objective)
+    assert changed['variable_count'] == 35
+    assert np.linalg.norm(changed['torque']-baseline['torque']) > 1.
+    assert max(changed['metrics'].values()) < 2e-5
+    # Auxiliary support is an optimization output, explicitly accounted for.
+    assert np.linalg.norm(changed['auxiliary_base_wrench']) > 1.
+    generalized = state['frames']['Trunk']['J'].T@changed['auxiliary_base_wrench']
+    inverse = pin.rnea(model.model, model.data, state['q'], state['v'], changed['acceleration'])
+    np.testing.assert_allclose(inverse-generalized, np.r_[np.zeros(6), changed['torque']], atol=2e-5)
+    objective['base_weight'] = 100.
+    costly_base = solver.solve(state, np.zeros(6), [], hybrid=objective)
+    assert np.linalg.norm(costly_base['auxiliary_base_wrench']) < np.linalg.norm(changed['auxiliary_base_wrench'])
+
+
+@pytest.mark.parametrize('body', ['left_foot_link', 'right_foot_link', 'left_hand_link', 'right_hand_link'])
+def test_hybrid_contact_logits_affect_physical_force_cost(model, body):
+    state = state_at_rest(model)
+    solver = AtlasQP(np.full(23, 60.))
+    contact = Contact(body) if body in FEET else Contact(body, points=np.zeros((1, 3)), constrain_rotation=False)
+    objective = hybrid_objective(model)
+    objective['base_weight'] = 1.
+    objective['contact_weights'] = {body: .00001}
+    cheap = solver.solve(state, np.zeros(6), [contact], hybrid=objective)
+    objective['contact_weights'][body] = 100.
+    expensive = solver.solve(state, np.zeros(6), [contact], hybrid=objective)
+    def force_norm(result):
+        return np.linalg.norm(sum(f for _, f in result['contact_forces'][body]))
+    assert force_norm(expensive) < force_norm(cheap)
+    assert max(expensive['metrics'].values()) < 2e-5
+    # Feet diagnostics remain valid when a hand point is also represented.
+    force_diagnostics(expensive, state, solver.torque_limits)
+
+
+def test_hybrid_limits_apply_to_pd_plus_feedforward(model):
+    state = state_at_rest(model)
+    limits = np.full(23, 60.)
+    pd = np.linspace(-180., 180., 23)
+    result = AtlasQP(limits).solve(state, np.zeros(6), [],
+        hybrid=hybrid_objective(model), pd_torque=pd)
+    total = pd+result['torque']
+    np.testing.assert_allclose(total, result['total_torque'], atol=1e-10)
+    assert np.max(np.abs(total)-limits) <= 2e-5
+    # FF must be allowed to counteract an already over-limit PD command.
+    assert np.max(np.abs(result['torque'])) > limits.max()
+    generalized = state['frames']['Trunk']['J'].T@result['auxiliary_base_wrench']
+    inverse = pin.rnea(model.model, model.data, state['q'], state['v'], result['acceleration'])
+    np.testing.assert_allclose(inverse-generalized, np.r_[np.zeros(6), total], atol=2e-5)
+    diag = force_diagnostics(result, state, limits)
+    np.testing.assert_allclose(diag['torque_utilization'], np.abs(total)/limits)
+
+
+@pytest.mark.parametrize('pd', [np.zeros(22), np.full(23, np.nan)])
+def test_reject_invalid_pd_torque(model, pd):
+    with pytest.raises(ValueError, match='PD torque'):
+        AtlasQP(np.full(23, 60.)).solve(state_at_rest(model), np.zeros(6), [], pd_torque=pd)
+
+
+def test_hybrid_balance_has_no_joint_posture_task(model):
+    from atlas_control import hybrid_balance_tasks
+    state = state_at_rest(model)
+    linear, angular = np.array([.2, -.1, .3]), np.array([.1, .2, -.3])
+    rate, tasks = hybrid_balance_tasks(state, linear, angular, 200.)
+    assert len(tasks) == 1 and tasks[0].name == 'base'
+    np.testing.assert_allclose(tasks[0].jacobian[:, 6:], 0., atol=1e-12)
+    nominal = np.zeros(29)
+    base = state['frames']['Trunk']
+    nominal[:6] = np.linalg.solve(base['J'][:, :6], np.r_[linear, angular]-base['bias'])
+    np.testing.assert_allclose(rate, state['Ag']@nominal+state['Ag_bias'])

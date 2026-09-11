@@ -57,11 +57,24 @@ def main():
         if 'actual_contact_acceleration_residual' in data:
             axes[0].plot(t, data['actual_contact_acceleration_residual'][mask], ':', label='Measured-state finite difference')
         axes[0].set_ylabel('Stance acceleration max'); axes[0].legend()
-        axes[1].plot(t, data['torque_utilization'][mask].max(axis=-1)); axes[1].axhline(1, color='r', linestyle='--'); axes[1].set_ylabel('Maximum torque utilization')
+        axes[1].plot(t, data['torque_utilization'][mask].max(axis=-1)); axes[1].axhline(1, color='r', linestyle='--')
+        axes[1].set_ylabel('Maximum PD + FF utilization' if 'pd_torque' in data else 'Maximum QP torque utilization')
         axes[2].plot(t, np.max(np.abs(data['inverse_dynamics_residual'][mask]), axis=-1)); axes[2].set_ylabel('QP inverse-dynamics residual max')
         axes[2].set_xlabel('Time (s)')
         for ax in axes: ax.grid(alpha=.2)
         fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_residuals.png', dpi=160); plt.close(fig)
+        if 'auxiliary_base_wrench' in data:
+            fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+            wrench = data['auxiliary_base_wrench'][mask]
+            for k, axis in enumerate('xyz'):
+                axes[0].plot(t, wrench[:, k], label=axis)
+                axes[1].plot(t, wrench[:, k+3], label=axis)
+            axes[0].set_ylabel('Auxiliary force (N)')
+            axes[1].set_ylabel('Auxiliary moment (Nm)')
+            axes[1].set_xlabel('Time (s)')
+            for ax in axes: ax.grid(alpha=.2); ax.legend()
+            fig.suptitle('Optimization base wrench (not applied in simulation)')
+            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_auxiliary_base.png', dpi=160); plt.close(fig)
     print(f'Saved Atlas plots to {args.output_dir}')
 
 

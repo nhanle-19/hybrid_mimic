@@ -13,7 +13,7 @@ parser.add_argument('--num_envs', type=int, default=1)
 parser.add_argument('--steps', type=int, default=141)
 parser.add_argument('--output', default='eval_data/atlas/diagnostics.npz')
 parser.add_argument('--contact_schedule', default=None, help='Boolean NPY (motion_frames,2) planned stance mask.')
-parser.add_argument('--zero_policy', action='store_true', help='Use reference feedback with zero residual actions; no trained policy required.')
+parser.add_argument('--zero_policy', action='store_true', help='Use zero HybridMimic policy outputs for a pipeline check, not reference tracking.')
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args, hydra = parser.parse_known_args()
@@ -39,16 +39,17 @@ def main(env_cfg, agent_cfg):
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.seed = agent_cfg.seed
     env_cfg.commands.motion.motion_file = args.motion_file
-    env_cfg.actions.atlas.record_diagnostics = True
-    env_cfg.actions.atlas.contact_schedule_file = args.contact_schedule
+    env_cfg.hybrid_controller.record_diagnostics = True
+    env_cfg.hybrid_controller.contact_schedule_file = args.contact_schedule
     env_cfg.sim.device = args.device
     env = RslRlVecEnvWrapper(gym.make(args.task, cfg=env_cfg))
     try:
         obs, _ = env.reset()
         if args.zero_policy:
-            policy = lambda _: torch.zeros((args.num_envs, 29), device=env.unwrapped.device)
+            policy = lambda _: torch.zeros((args.num_envs, env.unwrapped.hybrid_controller.action_dim), device=env.unwrapped.device)
         else:
-            path = get_checkpoint_path(str(Path('logs/rsl_rl')/agent_cfg.experiment_name), agent_cfg.load_run, agent_cfg.load_checkpoint)
+            path = get_checkpoint_path(str((Path('logs/rsl_rl')/agent_cfg.experiment_name).resolve()),
+                                       agent_cfg.load_run, agent_cfg.load_checkpoint)
             runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=env.unwrapped.device)
             runner.load(path)
             policy = runner.get_inference_policy(device=env.unwrapped.device)
@@ -58,10 +59,10 @@ def main(env_cfg, agent_cfg):
                 obs, _, _, _ = env.step(policy(obs))
                 if (step+1) % max(1, args.steps//5) == 0:
                     print(f'[INFO] Atlas evaluation: {step+1}/{args.steps}', flush=True)
-        env.unwrapped.action_manager.get_term('atlas').save_diagnostics(args.output)
+        env.unwrapped.hybrid_controller.save_diagnostics(args.output)
         print(f'[INFO] Saved Atlas diagnostics: {args.output}', flush=True)
     except Exception as error:
-        term = env.unwrapped.action_manager.get_term('atlas')
+        term = env.unwrapped.hybrid_controller
         if term.records:
             term.save_diagnostics(args.output, finalize=False, completed=False, failure_reason=str(error))
             print(f'[INFO] Saved partial Atlas diagnostics: {args.output}', flush=True)

@@ -12,9 +12,12 @@ from whole_body_tracking.utils import floating_model
 class FloatingModelEnv(HybridEnv):
     """HybridMimic environment using a floating-base whole-body controller."""
 
+    def _create_controller(self, robot):
+        return floating_model.FloatingModelController(robot, self.cfg.hybrid_controller)
+
     def _initialize_hybrid_runtime(self):
         robot = self.scene["robot"]
-        self.hybrid_controller = floating_model.FloatingModelController(robot, self.cfg.hybrid_controller)
+        self.hybrid_controller = self._create_controller(robot)
         self.hybrid_rew_info = None
         self.sensor_cfg = SceneEntityCfg(
             "contact_forces",

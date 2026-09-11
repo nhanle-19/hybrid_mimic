@@ -2,7 +2,11 @@
 
 The separate **Atlas-style centroidal controller** is available as
 `Tracking-Atlas-T1-v0` and `Tracking-Atlas-T1-Eval-v0`. It uses physical point
-contacts, an inequality-constrained QP, and a new 29-action policy interface.
+contacts and an inequality-constrained QP behind the same 57-action HybridMimic
+policy interface and PD-plus-feedforward step loop as `floating_model`.
+In Atlas, joint PD handles posture; the QP handles balance/contact dynamics
+without a duplicate posture-tracking objective and limits the combined PD plus
+feedforward torque.
 See [the formulation, tests, evaluation commands, and documented deviations](docs/atlas_controller.md).
 The `floating_model` task remains the baseline.
 
@@ -233,7 +237,9 @@ CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/trai
 Simulation and policy training use the exposed GPU; the Atlas QP solver runs
 on CPU, so start with two environments. This runs the default 30,000 iterations
 and saves checkpoints under `logs/rsl_rl/t1_atlas/`. Train a fresh policy because
-the Atlas 29-action interface is incompatible with Floating Model checkpoints.
+old 29-action Atlas checkpoints are incompatible with this 57-action interface.
+The policy layout now matches HybridMimic/Floating Model; controller behavior
+still differs, so matching dimensions do not establish policy transfer quality.
 See [Atlas validation and evaluation](docs/atlas_controller.md) for the current
 tracking limitations and evaluation commands.
 

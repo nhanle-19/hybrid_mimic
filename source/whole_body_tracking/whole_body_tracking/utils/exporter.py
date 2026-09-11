@@ -122,21 +122,21 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         "body_names": env.command_manager.get_term("motion").cfg.body_names,
     }
 
-    if "atlas" in env.action_manager.active_terms:
-        atlas = env.action_manager.get_term("atlas")
-        controller = atlas.cfg.controller
-        # Atlas actions are residuals in model joint order, followed by world
-        # CoM velocity and angular momentum; they are not joint-position targets.
+    metadata["action_scale"] = env.action_manager.get_term("joint_pos")._scale[0].cpu().tolist()
+    controller = getattr(env, "hybrid_controller", None)
+    if controller is not None:
+        # Preserve legacy joint action_scale while describing the complete
+        # HybridMimic policy output, shared by hybrid, floating and Atlas.
         metadata.update({
-            "action_type": "atlas_residual",
-            "action_joint_names": atlas.dynamics.joint_names,
-            "action_scale": [controller.posture_action_scale] * len(atlas.dynamics.joint_names)
-            + [controller.com_velocity_action_scale] * 3
-            + [controller.angular_momentum_action_scale] * 3,
-            "action_layout": "joint_posture,com_velocity_world,angular_momentum_world",
+            "action_type": "hybrid_mimic",
+            "policy_action_dim": controller.action_dim,
+            "action_joint_names": robot_data.joint_names,
+            "action_layout": "joint_position,linear_velocity_body,wrench_logits,torque_reference,angular_velocity_body",
+            "end_effector_names": controller.end_effector_names,
+            "desired_linear_velocity_scale": controller.desired_linear_velocity_scale,
+            "desired_angular_velocity_scale": controller.desired_angular_velocity_scale,
+            "torque_action_scale": controller.torque_action_scale,
         })
-    else:
-        metadata["action_scale"] = env.action_manager.get_term("joint_pos")._scale[0].cpu().tolist()
 
     model = onnx.load(onnx_path)
 
