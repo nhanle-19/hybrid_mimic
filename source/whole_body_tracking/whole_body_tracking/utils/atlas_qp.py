@@ -56,8 +56,9 @@ def friction_rays(normal, mu):
 class AtlasQP:
     def __init__(self, torque_limits, momentum_weights=(1., 1., 1., 10., 10., 10.),
                  force_weight=1e-5, acceleration_weight=1e-5, tolerance=2e-5,
-                 failure_directory=None):
+                 failure_directory=None, enforce_stance=True):
         self.failure_directory = failure_directory
+        self.enforce_stance = enforce_stance
         self.torque_limits = np.asarray(torque_limits, dtype=float)
         if not np.all(np.isfinite(self.torque_limits)&(self.torque_limits > 0)):
             raise ValueError('Torque limits must be finite and positive')
@@ -138,9 +139,10 @@ class AtlasQP:
             linear -= torque_map.T@(weights*target_tau)
         eq = [np.hstack([state['Ag'], -force_q])]
         rhs = [wg+wext-state['Ag_bias']]
-        for frame, rows in stance:
-            eq.append(np.hstack([frame['J'][:rows], np.zeros((rows, nr+nb))]))
-            rhs.append(-frame['bias'][:rows])
+        if self.enforce_stance:
+            for frame, rows in stance:
+                eq.append(np.hstack([frame['J'][:rows], np.zeros((rows, nr+nb))]))
+                rhs.append(-frame['bias'][:rows])
         for task in tasks:
             j = np.hstack([task.jacobian, np.zeros((len(task.target_minus_bias), nr+nb))])
             if task.hard:
@@ -162,26 +164,6 @@ class AtlasQP:
                      A=sparse.csc_matrix(constraint_matrix), l=lower_bounds, u=upper_bounds,
                      eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False)
         result = solver.solve()
-        initial_status = result.info.status
-        # Numeric status codes differ between OSQP 0.6 and 1.x.
-        retried = initial_status.lower() in ('solved inaccurate', 'maximum iterations reached')
-        objective_scale = 1.
-        if retried:
-            import warnings
-            warnings.warn(f'Atlas QP: {initial_status}; retrying with normalized objective. '
-                          'All torque/contact constraints and residual checks remain active.', RuntimeWarning)
-            # Multiplication by a positive scalar preserves the QP minimizer
-            # and relative objective weights. Constraint rows stay in physical
-            # units; no slack, torque clipping, or inaccurate solution is accepted.
-            objective_scale = max(1., float(np.max(np.abs(np.diag(hessian)))))
-            retry_solver = osqp.OSQP()
-            retry_solver.setup(P=sparse.csc_matrix(np.triu(hessian/objective_scale)), q=linear/objective_scale,
-                A=sparse.csc_matrix(constraint_matrix), l=lower_bounds, u=upper_bounds,
-                eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False,
-                adaptive_rho_interval=25)
-            if result.x is not None and np.isfinite(result.x).all():
-                retry_solver.warm_start(x=result.x)
-            result = retry_solver.solve()
         def fail(reason):
             dump = ''
             if self.failure_directory is not None:
@@ -193,8 +175,7 @@ class AtlasQP:
                 np.savez_compressed(path, hessian=hessian, linear=linear,
                     constraint_matrix=constraint_matrix, lower=lower_bounds, upper=upper_bounds,
                     q=state['q'], v=state['v'], pd_torque=pd_torque,
-                    status=np.asarray(result.info.status), initial_status=np.asarray(initial_status),
-                    objective_scale=objective_scale, iterations=result.info.iter, failure_reason=np.asarray(reason))
+                    status=np.asarray(result.info.status), iterations=result.info.iter, failure_reason=np.asarray(reason))
                 dump = f'; problem saved to {path}'
             raise RuntimeError(f'Atlas QP failed: {reason} after {result.info.iter} iterations'
                                f'{dump}; no clipped/fallback torque applied')
@@ -230,10 +211,14 @@ class AtlasQP:
                        normal_force_violation=float(normal_violation),
                        friction_violation=float(friction_violation),
                        equality=float(np.max(np.abs(aeq@x-beq))))
-        if max(metrics.values()) > self.tolerance:
+        # Keep recording actual stance acceleration when the experimental
+        # switch disables its equality; it is then diagnostic, not a rejection.
+        checked_metrics = {key: value for key, value in metrics.items()
+                           if key != 'stance' or self.enforce_stance}
+        if max(checked_metrics.values()) > self.tolerance:
             fail(f'constraint residual check: {metrics}')
         return dict(acceleration=acceleration, rho=rho, torque=torque, rate=rate,
-                    solver_retried=retried,
+                    stance_constraint_enabled=self.enforce_stance,
                     pd_torque=pd_torque.copy(), total_torque=total_torque,
                     auxiliary_base_wrench=base_wrench,
                     desired_rate=np.asarray(desired_rate), contact_forces=contact_forces,

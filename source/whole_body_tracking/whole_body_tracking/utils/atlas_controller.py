@@ -19,7 +19,8 @@ class AtlasController(FloatingModelController):
             raise ValueError('Atlas model and simulation joint names differ')
         self.solvers = [AtlasQP(limits, momentum_weights=cfg.momentum_weights,
                                force_weight=cfg.force_weight, acceleration_weight=cfg.acceleration_weight,
-                               tolerance=cfg.residual_tolerance, failure_directory=cfg.failure_directory)
+                               tolerance=cfg.residual_tolerance, failure_directory=cfg.failure_directory,
+                               enforce_stance=cfg.enforce_stance)
                         for limits in self.torque_limits[:, self.pin_to_sim].cpu().numpy()]
         self.references = self.planned_contacts = self.contact_override = None
         self.external = [[] for _ in range(env.num_envs)]
@@ -211,6 +212,7 @@ class AtlasController(FloatingModelController):
                 record.update(env_id=i, time=self._clock*self._env.physics_dt,
                     desired_rate=rate, predicted_rate=result['rate'],
                     contact_acceleration_residual=result['metrics']['stance'],
+                    stance_constraint_enabled=result['stance_constraint_enabled'],
                     inverse_dynamics_residual=result['inverse_residual'],
                     commanded_torque=result['total_torque'], pd_torque=result['pd_torque'],
                     feedforward_torque=result['torque'], auxiliary_base_wrench=result['auxiliary_base_wrench'],

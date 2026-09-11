@@ -6,6 +6,14 @@ feedforward torque application as the existing hybrid/floating-model tasks.
 `AtlasEnv` inherits the shared `FloatingModelEnv`/`HybridEnv` runtime and replaces
 the controller with an analytical Pinocchio/OSQP implementation.
 
+**Current experiment:** `T1AtlasControllerCfg.enforce_stance = False` disables
+the hard contact-acceleration equality `J_contact*qdd + dJ_contact*qdot = 0`
+for training and evaluation. Set it back to `True` to restore that constraint.
+Contact forces, friction/nonnegativity, dynamics balance and combined PD + FF
+torque limits remain active. Stance acceleration is still recorded, but does
+not reject a solution while this switch is off; diagnostics include the switch
+value. The standalone `AtlasQP` retains strict stance constraints by default.
+
 This replaces the earlier 29-action reference-residual Atlas design. Old
 29-action Atlas checkpoints cannot be resumed. Matching the floating-model
 policy dimensions does not establish successful transfer between controllers;
@@ -94,17 +102,12 @@ they do not prove physically realizable support. QP torque bounds apply to the
 combined PD-plus-feedforward command, and simulator actuator limits remain active.
 
 Hard constraints enforce centroidal balance including the auxiliary wrench,
-stance acceleration, nonnegative friction-ray coefficients, and combined
+stance acceleration when enabled, nonnegative friction-ray coefficients, and combined
 joint torque limits. OSQP uses float64 and checks solver status and residuals.
 An infeasible solve raises an error rather than silently changing the solution.
 
-On `maximum iterations reached` or `solved inaccurate`, the solver retries once
-with the entire objective divided by a positive common scale and a fixed
-adaptive-rho update interval. This preserves relative costs and every constraint.
-The retry must report `solved` and pass the same physical-unit residual checks;
-it does not loosen the PD-plus-feedforward torque bounds or accept an inaccurate
-solution. Scaling can help numerical convergence but cannot repair an infeasible
-contact schedule or guarantee that every early policy output will solve.
+The solver makes one attempt per physics step (maximum 100,000 iterations).
+There is no automatic retry or objective rescaling.
 
 If solving or residual validation still fails, the runtime writes the QP matrices,
 bounds, state and PD contribution to `eval_data/atlas/failures/qp_failure_*.npz`

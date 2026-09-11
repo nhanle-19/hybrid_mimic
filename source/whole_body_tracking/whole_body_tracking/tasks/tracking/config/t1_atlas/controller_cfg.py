@@ -10,6 +10,8 @@ class T1AtlasControllerCfg(T1FloatingModelControllerCfg):
     acceleration_weight: float = 1e-5
     # Posture is handled by joint PD, not a duplicate QP tracking objective.
     joint_acceleration_weight: float = 0.
+    # Experiment: disable J_contact*qdd + dJ_contact*qdot = 0.
+    enforce_stance: bool = False
     friction: float = .6
     contact_height_tolerance: float = .025
     contact_schedule_file: str | None = None

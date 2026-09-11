@@ -223,40 +223,6 @@ def test_hybrid_balance_has_no_joint_posture_task(model):
     np.testing.assert_allclose(rate, state['Ag']@nominal+state['Ag_bias'])
 
 
-def test_iteration_limit_retries_same_constraints(model, monkeypatch):
-    import atlas_qp
-    original = atlas_qp.osqp.OSQP
-    setups = []
-
-    def limited_first_solver():
-        solver = original()
-        setup = solver.setup
-        def capture(**kwargs):
-            setups.append(kwargs.copy())
-            if len(setups) == 1:
-                kwargs['max_iter'] = 1  # Exercise a real interrupted OSQP solve.
-            setup(**kwargs)
-        solver.setup = capture
-        return solver
-
-    monkeypatch.setattr(atlas_qp.osqp, 'OSQP', limited_first_solver)
-    state = state_at_rest(model)
-    pd = np.linspace(-100., 100., 23)
-    with pytest.warns(RuntimeWarning, match='retrying with normalized objective'):
-        result = AtlasQP(np.full(23, 60.)).solve(state, np.zeros(6), [],
-            hybrid=hybrid_objective(model), pd_torque=pd)
-    assert result['solver_retried']
-    assert len(setups) == 2
-    np.testing.assert_array_equal(setups[0]['A'].toarray(), setups[1]['A'].toarray())
-    np.testing.assert_array_equal(setups[0]['l'], setups[1]['l'])
-    np.testing.assert_array_equal(setups[0]['u'], setups[1]['u'])
-    scale = max(1., np.max(np.abs(setups[0]['P'].diagonal())))
-    np.testing.assert_allclose(setups[1]['P'].toarray(), setups[0]['P'].toarray()/scale)
-    np.testing.assert_allclose(setups[1]['q'], setups[0]['q']/scale)
-    assert max(result['metrics'].values()) < 2e-5
-    assert np.max(np.abs(pd+result['torque'])) <= 60.+2e-5
-
-
 def test_infeasible_qp_writes_replay_data(model, tmp_path):
     state = state_at_rest(model)
     impossible = MotionTask(np.zeros((1, 29)), np.ones(1), 1., hard=True)
@@ -269,3 +235,22 @@ def test_infeasible_qp_writes_replay_data(model, tmp_path):
         assert data['hessian'].shape == (29, 29)
         assert data['constraint_matrix'].shape[0] == len(data['lower']) == len(data['upper'])
         np.testing.assert_array_equal(data['q'], state['q'])
+
+
+def test_disabled_stance_allows_acceleration_but_keeps_torque_and_friction_bounds(model):
+    state = state_at_rest(model)
+    foot = FEET[0]
+    task = MotionTask(state['frames'][foot]['J'], np.array([0., 0., 1., 0., 0., 0.]),
+                      1., 'moving_contact', hard=True)
+    pd = np.linspace(-100., 100., 23)
+    args = (state, np.zeros(6), [Contact(foot)], [task])
+    with pytest.raises(RuntimeError):
+        AtlasQP(np.full(23, 60.)).solve(*args, hybrid=hybrid_objective(model), pd_torque=pd)
+    result = AtlasQP(np.full(23, 60.), enforce_stance=False).solve(
+        *args, hybrid=hybrid_objective(model), pd_torque=pd)
+    assert not result['stance_constraint_enabled']
+    assert result['metrics']['stance'] > .9
+    assert max(value for key, value in result['metrics'].items() if key != 'stance') < 2e-5
+    assert np.max(np.abs(pd+result['torque'])) < 60.+2e-5
+    assert result['metrics']['friction_violation'] < 2e-5
+    assert result['metrics']['rho_violation'] < 2e-5
