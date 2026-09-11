@@ -208,6 +208,35 @@ key supplied to the command. The input must be the converted file
 containing joint velocities and body transforms; the raw retargeted NPZ and
 terminal logs cannot be used directly for training.
 
+### Train the Atlas controller
+
+Use W&B logging in the same `hybrid_mimic` project, with GPU 0 exposed:
+
+```bash
+conda activate hybridmimic
+python -m pip install -r requirements-atlas.txt
+
+read -rsp "W&B API key: " WANDB_API_KEY
+echo
+
+CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
+  --task Tracking-Atlas-T1-v0 \
+  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --device cuda:0 \
+  --num_envs 2 \
+  --headless \
+  --logger wandb \
+  --log_project_name hybrid_mimic \
+  --run_name atlas_g18_push_kick_right
+```
+
+Simulation and policy training use the exposed GPU; the Atlas QP solver runs
+on CPU, so start with two environments. This runs the default 30,000 iterations
+and saves checkpoints under `logs/rsl_rl/t1_atlas/`. Train a fresh policy because
+the Atlas 29-action interface is incompatible with Floating Model checkpoints.
+See [Atlas validation and evaluation](docs/atlas_controller.md) for the current
+tracking limitations and evaluation commands.
+
 ### Train the PD baseline
 
 Use the original `Tracking-Flat-T1-v0` task with the local converted motion and
