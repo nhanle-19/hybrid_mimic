@@ -103,20 +103,40 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             history_length = term_cfg["history_length"]
             observation_history_lengths.append(1 if history_length == 0 else history_length)
 
+    robot_data = env.scene["robot"].data
+    default_joint_pos = getattr(robot_data, "default_joint_pos_nominal", None)
+    if default_joint_pos is None:
+        default_joint_pos = robot_data.default_joint_pos[0]
+
     metadata = {
         "run_path": run_path,
         "joint_names": env.scene["robot"].data.joint_names,
         "joint_stiffness": env.scene["robot"].data.joint_stiffness[0].cpu().tolist(),
         "joint_damping": env.scene["robot"].data.joint_damping[0].cpu().tolist(),
-        "default_joint_pos": env.scene["robot"].data.default_joint_pos_nominal.cpu().tolist(),
+        "default_joint_pos": default_joint_pos.cpu().tolist(),
         "command_names": env.command_manager.active_terms,
         "observation_names": observation_names,
         "observation_history_lengths": observation_history_lengths,
         "seq_len": int(env.command_manager.get_term("motion").seq_len),
-        "action_scale": env.action_manager.get_term("joint_pos")._scale[0].cpu().tolist(),
         "anchor_body_name": env.command_manager.get_term("motion").cfg.anchor_body_name,
         "body_names": env.command_manager.get_term("motion").cfg.body_names,
     }
+
+    if "atlas" in env.action_manager.active_terms:
+        atlas = env.action_manager.get_term("atlas")
+        controller = atlas.cfg.controller
+        # Atlas actions are residuals in model joint order, followed by world
+        # CoM velocity and angular momentum; they are not joint-position targets.
+        metadata.update({
+            "action_type": "atlas_residual",
+            "action_joint_names": atlas.dynamics.joint_names,
+            "action_scale": [controller.posture_action_scale] * len(atlas.dynamics.joint_names)
+            + [controller.com_velocity_action_scale] * 3
+            + [controller.angular_momentum_action_scale] * 3,
+            "action_layout": "joint_posture,com_velocity_world,angular_momentum_world",
+        })
+    else:
+        metadata["action_scale"] = env.action_manager.get_term("joint_pos")._scale[0].cpu().tolist()
 
     model = onnx.load(onnx_path)
 
