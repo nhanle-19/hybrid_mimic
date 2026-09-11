@@ -19,6 +19,7 @@ class BatchedAtlasQP:
         self.rays = self.tensor([[0.,0.,-mu,mu],[mu,-mu,0.,0.],[1.,1.,1.,1.]])
         self.counts = [4 if name in ('left_foot_link','right_foot_link') else 1 for name in self.names]
         self.nr = 4*sum(self.counts)
+        self.warm_start = {} if getattr(cfg, 'batched_warm_start', False) else None
 
     def assemble(self, state, pd, torque_limits, acceleration, logits, torque_reference, torque_weights, active,
                  external_centroidal=None, external_generalized=None):
@@ -60,7 +61,7 @@ class BatchedAtlasQP:
         ff_bias = total_bias-pd
         ag = torch.cat((state['Ag'], torch.zeros((n,6,nr+6),device=self.device,dtype=self.dtype)),-1)
         nominal = torch.zeros((n,nv),device=self.device,dtype=self.dtype)
-        nominal[:,:6] = torch.linalg.solve(base['J'][:,:,:6], (acceleration-base['bias']).unsqueeze(-1)).squeeze(-1)
+        nominal[:,:6] = torch.linalg.solve_ex(base['J'][:,:,:6], (acceleration-base['bias']).unsqueeze(-1), check_errors=False)[0].squeeze(-1)
         rate = bmv(state['Ag'],nominal)+state['Ag_bias']
         wh = self.tensor(cfg.momentum_weights)
         hessian = ag.transpose(-1,-2)@(wh[None,:,None]*ag)
@@ -91,13 +92,18 @@ class BatchedAtlasQP:
               external_centroidal=None, external_generalized=None):
         if self.cfg.enforce_stance:
             raise ValueError('Batched Atlas currently implements the stance-disabled experiment; select backend=osqp for hard stance constraints')
+        if self.warm_start is not None:
+            previous_active = self.warm_start.get('active')
+            if previous_active is not None and previous_active.shape == active.shape and 'valid' in self.warm_start:
+                self.warm_start['valid'] &= (previous_active == active).all(-1)
+            self.warm_start['active'] = active.clone()
         problem = self.assemble(state,pd,torque_limits,acceleration,logits,torque_reference,torque_weights,active,
                                 external_centroidal,external_generalized)
         p,g,t,c = eliminate_equalities(problem['hessian'],problem['linear'],problem['equality'],problem['target'])
         inequalities = problem['inequality']@t
         bounds = problem['bound']-bmv(problem['inequality'],c)
         reduced, info = solve_batched_qp(p,g,inequalities,bounds,max_iterations=self.cfg.batched_max_iterations,
-                                        tolerance=self.cfg.batched_tolerance)
+                                        tolerance=self.cfg.batched_tolerance,warm_start=self.warm_start)
         x = bmv(t,reduced)+c
         nv = state['M'].shape[-1]
         qdd, rho = x[:,:nv],x[:,nv:-6]

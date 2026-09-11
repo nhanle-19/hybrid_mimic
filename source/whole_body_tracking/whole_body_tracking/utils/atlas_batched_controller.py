@@ -234,6 +234,8 @@ class AtlasBatchedController(FloatingModelController):
 
     def reset(self,env_ids):
         self.external_wrenches[env_ids]=0
+        if self.qp.warm_start is not None and 'valid' in self.qp.warm_start:
+            self.qp.warm_start['valid'][env_ids] = False
         if self.pending is not None:
             ids=env_ids[env_ids<self.diagnostic_count]
             self.pending['_valid'][ids]=False

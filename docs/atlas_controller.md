@@ -117,6 +117,36 @@ solves stay on the simulation device; convergence/failure checks synchronize
 small status values with the host. There is no CPU solver fallback. The OSQP
 reference permits up to 100,000 iterations.
 
+GPU training enables `batched_warm_start=True`: the solver caches its primal
+and dual solution on CUDA, converts it into the next problem's scaling, and
+starts there. Reset environments and changed contact sets start cold. The
+objective, float64 arithmetic, convergence tolerances and physical residual
+checks are unchanged. Factorization status remains on device until the batch
+status check; triangular solves avoid the implicit synchronization in
+`torch.cholesky_solve`.
+
+For a timing comparison, append `env.hybrid_controller.batched_warm_start=False`
+to the training command to disable warm starts. The standalone benchmark accepts
+`--warm-start` / `--no-warm-start` and perturbs the PD contribution between solves:
+
+```bash
+python scripts/benchmark_atlas_batched.py --batches 1024 --repeats 20 --warm-start
+python scripts/benchmark_atlas_batched.py --batches 1024 --repeats 20 --no-warm-start
+```
+
+With 24 policy steps per rollout and decimation 10, each PPO iteration performs
+240 batched QP solves. Batch convergence waits for the hardest member, so contact
+changes, resets and saturated torques can vary collection time even at a fixed
+environment count. Compare collection and learning timings separately.
+
+Warm-start validation: 45 CPU/CUDA regression tests passed, including changes
+in contact sets and partial reset invalidation. Two local 128-environment PPO
+iterations completed and saved checkpoints. Second-iteration collection time
+was 22.862 s with warm starts versus 24.788 s in a matching cold-start run.
+These short RTX 4060 Laptop measurements are indicative, not a server timing
+guarantee. The 1,024-environment standalone warm-start benchmark also passed
+all physical checks.
+
 If solving or residual validation still fails, the runtime writes the QP matrices,
 bounds, state and PD contribution to `eval_data/atlas/failures/qp_failure_*.npz`
 and prints the path. Copy that file for diagnosis of the exact failing problem.

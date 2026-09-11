@@ -9,6 +9,7 @@ class T1AtlasControllerCfg(T1FloatingModelControllerCfg):
     backend: str = 'batched'  # 'osqp' retains the independent CPU reference.
     batched_max_iterations: int = 60
     batched_tolerance: float = 1e-7
+    batched_warm_start: bool = True
     diagnostic_env_count: int = 1
     force_weight: float = 1e-5
     acceleration_weight: float = 1e-5

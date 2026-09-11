@@ -115,3 +115,85 @@ def test_batched_atlas_matches_osqp_mixed_contacts(device, monkeypatch):
             [task],hybrid=objective,pd_torque=pd[i].cpu().numpy())
         np.testing.assert_allclose(result['total_torque'][i].cpu().numpy(),truth['total_torque'],atol=2e-3,rtol=1e-4)
         np.testing.assert_allclose(result['rate'][i].cpu().numpy(),truth['rate'],atol=2e-3,rtol=1e-4)
+
+
+def test_large_pd_cancellation_and_batch_independence(device):
+    from atlas_batched_control import BatchedAtlasQP
+    torch.manual_seed(91)
+    cfg = atlas_cfg()
+    cfg.batched_tolerance = 1e-7
+    model = AtlasTorchModel(device)
+    solver = BatchedAtlasQP(['left_foot_link','right_foot_link','left_hand_link','right_hand_link'],cfg,device)
+    q = torch.zeros((16,30), device=device, dtype=torch.float64)
+    q[:,6] = 1.
+    q[:,7:] = .2*torch.randn_like(q[:,7:])
+    v = .3*torch.randn((16,29), device=device, dtype=torch.float64)
+    pd = 200*torch.randn((16,23), device=device, dtype=torch.float64)
+    limits = torch.full_like(pd,30.)
+    acc = torch.randn((16,6), device=device, dtype=torch.float64)
+    logits = torch.randn((16,5), device=device, dtype=torch.float64)
+    active = torch.rand((16,4), device=device)>.5
+    result = solver.solve(model.state(q,v),pd,limits,acc,logits,torch.zeros_like(pd),torch.ones_like(pd),active)
+    assert result['valid'].all(), result['solver_info']
+    assert torch.all(result['total_torque'].abs() <= limits+cfg.residual_tolerance)
+    torch.testing.assert_close(result['torque']+pd,result['total_torque'])
+    order = torch.arange(15,-1,-1,device=device)
+    permuted = solver.solve(model.state(q[order],v[order]),pd[order],limits[order],acc[order],logits[order],
+        torch.zeros_like(pd),torch.ones_like(pd),active[order])
+    assert permuted['valid'].all()
+    torch.testing.assert_close(permuted['total_torque'],result['total_torque'][order],atol=1e-6,rtol=1e-6)
+
+
+def test_factorization_failure_does_not_poison_healthy_batch_member(device):
+    from atlas_batched_qp import solve_batched_qp
+    hessian = torch.eye(2, dtype=torch.float64, device=device).repeat(2, 1, 1)
+    hessian[1].neg_()  # Deliberately violate convexity in just one member.
+    linear = torch.ones((2, 2), dtype=torch.float64, device=device)
+    inequality = torch.zeros((2, 1, 2), dtype=torch.float64, device=device)
+    inequality[:, 0, 0] = 1.
+    bound = torch.ones((2, 1), dtype=torch.float64, device=device)
+    x, info = solve_batched_qp(hessian, linear, inequality, bound)
+    assert info['converged'].tolist() == [True, False]
+    assert info['factorization_failed'].tolist() == [False, True]
+    torch.testing.assert_close(x[0], -linear[0])
+    assert torch.isfinite(x).all()
+
+
+def test_warm_start_matches_cold_after_state_contact_and_reset_changes(device):
+    from atlas_batched_control import BatchedAtlasQP
+    torch.manual_seed(31)
+    cfg = atlas_cfg()
+    cfg.batched_warm_start = True
+    cfg.batched_tolerance = 1e-7  # Match the training configuration for saturated actions.
+    names = ['left_foot_link','right_foot_link','left_hand_link','right_hand_link']
+    warm = BatchedAtlasQP(names, cfg, device)
+    cfg_cold = atlas_cfg()
+    cfg_cold.batched_tolerance = cfg.batched_tolerance
+    cold = BatchedAtlasQP(names, cfg_cold, device)
+    model = AtlasTorchModel(device)
+    batch = 8
+    q = torch.zeros((batch,30), dtype=torch.float64, device=device)
+    q[:,6] = 1.
+    v = torch.zeros((batch,29), dtype=torch.float64, device=device)
+    pd = torch.zeros((batch,23), dtype=torch.float64, device=device)
+    limits = torch.full_like(pd, 30.)
+    active = torch.ones((batch,4), dtype=torch.bool, device=device)
+    for step in range(4):
+        q[:,7:] += .02*torch.randn_like(q[:,7:])
+        v += .1*torch.randn_like(v)
+        pd += 30*torch.randn_like(pd)
+        active = ~active if step == 2 else active
+        if step == 3:
+            # Invalidate only reset environments, preserving other warm starts.
+            warm.warm_start['valid'][::2] = False
+        args = (model.state(q,v), pd, limits,
+                torch.randn((batch,6), dtype=q.dtype, device=device),
+                torch.randn((batch,5), dtype=q.dtype, device=device),
+                torch.zeros_like(pd), torch.ones_like(pd), active)
+        actual, expected = warm.solve(*args), cold.solve(*args)
+        assert actual['valid'].all(), actual['solver_info']
+        assert expected['valid'].all(), expected['solver_info']
+        torch.testing.assert_close(actual['total_torque'], expected['total_torque'], atol=2e-3, rtol=1e-4)
+        torch.testing.assert_close(actual['rate'], expected['rate'], atol=2e-3, rtol=1e-4)
+        assert torch.all(actual['total_torque'].abs() <= limits+cfg.residual_tolerance)
+        assert torch.all(actual['forces'][~active] == 0)
