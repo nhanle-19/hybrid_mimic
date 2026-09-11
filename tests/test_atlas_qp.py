@@ -221,3 +221,51 @@ def test_hybrid_balance_has_no_joint_posture_task(model):
     base = state['frames']['Trunk']
     nominal[:6] = np.linalg.solve(base['J'][:, :6], np.r_[linear, angular]-base['bias'])
     np.testing.assert_allclose(rate, state['Ag']@nominal+state['Ag_bias'])
+
+
+def test_iteration_limit_retries_same_constraints(model, monkeypatch):
+    import atlas_qp
+    original = atlas_qp.osqp.OSQP
+    setups = []
+
+    def limited_first_solver():
+        solver = original()
+        setup = solver.setup
+        def capture(**kwargs):
+            setups.append(kwargs.copy())
+            if len(setups) == 1:
+                kwargs['max_iter'] = 1  # Exercise a real interrupted OSQP solve.
+            setup(**kwargs)
+        solver.setup = capture
+        return solver
+
+    monkeypatch.setattr(atlas_qp.osqp, 'OSQP', limited_first_solver)
+    state = state_at_rest(model)
+    pd = np.linspace(-100., 100., 23)
+    with pytest.warns(RuntimeWarning, match='retrying with normalized objective'):
+        result = AtlasQP(np.full(23, 60.)).solve(state, np.zeros(6), [],
+            hybrid=hybrid_objective(model), pd_torque=pd)
+    assert result['solver_retried']
+    assert len(setups) == 2
+    np.testing.assert_array_equal(setups[0]['A'].toarray(), setups[1]['A'].toarray())
+    np.testing.assert_array_equal(setups[0]['l'], setups[1]['l'])
+    np.testing.assert_array_equal(setups[0]['u'], setups[1]['u'])
+    scale = max(1., np.max(np.abs(setups[0]['P'].diagonal())))
+    np.testing.assert_allclose(setups[1]['P'].toarray(), setups[0]['P'].toarray()/scale)
+    np.testing.assert_allclose(setups[1]['q'], setups[0]['q']/scale)
+    assert max(result['metrics'].values()) < 2e-5
+    assert np.max(np.abs(pd+result['torque'])) <= 60.+2e-5
+
+
+def test_infeasible_qp_writes_replay_data(model, tmp_path):
+    state = state_at_rest(model)
+    impossible = MotionTask(np.zeros((1, 29)), np.ones(1), 1., hard=True)
+    with pytest.raises(RuntimeError, match='problem saved to'):
+        AtlasQP(np.full(23, 60.), failure_directory=tmp_path).solve(state, np.zeros(6), [], [impossible])
+    files = list(tmp_path.glob('qp_failure_*.npz'))
+    assert len(files) == 1
+    with np.load(files[0], allow_pickle=False) as data:
+        assert 'infeasible' in str(data['status'])
+        assert data['hessian'].shape == (29, 29)
+        assert data['constraint_matrix'].shape[0] == len(data['lower']) == len(data['upper'])
+        np.testing.assert_array_equal(data['q'], state['q'])

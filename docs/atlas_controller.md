@@ -98,6 +98,18 @@ stance acceleration, nonnegative friction-ray coefficients, and combined
 joint torque limits. OSQP uses float64 and checks solver status and residuals.
 An infeasible solve raises an error rather than silently changing the solution.
 
+On `maximum iterations reached` or `solved inaccurate`, the solver retries once
+with the entire objective divided by a positive common scale and a fixed
+adaptive-rho update interval. This preserves relative costs and every constraint.
+The retry must report `solved` and pass the same physical-unit residual checks;
+it does not loosen the PD-plus-feedforward torque bounds or accept an inaccurate
+solution. Scaling can help numerical convergence but cannot repair an infeasible
+contact schedule or guarantee that every early policy output will solve.
+
+If solving or residual validation still fails, the runtime writes the QP matrices,
+bounds, state and PD contribution to `eval_data/atlas/failures/qp_failure_*.npz`
+and prints the path. Copy that file for diagnosis of the exact failing problem.
+
 The standalone `AtlasQP.solve(..., hybrid=None)` mode remains available for
 strict physical numerical tests: it has no auxiliary base wrench or hybrid
 policy objective. Its original variable counts are 29/45/61. The registered

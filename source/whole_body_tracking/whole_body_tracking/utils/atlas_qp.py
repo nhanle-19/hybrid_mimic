@@ -155,12 +155,34 @@ class AtlasQP:
         if nr:
             rows.append(np.hstack([np.zeros((nr, nv)), np.eye(nr), np.zeros((nr, nb))]))
             lower.append(np.zeros(nr)); upper.append(np.full(nr, np.inf))
+        constraint_matrix = np.vstack(rows)
+        lower_bounds, upper_bounds = np.concatenate(lower), np.concatenate(upper)
         solver = osqp.OSQP()
         solver.setup(P=sparse.csc_matrix(np.triu(hessian)), q=linear,
-                     A=sparse.csc_matrix(np.vstack(rows)), l=np.concatenate(lower), u=np.concatenate(upper),
+                     A=sparse.csc_matrix(constraint_matrix), l=lower_bounds, u=upper_bounds,
                      eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False)
         result = solver.solve()
-        if result.info.status_val != 1 or result.x is None or not np.isfinite(result.x).all():
+        initial_status = result.info.status
+        # Numeric status codes differ between OSQP 0.6 and 1.x.
+        retried = initial_status.lower() in ('solved inaccurate', 'maximum iterations reached')
+        objective_scale = 1.
+        if retried:
+            import warnings
+            warnings.warn(f'Atlas QP: {initial_status}; retrying with normalized objective. '
+                          'All torque/contact constraints and residual checks remain active.', RuntimeWarning)
+            # Multiplication by a positive scalar preserves the QP minimizer
+            # and relative objective weights. Constraint rows stay in physical
+            # units; no slack, torque clipping, or inaccurate solution is accepted.
+            objective_scale = max(1., float(np.max(np.abs(np.diag(hessian)))))
+            retry_solver = osqp.OSQP()
+            retry_solver.setup(P=sparse.csc_matrix(np.triu(hessian/objective_scale)), q=linear/objective_scale,
+                A=sparse.csc_matrix(constraint_matrix), l=lower_bounds, u=upper_bounds,
+                eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False,
+                adaptive_rho_interval=25)
+            if result.x is not None and np.isfinite(result.x).all():
+                retry_solver.warm_start(x=result.x)
+            result = retry_solver.solve()
+        def fail(reason):
             dump = ''
             if self.failure_directory is not None:
                 from pathlib import Path
@@ -169,12 +191,16 @@ class AtlasQP:
                 directory.mkdir(parents=True, exist_ok=True)
                 path = directory/f'qp_failure_{uuid4().hex}.npz'
                 np.savez_compressed(path, hessian=hessian, linear=linear,
-                    constraint_matrix=np.vstack(rows), lower=np.concatenate(lower), upper=np.concatenate(upper),
+                    constraint_matrix=constraint_matrix, lower=lower_bounds, upper=upper_bounds,
                     q=state['q'], v=state['v'], pd_torque=pd_torque,
-                    status=np.asarray(result.info.status), iterations=result.info.iter)
+                    status=np.asarray(result.info.status), initial_status=np.asarray(initial_status),
+                    objective_scale=objective_scale, iterations=result.info.iter, failure_reason=np.asarray(reason))
                 dump = f'; problem saved to {path}'
-            raise RuntimeError(f'Atlas QP failed: {result.info.status} after {result.info.iter} iterations'
+            raise RuntimeError(f'Atlas QP failed: {reason} after {result.info.iter} iterations'
                                f'{dump}; no clipped/fallback torque applied')
+
+        if result.info.status_val != 1 or result.x is None or not np.isfinite(result.x).all():
+            fail(result.info.status)
         x = result.x
         acceleration, rho = x[:nv], x[nv:nv+nr]
         base_wrench = x[nv+nr:]
@@ -205,8 +231,9 @@ class AtlasQP:
                        friction_violation=float(friction_violation),
                        equality=float(np.max(np.abs(aeq@x-beq))))
         if max(metrics.values()) > self.tolerance:
-            raise RuntimeError(f'Atlas QP constraint residual check failed: {metrics}')
+            fail(f'constraint residual check: {metrics}')
         return dict(acceleration=acceleration, rho=rho, torque=torque, rate=rate,
+                    solver_retried=retried,
                     pd_torque=pd_torque.copy(), total_torque=total_torque,
                     auxiliary_base_wrench=base_wrench,
                     desired_rate=np.asarray(desired_rate), contact_forces=contact_forces,
