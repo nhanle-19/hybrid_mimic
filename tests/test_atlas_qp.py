@@ -254,3 +254,18 @@ def test_disabled_stance_allows_acceleration_but_keeps_torque_and_friction_bound
     assert np.max(np.abs(pd+result['torque'])) < 60.+2e-5
     assert result['metrics']['friction_violation'] < 2e-5
     assert result['metrics']['rho_violation'] < 2e-5
+
+
+@pytest.mark.parametrize('error', [ValueError('OSQP solve error!'), KeyboardInterrupt()])
+def test_solver_exception_saves_problem(model, tmp_path, monkeypatch, error):
+    import atlas_qp
+    def interrupted(_):
+        raise error
+    monkeypatch.setattr(atlas_qp.osqp.OSQP, 'solve', interrupted)
+    with pytest.raises(RuntimeError, match='problem saved to'):
+        AtlasQP(np.full(23, 60.), failure_directory=tmp_path, enforce_stance=False).solve(
+            state_at_rest(model), np.zeros(6), [])
+    with np.load(next(tmp_path.glob('qp_failure_*.npz')), allow_pickle=False) as data:
+        assert int(data['iterations']) == -1
+        assert not bool(data['stance_constraint_enabled'])
+        assert type(error).__name__ in str(data['failure_reason'])

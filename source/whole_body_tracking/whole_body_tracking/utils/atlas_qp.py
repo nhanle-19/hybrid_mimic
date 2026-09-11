@@ -163,9 +163,11 @@ class AtlasQP:
         solver.setup(P=sparse.csc_matrix(np.triu(hessian)), q=linear,
                      A=sparse.csc_matrix(constraint_matrix), l=lower_bounds, u=upper_bounds,
                      eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False)
-        result = solver.solve()
+        result = None
         def fail(reason):
             dump = ''
+            status = result.info.status if result is not None else 'solver exception/interruption'
+            iterations = result.info.iter if result is not None else -1
             if self.failure_directory is not None:
                 from pathlib import Path
                 from uuid import uuid4
@@ -175,11 +177,16 @@ class AtlasQP:
                 np.savez_compressed(path, hessian=hessian, linear=linear,
                     constraint_matrix=constraint_matrix, lower=lower_bounds, upper=upper_bounds,
                     q=state['q'], v=state['v'], pd_torque=pd_torque,
-                    status=np.asarray(result.info.status), iterations=result.info.iter, failure_reason=np.asarray(reason))
+                    status=np.asarray(status), iterations=iterations, failure_reason=np.asarray(reason),
+                    stance_constraint_enabled=self.enforce_stance)
                 dump = f'; problem saved to {path}'
-            raise RuntimeError(f'Atlas QP failed: {reason} after {result.info.iter} iterations'
+            raise RuntimeError(f'Atlas QP failed: {reason} (iterations={iterations}; -1 means unavailable)'
                                f'{dump}; no clipped/fallback torque applied')
 
+        try:
+            result = solver.solve()
+        except (Exception, KeyboardInterrupt) as error:
+            fail(f'{type(error).__name__}: {error}')
         if result.info.status_val != 1 or result.x is None or not np.isfinite(result.x).all():
             fail(result.info.status)
         x = result.x
