@@ -8,7 +8,7 @@ from .motion import AtlasEvaluationMotion, foot_collision
 
 
 def configure_atlas(cfg):
-    cfg.scene.num_envs = 2  # CPU OSQP is a correctness baseline, not a GPU batched solver.
+    cfg.scene.num_envs = 128 if cfg.hybrid_controller.backend == 'batched' else 2
     cfg.scene.terrain.terrain_type = 'usd'
     cfg.scene.terrain.usd_path = f'{ASSET_DIR}/booster/t1/atlas_ground.usda'
     cfg.scene.terrain.visual_material = None

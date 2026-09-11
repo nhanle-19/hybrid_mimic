@@ -4,11 +4,14 @@
 **57-action policy interface**, observations, rewards, and joint PD plus
 feedforward torque application as the existing hybrid/floating-model tasks.
 `AtlasEnv` inherits the shared `FloatingModelEnv`/`HybridEnv` runtime and replaces
-the controller with an analytical Pinocchio/OSQP implementation.
+the controller with batched Torch analytical dynamics and a float64 GPU QP.
+The Pinocchio/OSQP implementation remains an explicit evaluation reference.
 
 **Current experiment:** `T1AtlasControllerCfg.enforce_stance = False` disables
 the hard contact-acceleration equality `J_contact*qdd + dJ_contact*qdot = 0`
-for training and evaluation. Set it back to `True` to restore that constraint.
+for training and evaluation. Hard stance is currently supported only by the
+CPU reference backend (`backend=osqp`) during evaluation. GPU training rejects
+`enforce_stance=True`.
 Contact forces, friction/nonnegativity, dynamics balance and combined PD + FF
 torque limits remain active. Stance acceleration is still recorded, but does
 not reject a solution while this switch is off; diagnostics include the switch
@@ -70,8 +73,9 @@ and `commanded_torque` (their sum) separately from simulator `applied_torque`.
 
 ## Analytical controller
 
-`AtlasModel` builds a Pinocchio free-flyer from `atlas_dynamics.json`, exported
-from the actual T1 USD rigid-body tree. It computes full mass/bias matrices,
+`AtlasTorchModel` uses `atlas_dynamics.json`, exported from the actual T1 USD
+rigid-body tree, to compute batched dynamics on CUDA. `AtlasModel` builds the
+independent Pinocchio reference from the same data. Both compute full mass/bias matrices,
 centroidal momentum maps and frame Jacobians/biases at every physics step.
 Simulator startup checks compare mass, inertia, CoM offsets, link frames and
 independently measured body-sum momentum. Hybrid actuator armature is included
@@ -80,7 +84,7 @@ in the joint block of the optimization mass matrix.
 The hybrid-mode decision vector is `[generalized_acceleration, rho, base_wrench]`.
 There are 29 acceleration variables, four nonnegative friction-ray coefficients
 per contact point, and six auxiliary-base-wrench variables. Each foot uses four
-sole points. With no hands active, the sizes are:
+sole points. The CPU reference compacts inactive contacts. With no hands active, its sizes are:
 
 | Foot support | Variables |
 | --- | ---: |
@@ -106,8 +110,12 @@ stance acceleration when enabled, nonnegative friction-ray coefficients, and com
 joint torque limits. OSQP uses float64 and checks solver status and residuals.
 An infeasible solve raises an error rather than silently changing the solution.
 
-The solver makes one attempt per physics step (maximum 100,000 iterations).
-There is no automatic retry or objective rescaling.
+The GPU solver keeps all contact slots in a fixed batch, with inactive force
+maps zeroed, and eliminates the six base-wrench equality variables. It uses
+variable/row equilibration and up to 60 predictor/corrector iterations. Numerical
+solves stay on the simulation device; convergence/failure checks synchronize
+small status values with the host. There is no CPU solver fallback. The OSQP
+reference permits up to 100,000 iterations.
 
 If solving or residual validation still fails, the runtime writes the QP matrices,
 bounds, state and PD contribution to `eval_data/atlas/failures/qp_failure_*.npz`
@@ -162,7 +170,7 @@ CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/trai
   --task Tracking-Atlas-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --device cuda:0 \
-  --num_envs 2 \
+  --num_envs 128 \
   --logger wandb \
   --log_project_name hybrid_mimic \
   --run_name atlas_hybrid_g18_push_kick_right \
@@ -189,7 +197,7 @@ combined torque and simulator applied torque are recorded separately.
 Numerical and metadata regression checks:
 
 ```bash
-python -m pytest tests/test_atlas_qp.py tests/test_exporter_metadata.py -q
+python -m pytest tests/test_atlas_batched.py tests/test_atlas_qp.py tests/test_exporter_metadata.py -q
 ```
 
 The September 10 evaluation and its 16 numerical tests documented the earlier
@@ -211,3 +219,13 @@ After separating posture PD from the QP and bounding their summed torque,
 feedforward cancellation. A five-step CPU checkpoint evaluation produced 50
 physics samples: maximum combined utilization was 1.000000009 (solver roundoff),
 and the maximum recorded applied-versus-commanded difference was 2.38e-5 Nm.
+
+GPU migration validation: 39 regression tests passed, including CUDA dynamics
+and mixed-contact QP comparisons against Pinocchio/OSQP. A CUDA training smoke
+run with 128 environments completed one PPO iteration (3,072 transitions) and
+saved `model_0.pt`; collection took 35.107 s and learning 0.232 s on the local
+RTX 4060 Laptop GPU. The default is now 128 environments. A 1,024-environment
+trial encountered PhysX GPU kernel-launch errors and was stopped; that size is
+not validated on this machine. These checks do not establish long-run tracking
+quality. Host work remains for initialization, status checks, logging and file
+exports; numerical dynamics, QP solves, simulation and PPO use CUDA.

@@ -227,15 +227,17 @@ CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/trai
   --task Tracking-Atlas-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --device cuda:0 \
-  --num_envs 2 \
+  --num_envs 128 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
   --run_name atlas_g18_push_kick_right
 ```
 
-Simulation and policy training use the exposed GPU; the Atlas QP solver runs
-on CPU, so start with two environments. This runs the default 30,000 iterations
+Simulation, analytical dynamics, batched QP solves, and PPO training use the
+same exposed GPU. Atlas training requires CUDA and the `batched` backend; it
+rejects CPU/OSQP configurations. File loading, logging, and checkpoint exports
+still use the host. This runs the default 30,000 iterations
 and saves checkpoints under `logs/rsl_rl/t1_atlas/`. Train a fresh policy because
 old 29-action Atlas checkpoints are incompatible with this 57-action interface.
 The policy layout now matches HybridMimic/Floating Model; controller behavior

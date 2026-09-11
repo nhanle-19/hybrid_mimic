@@ -89,6 +89,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    # Keep PPO, rollout storage and simulation on the same device, including
+    # explicit CUDA indices. Atlas training must never use the CPU reference.
+    agent_cfg.device = env_cfg.sim.device
+    if hasattr(env_cfg, "hybrid_controller") and hasattr(env_cfg.hybrid_controller, "backend"):
+        if env_cfg.hybrid_controller.backend != "batched":
+            raise ValueError("Atlas training requires hybrid_controller.backend=batched; OSQP is for reference evaluation.")
+        if torch.device(env_cfg.sim.device).type != "cuda" or not torch.cuda.is_available():
+            raise RuntimeError("Atlas training requires an available CUDA device for simulation, dynamics, QP and PPO.")
+        if env_cfg.hybrid_controller.enforce_stance:
+            raise ValueError("GPU Atlas training currently requires enforce_stance=False.")
+        print(f"[INFO] Atlas simulation, analytical dynamics, batched QP and PPO device: {agent_cfg.device}")
 
     import pathlib
 

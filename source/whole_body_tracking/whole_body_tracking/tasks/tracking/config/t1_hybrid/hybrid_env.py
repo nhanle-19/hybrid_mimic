@@ -1,4 +1,5 @@
 import re
+import inspect
 
 import torch
 from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
@@ -8,6 +9,8 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import quat_from_angle_axis, quat_mul
 
 from whole_body_tracking.utils import hybrid
+
+_OBSERVATION_UPDATE_HISTORY = "update_history" in inspect.signature(ObservationManager.compute).parameters
 
 # Implementation of the Hybrid environment. The model-based controller
 # information is saved on the environment for use by reward terms.
@@ -454,7 +457,11 @@ class HybridEnv(ManagerBasedRLEnv):
             self.event_manager.apply(mode="interval", dt=self.step_dt)
         # -- compute observations
         # note: done after reset to get the correct observations for reset envs
-        self.obs_buf = self.observation_manager.compute(update_history=True)
+        # Older Isaac Lab computes and appends history unconditionally.
+        if _OBSERVATION_UPDATE_HISTORY:
+            self.obs_buf = self.observation_manager.compute(update_history=True)
+        else:
+            self.obs_buf = self.observation_manager.compute()
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras

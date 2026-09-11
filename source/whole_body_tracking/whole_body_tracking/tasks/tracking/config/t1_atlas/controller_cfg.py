@@ -6,6 +6,10 @@ from whole_body_tracking.tasks.tracking.config.t1_floating_model.controller_cfg 
 class T1AtlasControllerCfg(T1FloatingModelControllerCfg):
     """HybridMimic policy scales and Atlas analytical solver settings."""
     momentum_weights: tuple = (1., 1., 1., 10., 10., 10.)
+    backend: str = 'batched'  # 'osqp' retains the independent CPU reference.
+    batched_max_iterations: int = 60
+    batched_tolerance: float = 1e-7
+    diagnostic_env_count: int = 1
     force_weight: float = 1e-5
     acceleration_weight: float = 1e-5
     # Posture is handled by joint PD, not a duplicate QP tracking objective.

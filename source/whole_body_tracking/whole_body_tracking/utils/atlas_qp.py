@@ -162,7 +162,8 @@ class AtlasQP:
         solver = osqp.OSQP()
         solver.setup(P=sparse.csc_matrix(np.triu(hessian)), q=linear,
                      A=sparse.csc_matrix(constraint_matrix), l=lower_bounds, u=upper_bounds,
-                     eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False)
+                     eps_abs=1e-8, eps_rel=1e-10, max_iter=100000, polish=True,
+                     delta=1e-8, polish_refine_iter=10, verbose=False)
         result = None
         def fail(reason):
             dump = ''
