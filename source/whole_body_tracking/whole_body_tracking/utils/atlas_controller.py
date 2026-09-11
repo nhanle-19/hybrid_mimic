@@ -19,7 +19,7 @@ class AtlasController(FloatingModelController):
             raise ValueError('Atlas model and simulation joint names differ')
         self.solvers = [AtlasQP(limits, momentum_weights=cfg.momentum_weights,
                                force_weight=cfg.force_weight, acceleration_weight=cfg.acceleration_weight,
-                               tolerance=cfg.residual_tolerance)
+                               tolerance=cfg.residual_tolerance, failure_directory=cfg.failure_directory)
                         for limits in self.torque_limits[:, self.pin_to_sim].cpu().numpy()]
         self.references = self.planned_contacts = self.contact_override = None
         self.external = [[] for _ in range(env.num_envs)]

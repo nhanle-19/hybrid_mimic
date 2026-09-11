@@ -15,3 +15,4 @@ class T1AtlasControllerCfg(T1FloatingModelControllerCfg):
     contact_schedule_file: str | None = None
     residual_tolerance: float = 2e-5
     record_diagnostics: bool = False
+    failure_directory: str = 'eval_data/atlas/failures'

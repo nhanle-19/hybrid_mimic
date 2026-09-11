@@ -55,7 +55,9 @@ def friction_rays(normal, mu):
 
 class AtlasQP:
     def __init__(self, torque_limits, momentum_weights=(1., 1., 1., 10., 10., 10.),
-                 force_weight=1e-5, acceleration_weight=1e-5, tolerance=2e-5):
+                 force_weight=1e-5, acceleration_weight=1e-5, tolerance=2e-5,
+                 failure_directory=None):
+        self.failure_directory = failure_directory
         self.torque_limits = np.asarray(torque_limits, dtype=float)
         if not np.all(np.isfinite(self.torque_limits)&(self.torque_limits > 0)):
             raise ValueError('Torque limits must be finite and positive')
@@ -159,7 +161,20 @@ class AtlasQP:
                      eps_abs=1e-8, eps_rel=1e-8, max_iter=100000, polish=True, verbose=False)
         result = solver.solve()
         if result.info.status_val != 1 or result.x is None or not np.isfinite(result.x).all():
-            raise RuntimeError(f'Atlas QP failed: {result.info.status}; no clipped/fallback torque applied')
+            dump = ''
+            if self.failure_directory is not None:
+                from pathlib import Path
+                from uuid import uuid4
+                directory = Path(self.failure_directory)
+                directory.mkdir(parents=True, exist_ok=True)
+                path = directory/f'qp_failure_{uuid4().hex}.npz'
+                np.savez_compressed(path, hessian=hessian, linear=linear,
+                    constraint_matrix=np.vstack(rows), lower=np.concatenate(lower), upper=np.concatenate(upper),
+                    q=state['q'], v=state['v'], pd_torque=pd_torque,
+                    status=np.asarray(result.info.status), iterations=result.info.iter)
+                dump = f'; problem saved to {path}'
+            raise RuntimeError(f'Atlas QP failed: {result.info.status} after {result.info.iter} iterations'
+                               f'{dump}; no clipped/fallback torque applied')
         x = result.x
         acceleration, rho = x[:nv], x[nv:nv+nr]
         base_wrench = x[nv+nr:]
