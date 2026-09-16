@@ -1,8 +1,10 @@
 """Batched version of the reference-conditioned contact Atlas reference controller and physical QP.
 
 All dynamics, objective assembly, equality elimination and solves stay on the
-input torch device. The four contact patterns are batched separately so absent
-feet contribute neither forces nor stance constraints.
+input torch device. Every environment uses 61 variables and 80 inequality
+rows before six balance equalities are eliminated, regardless of contact geometry.
+Unavailable force columns are masked out of physics, with decoupled regularized
+dummy variables instead of zero-capacity barrier constraints.
 """
 import torch
 
@@ -59,14 +61,12 @@ def reference_tasks(state, ref, action, cfg, active):
     angular += cfg.pelvis_velocity_gain*(desired['velocity'][:, 3:]-pelvis['velocity'][:, 3:])
     tasks.append((pelvis['J'][:, 3:], angular-pelvis['bias'][:, 3:], cfg.pelvis_weight))
     if cfg.swing_weight:
-        for foot in FEET:
-            if foot in active:
-                continue
+        for i, foot in enumerate(FEET):
             current, desired = state['frames'][foot], ref['frames'][foot]
             error = torch.cat((desired['position']-current['position'],
                                rotation_log(desired['rotation']@current['rotation'].transpose(-1, -2))), -1)
             acceleration = cfg.swing_position_gain*error+cfg.swing_velocity_gain*(desired['velocity']-current['velocity'])
-            tasks.append((current['J'], acceleration-current['bias'], cfg.swing_weight))
+            tasks.append((current['J'], acceleration-current['bias'], cfg.swing_weight*(~active[:, i])))
     return rate, tasks
 
 
@@ -84,58 +84,35 @@ class AtlasGPUQP:
         if masks.shape != (n, 2, 4) or masks.dtype != torch.bool:
             raise ValueError('Actual support geometry must be boolean (N,2,4)')
         point_masks = masks & (activation > 0)[:, :, None]
-        masks = point_masks.any(-1)
-        failed = torch.zeros(n, dtype=torch.bool, device=actions.device)
-        wrenches = actions.new_zeros((n, 2, 6))
-        contact_acceleration = actions.new_zeros((n, 2, 6))
-        torque = torch.empty_like(limits)
-        acceleration = torch.empty_like(state['bias'])
-        rho = actions.new_zeros((n, 32))
-        rates, desired_rates = actions.new_empty((n, 6)), actions.new_empty((n, 6))
-        residuals = actions.new_empty(n)
-        # Constant four-pattern loop, independent of the number of environments.
-        for pattern in range(4):
-            ids = torch.where((masks[:, 0].long()+2*masks[:, 1].long()) == pattern)[0]
-            if ids.numel() == 0:
-                continue
-            s, ref = select_state(state, ids), select_state(reference, ids)
-            active = [foot for i, foot in enumerate(FEET) if pattern & (1 << i)]
-            rate, tasks = reference_tasks(s, ref, actions[ids], self.cfg, active)
-            result = self._solve_group(s, rate, tasks, active, limits[ids],
-                                       None if external is None else external[ids], weights[ids], activation[ids], point_masks[ids], ref)
-            torque[ids], acceleration[ids], rates[ids] = result['torque'], result['acceleration'], result['rate']
-            desired_rates[ids], residuals[ids] = rate, result['residual']
-            failed[ids] = result['failed']
-            for j, foot in enumerate(FEET):
-                contact_acceleration[ids, j] = result['contact_acceleration'][foot]
-            for i, foot in enumerate(active):
-                start = FEET.index(foot)*16
-                rho[ids, start:start+16] = result['rho'][:, i*16:(i+1)*16]
-                wrenches[ids, FEET.index(foot)] = result['wrenches'][foot]
-        return dict(torque=torque, acceleration=acceleration, rho=rho, rate=rates,
-                    desired_rate=desired_rates, residual=residuals, contact_weights=weights,
-                    contact_acceleration=contact_acceleration, activation=activation, available=point_masks,
-                    failed=failed, wrenches=wrenches)
+        rate, tasks = reference_tasks(state, reference, actions, self.cfg, point_masks.any(-1))
+        result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks, reference)
+        result.update(desired_rate=rate, contact_weights=weights, activation=activation, available=point_masks)
+        return result
 
-    def _solve_group(self, s, rate, tasks, active, limits, external, weights, activation, point_masks, ref):
+    def _solve_fixed(self, s, rate, tasks, limits, external, weights, activation, point_masks, ref):
         n, nv = s['bias'].shape
-        nr, nx = 16*len(active), nv+16*len(active)
+        nr, nx = 32, nv+32
         zeros = lambda *shape: s['M'].new_zeros(shape)
         tensor = lambda value: torch.as_tensor(value, device=s['M'].device, dtype=s['M'].dtype)
         points = sole_vertices(s['q'].device, s['q'].dtype)
         mu = self.friction
         rays = tensor([[0., 0., -mu, mu], [mu, -mu, 0., 0.], [1., 1., 1., 1.]])
+        enabled = point_masks.reshape(n, 8).repeat_interleave(4, dim=-1)
         qmap, gmap = zeros(n, 6, nr), zeros(n, nv, nr)
-        for i, foot in enumerate(active):
+        for i, foot in enumerate(FEET):
             frame = s['frames'][foot]
-            offsets = points[FEET.index(foot)]@frame['rotation'].transpose(-1, -2)
-            for j in range(4):
-                offset = offsets[:, j]
-                location = frame['position']+offset
-                jp = frame['J'][:, :3]-skew(offset)@frame['J'][:, 3:]
-                sl = slice(i*16+j*4, i*16+j*4+4)
-                qmap[:, :, sl] = torch.cat((rays.expand(n, -1, -1), skew(location-s['com'])@rays), 1)
-                gmap[:, :, sl] = jp.transpose(-1, -2)@rays
+            offsets = points[i]@frame['rotation'].transpose(-1, -2)
+            location = frame['position'][:, None]+offsets
+            jp = frame['J'][:, None, :3]-skew(offsets)@frame['J'][:, None, 3:]
+            sl = slice(i*16, (i+1)*16)
+            qmap[:, :, sl] = torch.cat((rays.expand(n, 4, -1, -1),
+                skew(location-s['com'][:, None])@rays), -2).transpose(1, 2).reshape(n, 6, 16)
+            gmap[:, :, sl] = (jp.transpose(-1, -2)@rays).transpose(1, 2).reshape(n, nv, 16)
+        # Physical rho = enabled * latent rho. Disabled columns cannot exert
+        # force, but retain independent positive quadratic curvature so the
+        # fixed-size Newton system remains nonsingular without rho<=0/-rho<=0.
+        qmap *= enabled[:, None]
+        gmap *= enabled[:, None]
         wg = torch.cat((s['mass']*s['gravity'], zeros(3))).expand(n, -1)
         wext, gext = zeros(n, 6), zeros(n, nv)
         if external is not None:
@@ -161,56 +138,40 @@ class AtlasGPUQP:
             weight = weights[:, i]
             hessian += j.transpose(-1, -2)@(weight[:, :, None]*j)
             linear += mv(j.transpose(-1, -2), weight*(frame['bias']-target_acceleration))
-        # Unsupported collider corners have exactly zero rho. Group-independent
-        # elimination below drops those variables rather than using infeasible
-        # pairs of strict barrier inequalities at zero capacity.
         for jacobian, target, weight in tasks:
             j = torch.cat((jacobian, zeros(n, jacobian.shape[1], nr)), -1)
-            hessian += weight*j.transpose(-1, -2)@j
-            linear -= weight*mv(j.transpose(-1, -2), target)
+            weight = torch.as_tensor(weight, device=s['M'].device, dtype=s['M'].dtype).expand(n)
+            hessian += weight[:, None, None]*(j.transpose(-1, -2)@j)
+            linear -= weight[:, None]*mv(j.transpose(-1, -2), target)
         equality, target = torch.cat(eq, 1), torch.cat(rhs, 1)
-        inequality = torch.cat((torque_map, -torque_map, torch.cat((zeros(n, nr, nv), -torch.eye(nr, device=s['q'].device, dtype=s['q'].dtype).expand(n, -1, -1)), -1)), 1)
-        bound = torch.cat((limits-torque_bias, limits+torque_bias, zeros(n, nr)), -1)
-        if active:
-            normal_rows = zeros(n, len(active), nx)
-            capacities = []
-            for i, foot in enumerate(active):
-                # Every friction ray has unit world-normal component, so Fn=sum rho.
-                normal_rows[:, i, nv+i*16:nv+(i+1)*16] = 1.
-                capacities.append(activation[:, FEET.index(foot)]*self.cfg.contact_force_max[FEET.index(foot)])
-            inequality = torch.cat((inequality, normal_rows), 1)
-            bound = torch.cat((bound, torch.stack(capacities, -1)), -1)
-        enabled = torch.cat([point_masks[:, FEET.index(f)] for f in active], -1) if active else torch.ones((n, 0), dtype=torch.bool, device=s['q'].device)
-        # At most 256 geometry patterns for the existing two four-corner boxes.
-        codes = (enabled.long()*(2**torch.arange(enabled.shape[1], device=s['q'].device))).sum(-1)
-        x, converged = zeros(n, nx), torch.zeros(n, dtype=torch.bool, device=s['q'].device)
-        for code in torch.unique(codes):
-            ids = torch.where(codes == code)[0]
-            keep_rho = enabled[ids[0]].repeat_interleave(4)
-            keep = torch.cat((torch.ones(nv, dtype=torch.bool, device=s['q'].device), keep_rho))
-            # Drop nonnegativity rows belonging to eliminated zero coefficients.
-            rows = torch.cat((torch.ones(2*(nv-6), dtype=torch.bool, device=s['q'].device), keep_rho,
-                              torch.ones(len(active), dtype=torch.bool, device=s['q'].device)))
-            h0, g0 = hessian[ids][:, keep][:, :, keep], linear[ids][:, keep]
-            e, target0 = equality[ids][:, :, keep], target[ids]
-            gmat, bounds = inequality[ids][:, rows][:, :, keep], bound[ids][:, rows]
-            q, r = torch.linalg.qr(e.transpose(-1, -2), mode='complete')
-            ne = e.shape[1]
-            offset = mv(q[:, :, :ne], torch.linalg.solve_triangular(r[:, :ne].transpose(-1, -2), target0[..., None], upper=False).squeeze(-1))
-            basis = q[:, :, ne:]
-            h = basis.transpose(-1, -2)@h0@basis
-            g = mv(basis.transpose(-1, -2), g0+mv(h0, offset))
-            if self.backend == 'osqp':
-                reduced, ok = self._osqp(h, g, gmat@basis, bounds-mv(gmat, offset))
-            else:
-                reduced, info = solve_batched_qp(h, g, gmat@basis, bounds-mv(gmat, offset),
-                    max_iterations=self.max_iterations, tolerance=self.solver_tolerance)
-                ok = info['converged']
-            full = zeros(len(ids), nx)
-            full[:, keep] = offset+mv(basis, reduced)
-            x[ids], converged[ids] = full, ok
+        nonnegative = torch.cat((zeros(n, nr, nv), -torch.diag_embed(enabled.to(s['q'].dtype))), -1)
+        normal_rows = zeros(n, 2, nx)
+        for i in range(2):
+            normal_rows[:, i, nv+i*16:nv+(i+1)*16] = enabled[:, i*16:(i+1)*16]
+        support = point_masks.any(-1)
+        capacities = activation*tensor(self.cfg.contact_force_max)
+        # Disabled rows are 0 <= 1, strictly feasible and independent of x.
+        # In particular zero-activation feet never introduce a zero-width
+        # feasible interval into the interior-point solver.
+        inequality = torch.cat((torque_map, -torque_map, nonnegative, normal_rows), 1)
+        bound = torch.cat((limits-torque_bias, limits+torque_bias,
+                           (~enabled).to(s['q'].dtype), torch.where(support, capacities, 1.)), -1)
+        q, r = torch.linalg.qr(equality.transpose(-1, -2), mode='complete')
+        ne = equality.shape[1]
+        offset = mv(q[:, :, :ne], torch.linalg.solve_triangular(
+            r[:, :ne].transpose(-1, -2), target[..., None], upper=False).squeeze(-1))
+        basis = q[:, :, ne:]
+        h = basis.transpose(-1, -2)@hessian@basis
+        g = mv(basis.transpose(-1, -2), linear+mv(hessian, offset))
+        if self.backend == 'osqp':
+            reduced, converged = self._osqp(h, g, inequality@basis, bound-mv(inequality, offset))
+        else:
+            reduced, info = solve_batched_qp(h, g, inequality@basis, bound-mv(inequality, offset),
+                max_iterations=self.max_iterations, tolerance=self.solver_tolerance)
+            converged = info['converged']
+        x = offset+mv(basis, reduced)
         torque = mv(torque_map, x)+torque_bias
-        acceleration, rho = x[:, :nv], x[:, nv:]
+        acceleration, rho = x[:, :nv], x[:, nv:]*enabled
         inverse = mv(s['M'], acceleration)+s['bias']-mv(gmap, rho)-gext-torch.cat((zeros(n, 6), torque), -1)
         residual = torch.stack(((mv(equality, x)-target).abs().amax(-1),
                                 (mv(inequality, x)-bound).clamp_min(0).amax(-1),
@@ -221,15 +182,16 @@ class AtlasGPUQP:
         torque = torch.where(valid[:, None], torque, 0.)
         acceleration = torch.where(valid[:, None], acceleration, 0.)
         rho = torch.where(valid[:, None], rho, 0.)
-        wrenches = {}
-        for i, foot in enumerate(active):
+        wrenches = []
+        for i, foot in enumerate(FEET):
             frame = s['frames'][foot]
             offsets = points[FEET.index(foot)]@frame['rotation'].transpose(-1, -2)
             forces = rho[:, i*16:(i+1)*16].reshape(n, 4, 4)@rays.T
-            wrenches[foot] = torch.cat((forces.sum(1), torch.cross(offsets, forces, dim=-1).sum(1)), -1)
+            wrenches.append(torch.cat((forces.sum(1), torch.cross(offsets, forces, dim=-1).sum(1)), -1))
         return dict(torque=torque, acceleration=acceleration, rho=rho,
                     rate=mv(s['Ag'], acceleration)+s['Ag_bias'], residual=residual,
-                    contact_acceleration={foot: mv(s['frames'][foot]['J'], acceleration)+s['frames'][foot]['bias'] for foot in FEET}, failed=~valid, wrenches=wrenches)
+                    contact_acceleration=torch.stack([mv(s['frames'][foot]['J'], acceleration)+s['frames'][foot]['bias'] for foot in FEET], 1),
+                    failed=~valid, wrenches=torch.stack(wrenches, 1))
 
     @staticmethod
     def _osqp(hessian, linear, inequality, bound):
@@ -243,7 +205,8 @@ class AtlasGPUQP:
             scale = hessian[i].diagonal().clamp_min(1e-12).rsqrt()
             h = hessian[i]*scale[:, None]*scale[None, :]
             g = inequality[i]*scale[None, :]
-            row = g.abs().amax(-1).clamp_min(1e-12).reciprocal()
+            row_norm = g.abs().amax(-1)
+            row = torch.where(row_norm > 0, row_norm.clamp_min(1e-12).reciprocal(), 1.)
             solver.setup(P=sparse.csc_matrix(np.triu(h.cpu().numpy())), q=(linear[i]*scale).cpu().numpy(),
                          A=sparse.csc_matrix((g*row[:, None]).cpu().numpy()), l=np.full(bound.shape[1], -np.inf),
                          u=(bound[i]*row).cpu().numpy(), eps_abs=1e-10, eps_rel=1e-10, max_iter=100000, verbose=False, polish=True)

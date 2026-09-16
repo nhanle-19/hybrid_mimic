@@ -148,6 +148,55 @@ def test_solver_failure_is_flagged(cfg):
     assert torch.isfinite(r['torque']).all()
 
 
+@pytest.mark.parametrize('device', DEVICES)
+def test_all_contact_patterns_share_one_fixed_batch(cfg, device, monkeypatch):
+    import atlas_gpu_control as control
+    n = 256
+    s = standing_state(AtlasTorchModel(device), n)
+    a = support_actions(n, device)
+    # All eight-corner availability patterns, including no support, a single
+    # corner, an edge, a full foot, and both feet. Activations can disable a
+    # geometrically available foot independently.
+    masks = ((torch.arange(n, device=device)[:, None] >> torch.arange(8, device=device)) & 1).bool().reshape(n, 2, 4)
+    a[::7, 0] = 0.
+    a[::11, 7] = 0.
+    limits = torch.full((n, 23), 60., dtype=torch.float64, device=device)
+    calls = []
+    solve = control.solve_batched_qp
+    def counted(h, g, matrix, bound, **kwargs):
+        calls.append((h.shape, matrix.shape, h.device))
+        return solve(h, g, matrix, bound, **kwargs)
+    monkeypatch.setattr(control, 'solve_batched_qp', counted)
+    result = AtlasGPUQP(cfg).solve(s, s, a, masks, limits)
+    assert calls == [(torch.Size([n, 55, 55]), torch.Size([n, 80, 55]), torch.device(device))]
+    assert not result['failed'].any()
+    assert result['residual'].max() < 2e-5
+    assert result['rho'].reshape(n, 2, 4, 4)[~result['available']].count_nonzero() == 0
+    assert (result['torque'].abs() <= limits+2e-5).all()
+    # Cross-check representative patterns with a separate optimization solver.
+    ids = torch.tensor([0, 1, 3, 15, 16, 51, 127, 255], device=device)
+    subset = control.select_state(s, ids)
+    expected = AtlasGPUQP(cfg, backend='osqp').solve(subset, subset, a[ids], masks[ids], limits[ids])
+    assert not expected['failed'].any()
+    torch.testing.assert_close(result['acceleration'][ids], expected['acceleration'], atol=2e-3, rtol=1e-3)
+    # Force sharing has only 1e-5 objective regularization; solvers agree much
+    # more closely on acceleration than on the redundant friction-ray split.
+    torch.testing.assert_close(result['torque'][ids], expected['torque'], atol=.01, rtol=1e-3)
+    torch.testing.assert_close(result['wrenches'][ids], expected['wrenches'], atol=.02, rtol=1e-3)
+
+
+def test_fixed_batch_keeps_failed_environment_isolated(cfg):
+    from atlas_contact_policy import available_vertices
+    s = standing_state(AtlasTorchModel(), 3)
+    # A bad model momentum identity must invalidate only that environment.
+    s['momentum'][1, 0] += 1.
+    result = AtlasGPUQP(cfg).solve(s, s, support_actions(3), available_vertices(s, cfg),
+                                  torch.full((3, 23), 60., dtype=torch.float64))
+    assert result['failed'].tolist() == [False, True, False]
+    assert result['torque'][1].count_nonzero() == 0
+    torch.testing.assert_close(result['torque'][0], result['torque'][2])
+
+
 def test_rotation_log_matches_pinocchio():
     axis = np.array([1., 2., 3.])/np.sqrt(14)
     for angle in (0., 1e-10, .5, np.pi-1e-8):

@@ -75,9 +75,24 @@ rho_i >= 0
 `Fmax=(600,600)` N initially. Each friction ray has unit vertical component, so
 the normal-force expression uses the existing rho mapping exactly. The friction
 pyramid remains inside the Coulomb cone (`mu=0.6`). Moments arise only from
-forces at available collider vertices. Unsupported coefficients are eliminated;
+forces at available collider vertices. Unsupported physical coefficients are masked to zero;
 `c=0` or unavailable geometry gives exactly zero wrench. This preserves the
 admissible moment restrictions while reducing edge/corner support capability.
+
+The batched backend uses one fixed-size QP batch across all environments,
+including different support activations and vertex masks. Each problem has
+29 acceleration variables and 32 latent force coefficients (61 total), six
+centroidal-balance equalities, and 80 inequality rows. Batched QR eliminates
+the six equalities, giving a 55-variable solve with 80 rows for every environment.
+There are no Python loops over contact patterns or environments in this backend.
+
+Physical force coefficients equal the latent coefficients multiplied by the
+availability mask. Disabled columns have no physical effect and retain an
+independent quadratic regularizer; their optimum is zero. Inactive inequality
+rows become `0 <= 1`, preserving a strict interior rather than imposing opposing
+zero-capacity bounds. Zero rows retain unit scaling in the solver. Torque,
+friction, support-force capacity, and physical residual checks remain in force.
+The OSQP reference backend remains a sequential CPU solve.
 
 Limitations: flat terrain, a conservative rigid box bottom face, no side/rolling
 contact, finite contact-gap tolerance, no impulse/contact-transition model,

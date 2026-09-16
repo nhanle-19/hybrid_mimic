@@ -31,7 +31,10 @@ def solve_batched_qp(hessian, linear, inequality, bound, *, max_iterations=40, t
     p = hessian*scale[:, :, None]*scale[:, None, :]
     q = linear*scale
     g = inequality*scale[:, None, :]
-    row_scale = g.abs().amax(-1).clamp_min(1e-12).reciprocal()
+    row_norm = g.abs().amax(-1)
+    # Fixed-size contact QPs pad inactive inequalities with 0 <= 1.
+    # Do not turn their slack into 1e12 through row equilibration.
+    row_scale = torch.where(row_norm > 0, row_norm.clamp_min(1e-12).reciprocal(), 1.)
     g = g*row_scale[:, :, None]
     h = bound*row_scale
     x = torch.zeros_like(q)
