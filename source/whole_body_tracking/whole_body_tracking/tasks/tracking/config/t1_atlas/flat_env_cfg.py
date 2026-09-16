@@ -3,7 +3,7 @@ from isaaclab.utils import configclass
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.managers import RewardTermCfg, TerminationTermCfg, SceneEntityCfg
 from .observations import AtlasObservationsCfg
-from .rewards import excessive_slip, mapped_action_rate, qp_failed, termination_penalty
+from .rewards import alive_reward, excessive_slip, mapped_action_rate, qp_failed
 from .contact_sensor import AtlasContactSensor
 from whole_body_tracking.tasks.tracking.config.t1.flat_env_cfg import T1FlatEnvCfg, T1FlatEnvEvalCfg
 from whole_body_tracking.tasks.tracking.tracking_env_cfg import EventEvalCfg
@@ -59,7 +59,8 @@ def configure_atlas(cfg):
     # Only torso/head collisions are forbidden; limbs may provide support.
     cfg.rewards.undesired_contacts.params['sensor_cfg'] = SceneEntityCfg(
         'contact_forces', body_names=['Trunk', 'H1', 'H2'])
-    cfg.rewards.termination = RewardTermCfg(func=termination_penalty, weight=-10.)
+    # RewardManager multiplies by dt: +1 per simulated second survived.
+    cfg.rewards.alive = RewardTermCfg(func=alive_reward, weight=1.)
     cfg.terminations.qp_infeasible = TerminationTermCfg(func=qp_failed)
     cfg.rewards.excessive_slip = RewardTermCfg(func=excessive_slip, weight=-1.)
     cfg.rewards.left_foot_right_foot_collision.func = foot_collision

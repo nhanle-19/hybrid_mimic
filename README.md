@@ -246,7 +246,9 @@ the 14-output Atlas interface is incompatible with earlier Atlas and Floating
 Model checkpoints. For each foot the reference-only actor produces support
 activation and six motion weights. Actual collider geometry gates force
 availability; all six contact-motion requests are soft. Tracking rewards and
-fall termination are retained, with a measured-slip penalty.
+fall termination are retained, with a measured-slip penalty. An alive reward adds
++1 per simulated second survived, excluding failure steps and including timeouts,
+in place of the fixed termination penalty.
 See [Atlas validation and evaluation](docs/atlas_controller.md) for the current
 tracking limitations and evaluation commands.
 

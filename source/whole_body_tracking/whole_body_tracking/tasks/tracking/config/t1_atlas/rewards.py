@@ -1,4 +1,4 @@
-"""Atlas penalties evaluated at policy rate using physical QP/contact quantities."""
+"""Atlas rewards evaluated at policy rate using physical QP/contact quantities."""
 import torch
 
 
@@ -7,9 +7,9 @@ def qp_failed(env):
     return env.action_manager.get_term('atlas').qp_failed
 
 
-def termination_penalty(env):
-    """Unit event penalty; cancel RewardManager's dt scaling (timeouts excluded)."""
-    return env.termination_manager.terminated.float() / env.step_dt
+def alive_reward(env):
+    """Survival rate; RewardManager integrates over dt, with timeouts counted as alive."""
+    return (~env.termination_manager.terminated).float()
 
 
 def mapped_action_rate(env):

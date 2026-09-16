@@ -21,12 +21,26 @@ def test_mapped_rate_ignores_saturated_raw_changes():
     torch.testing.assert_close(rewards.mapped_action_rate(env), torch.full((2,), 2/14))
 
 
-def test_termination_is_event_penalty_and_failure_is_per_environment():
+def test_qp_failure_is_per_environment():
     failure = torch.tensor([True, False])
     env = NS(action_manager=NS(get_term=lambda _: NS(qp_failed=failure)),
              termination_manager=NS(terminated=failure), step_dt=.02)
     assert rewards.qp_failed(env).tolist() == [True, False]
-    torch.testing.assert_close(rewards.termination_penalty(env)*env.step_dt, failure.float())
+
+
+def test_alive_reward_excludes_failures_but_includes_timeouts():
+    env = NS(termination_manager=NS(
+        terminated=torch.tensor([False, True, False, True]),
+        time_outs=torch.tensor([False, False, True, True])))
+    torch.testing.assert_close(rewards.alive_reward(env), torch.tensor([1., 0., 1., 0.]))
+
+
+def test_alive_return_grows_with_survival_time_independent_of_step_dt():
+    env = NS(termination_manager=NS(terminated=torch.tensor([False])))
+    for dt in (.01, .02, .04):
+        for seconds in (1., 2.):
+            episode_return = (rewards.alive_reward(env) * dt).repeat(round(seconds / dt)).sum()
+            torch.testing.assert_close(episode_return, torch.tensor(seconds))
 
 
 def contact_env(linear, angular, counts=(1, 1), force=10.):
