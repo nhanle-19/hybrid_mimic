@@ -28,24 +28,27 @@ def reference_contact_schedule(reference_states, height_tolerance=.025):
     return centers <= floor+height_tolerance
 
 
-def build_reference_tasks(state, reference, action, gains=None):
-    """29 actions: 23 posture offsets, 3 CoM velocity, 3 angular momentum.
-
-    Returns momentum-rate target and SOFT acceleration tasks. Contact constraints
-    remain hard in AtlasQP and do not originate from these policy residuals.
-    """
+def contact_weights(action, gains=None):
+    """Bounded per-foot weights in left/right order; stable even for large logits."""
+    from scipy.special import expit
     action = np.asarray(action, dtype=float)
+    if action.shape != (2,) or not np.isfinite(action).all():
+        raise ValueError('Expected two finite contact-weight logits (left, right)')
+    low, high = getattr(gains, 'contact_weight_min', .1), getattr(gains, 'contact_weight_max', 100.)
+    if not np.isfinite([low, high]).all() or not 0 < low < high:
+        raise ValueError('Contact weight bounds must be finite and satisfy 0 < min < max')
+    return low+(high-low)*expit(action)
+
+
+def build_reference_tasks(state, reference, action, gains=None):
+    """Fixed reference feedback; the two policy logits only set contact weights."""
+    contact_weights(action, gains)  # Validate the two-output interface.
     nv = state['M'].shape[0]
-    if action.shape != (nv,) or not np.isfinite(action).all():
-        raise ValueError(f'Expected {nv} finite policy actions')
-    nj = nv-6
     value = lambda name, default: getattr(gains, name, default)
-    desired_linear_momentum = reference['momentum'][:3]+state['mass']*value('com_velocity_action_scale', .25)*action[nj:nj+3]
-    desired_angular_momentum = reference['momentum'][3:]+value('angular_momentum_action_scale', .5)*action[nj+3:nj+6]
     rate = np.r_[state['mass']*value('com_position_gain', 40)*(reference['com']-state['com'])
-                  +value('linear_momentum_gain', 10)*(desired_linear_momentum-state['momentum'][:3]),
-                  value('angular_momentum_gain', 15)*(desired_angular_momentum-state['momentum'][3:])]
-    posture_target = value('posture_position_gain', 40)*(reference['q'][7:]+value('posture_action_scale', .15)*action[:nj]-state['q'][7:])+value('posture_velocity_gain', 8)*(reference['v'][6:]-state['v'][6:])
+                  +value('linear_momentum_gain', 10)*(reference['momentum'][:3]-state['momentum'][:3]),
+                  value('angular_momentum_gain', 15)*(reference['momentum'][3:]-state['momentum'][3:])]
+    posture_target = value('posture_position_gain', 40)*(reference['q'][7:]-state['q'][7:])+value('posture_velocity_gain', 8)*(reference['v'][6:]-state['v'][6:])
     tasks = [MotionTask(np.eye(nv)[6:], posture_target, value('posture_weight', .1), 'posture')]
     pelvis, target = state['frames']['Trunk'], reference['frames']['Trunk']
     angular = value('pelvis_position_gain', 60)*pin.log3(target['rotation']@pelvis['rotation'].T)+value('pelvis_velocity_gain', 12)*(target['velocity'][3:]-pelvis['velocity'][3:])
@@ -54,6 +57,9 @@ def build_reference_tasks(state, reference, action, gains=None):
 
 
 def swing_tasks(state, reference, active, gains=None):
+    weight = getattr(gains, 'swing_weight', 0.)
+    if weight == 0:
+        return []
     tasks = []
     for foot in FEET:
         if foot in active:
@@ -61,18 +67,8 @@ def swing_tasks(state, reference, active, gains=None):
         current, target = state['frames'][foot], reference['frames'][foot]
         error = np.r_[target['position']-current['position'], pin.log3(target['rotation']@current['rotation'].T)]
         acceleration = getattr(gains, 'swing_position_gain', 80)*error+getattr(gains, 'swing_velocity_gain', 16)*(target['velocity']-current['velocity'])
-        tasks.append(MotionTask(current['J'], acceleration-current['bias'], getattr(gains, 'swing_weight', 10), f'swing_{foot}'))
+        tasks.append(MotionTask(current['J'], acceleration-current['bias'], weight, f'swing_{foot}'))
     return tasks
-
-
-def hybrid_balance_tasks(state, linear_acceleration, angular_acceleration, base_weight):
-    """Balance targets only: no reference/policy joint-posture tracking in the QP."""
-    base = state['frames']['Trunk']
-    desired = np.r_[linear_acceleration, angular_acceleration]
-    task = MotionTask(base['J'], desired-base['bias'], base_weight, 'base')
-    nominal = np.zeros(state['M'].shape[0])
-    nominal[:6] = np.linalg.solve(base['J'][:, :6], desired-base['bias'])
-    return state['Ag']@nominal+state['Ag_bias'], [task]
 
 
 def force_diagnostics(result, state, torque_limits):
@@ -81,8 +77,6 @@ def force_diagnostics(result, state, torque_limits):
     utilization = np.zeros((2, 4)); cop = np.full((2, 2), np.nan)
     active = np.zeros(2, dtype=bool)
     for contact in result['contacts']:
-        if contact.body not in FEET:
-            continue
         index = FEET.index(contact.body)
         active[index] = True
         normal_axis = np.asarray(contact.normal)/np.linalg.norm(contact.normal)
@@ -100,4 +94,4 @@ def force_diagnostics(result, state, torque_limits):
             cop[index] = np.sum(local[:, :2]*fn[:, None], axis=0)/fn.sum()
     return dict(point_forces=forces, normal_forces=normal, tangential_forces=tangent,
                 friction_utilization=utilization, cop=cop, active_contact=active,
-                torque_utilization=np.abs(result.get('total_torque', result['torque']))/torque_limits)
+                torque_utilization=np.abs(result['torque'])/torque_limits)

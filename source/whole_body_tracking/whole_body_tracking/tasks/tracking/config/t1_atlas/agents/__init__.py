@@ -1,1 +1,1 @@
-"""Atlas uses the HybridMimic 57-action policy interface."""
+"""Reference-only actor with 14 contact-policy outputs; retraining required."""

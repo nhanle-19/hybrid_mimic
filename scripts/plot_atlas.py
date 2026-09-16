@@ -20,6 +20,26 @@ def main():
     for env in np.unique(data['env_id']):
         mask = data['env_id'] == env
         t = data['time'][mask]
+        if 'predicted_contact_wrench' in data:
+            fig, axes = plt.subplots(6, 2, figsize=(12, 14), sharex=True)
+            for foot in range(2):
+                for component, label in enumerate(('Fx (N)', 'Fy (N)', 'Fz (N)', 'Mx (Nm)', 'My (Nm)', 'Mz (Nm)')):
+                    ax = axes[component, foot]
+                    ax.plot(t, data['predicted_contact_wrench'][mask, foot, component], label='QP prediction')
+                    ax.plot(t, data['actual_contact_wrench'][mask, foot, component], ':', label='PhysX measurement')
+                    ax.set_ylabel(label); ax.grid(alpha=.2)
+                axes[0, foot].set_title(str(data['foot_names'][foot])); axes[0, foot].legend()
+                axes[-1, foot].set_xlabel('Time (s)')
+            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_wrenches.png', dpi=160); plt.close(fig)
+            fig, axes = plt.subplots(5, 1, figsize=(12, 12), sharex=True)
+            axes[0].plot(t, data['support_activation'][mask]); axes[0].set_ylabel('Support activation')
+            axes[1].plot(t, data['contact_weights'][mask].reshape(len(t), -1)); axes[1].set_ylabel('Six motion weights/foot')
+            axes[2].plot(t, data['joint_tracking_rmse'][mask]); axes[2].set_ylabel('Joint tracking RMSE (rad)')
+            axes[3].plot(t, data['solver_failed'][mask]); axes[3].set_ylabel('Solver failure')
+            axes[4].plot(t, data['torque_saturation'][mask]); axes[4].set_ylabel('Torque saturation fraction')
+            axes[-1].set_xlabel('Time (s)')
+            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_contact_policy.png', dpi=160); plt.close(fig)
+            continue
         fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
         for k, ax in enumerate(axes.flat):
             for key, label, style in [('desired_rate', 'Desired', '--'), ('predicted_rate', 'QP prediction', '-'), ('actual_rate', 'Measured-state finite difference', ':')]:
@@ -33,8 +53,10 @@ def main():
         for foot in range(2):
             axes[0, foot].plot(t, data['normal_forces'][mask, foot].sum(axis=-1), label='QP normal')
             axes[0, foot].plot(t, data['tangential_forces'][mask, foot].sum(axis=-1), label='QP sum point tangential magnitudes')
-            if 'sensor_normal_force_w' in data:
-                axes[0, foot].plot(t, data['sensor_normal_force_w'][mask, foot, 2], ':', label='Sensor normal z')
+            if 'ground_normal_force_w' in data:
+                axes[0, foot].plot(t, data['ground_normal_force_w'][mask, foot, 2], ':', label='Ground normal z (after step)')
+            elif 'sensor_normal_force_w' in data:
+                axes[0, foot].plot(t, data['sensor_normal_force_w'][mask, foot, 2], ':', label='All-object sensor normal z')
             axes[0, foot].set_ylabel('Force (N)'); axes[0, foot].set_title(str(data['foot_names'][foot]))
             utilization = data['friction_utilization'][mask, foot].copy()
             loaded = data['normal_forces'][mask, foot] > 1.
@@ -46,7 +68,12 @@ def main():
             axes[2, foot].plot(t, data['cop'][mask, foot, 0], label='CoP local x')
             axes[2, foot].plot(t, data['cop'][mask, foot, 1], label='CoP local y')
             axes[2, foot].set_ylabel('QP CoP (m)')
-            axes[3, foot].step(t, data['active_contact'][mask, foot], where='post'); axes[3, foot].set_ylabel('Planned stance')
+            axes[3, foot].step(t, data['active_contact'][mask, foot], where='post', label='QP stance')
+            for key, label, style in [('reference_contact', 'Reference stance', '--'),
+                                      ('estimated_contact', 'Measured ground stance', ':')]:
+                if key in data:
+                    axes[3, foot].step(t, data[key][mask, foot], where='post', linestyle=style, label=label)
+            axes[3, foot].set_ylabel('Contact mask')
             axes[3, foot].set_xlabel('Time (s)')
             for ax in axes[:, foot]:
                 ax.grid(alpha=.2)
@@ -56,25 +83,35 @@ def main():
         axes[0].plot(t, data['contact_acceleration_residual'][mask], label='QP')
         if 'actual_contact_acceleration_residual' in data:
             axes[0].plot(t, data['actual_contact_acceleration_residual'][mask], ':', label='Measured-state finite difference')
-        axes[0].set_ylabel('Stance acceleration max'); axes[0].legend()
-        axes[1].plot(t, data['torque_utilization'][mask].max(axis=-1)); axes[1].axhline(1, color='r', linestyle='--')
-        axes[1].set_ylabel('Maximum PD + FF utilization' if 'pd_torque' in data else 'Maximum QP torque utilization')
+        axes[0].set_ylabel('Hard contact acceleration max' if 'contact_weights' in data else 'Stance acceleration max'); axes[0].legend()
+        axes[1].plot(t, data['torque_utilization'][mask].max(axis=-1)); axes[1].axhline(1, color='r', linestyle='--'); axes[1].set_ylabel('Maximum torque utilization')
         axes[2].plot(t, np.max(np.abs(data['inverse_dynamics_residual'][mask]), axis=-1)); axes[2].set_ylabel('QP inverse-dynamics residual max')
         axes[2].set_xlabel('Time (s)')
         for ax in axes: ax.grid(alpha=.2)
         fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_residuals.png', dpi=160); plt.close(fig)
-        if 'auxiliary_base_wrench' in data:
+        if 'contact_weights' in data:
             fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-            wrench = data['auxiliary_base_wrench'][mask]
-            for k, axis in enumerate('xyz'):
-                axes[0].plot(t, wrench[:, k], label=axis)
-                axes[1].plot(t, wrench[:, k+3], label=axis)
-            axes[0].set_ylabel('Auxiliary force (N)')
-            axes[1].set_ylabel('Auxiliary moment (Nm)')
+            for foot in range(2):
+                label = str(data['foot_names'][foot])
+                axes[0].plot(t, data['contact_weights'][mask, foot], label=label)
+                axes[1].plot(t, np.linalg.norm(data['contact_tangential_acceleration'][mask, foot], axis=-1), label=label)
+            axes[0].set_ylabel('Contact-relaxation weight')
+            axes[1].set_ylabel('Tangential acceleration (m/s²)')
             axes[1].set_xlabel('Time (s)')
             for ax in axes: ax.grid(alpha=.2); ax.legend()
-            fig.suptitle('Optimization base wrench (not applied in simulation)')
-            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_auxiliary_base.png', dpi=160); plt.close(fig)
+            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_contact_relaxation.png', dpi=160); plt.close(fig)
+        if 'foot_position_w' in data and 'reference_foot_position_w' in data:
+            fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
+            for foot in range(2):
+                for coordinate, axis_name in enumerate('xyz'):
+                    ax = axes[coordinate, foot]
+                    ax.plot(t, data['foot_position_w'][mask, foot, coordinate], label='Actual')
+                    ax.plot(t, data['reference_foot_position_w'][mask, foot, coordinate], '--', label='Reference')
+                    ax.set_ylabel(f'{axis_name} (m; env origin)'); ax.grid(alpha=.2); ax.legend(fontsize=8)
+                axes[0, foot].set_title(str(data['foot_names'][foot]))
+                axes[2, foot].set_xlabel('Time (s)')
+            fig.suptitle('Foot tracking before each QP solve')
+            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_foot_tracking.png', dpi=160); plt.close(fig)
     print(f'Saved Atlas plots to {args.output_dir}')
 
 

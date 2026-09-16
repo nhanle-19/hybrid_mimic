@@ -15,3 +15,21 @@ class AtlasEvaluationMotion(MotionCommand):
     def _resample_command(self, env_ids):
         if len(env_ids):
             self.reset_command(env_ids)
+
+
+class AtlasStandingMotion(AtlasEvaluationMotion):
+    """Hold the first pose indefinitely, with zero reference velocity."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        for name in ('joint_pos', '_body_pos_w', '_body_quat_w'):
+            values = getattr(self.motion, name)
+            values[:] = values[:1].clone()
+        for name in ('joint_vel', '_body_lin_vel_w', '_body_ang_vel_w'):
+            getattr(self.motion, name).zero_()
+
+    def _update_command(self):
+        # The parent advances by one before updating relative reference poses.
+        # Keep frame zero without triggering an end-of-clip robot reset.
+        self.time_steps.fill_(-1)
+        super()._update_command()

@@ -122,21 +122,36 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         "body_names": env.command_manager.get_term("motion").cfg.body_names,
     }
 
-    metadata["action_scale"] = env.action_manager.get_term("joint_pos")._scale[0].cpu().tolist()
-    controller = getattr(env, "hybrid_controller", None)
-    if controller is not None:
-        # Preserve legacy joint action_scale while describing the complete
-        # HybridMimic policy output, shared by hybrid, floating and Atlas.
+    if "atlas" in env.action_manager.active_terms:
+        atlas = env.action_manager.get_term("atlas")
+        controller = atlas.cfg.controller
         metadata.update({
-            "action_type": "hybrid_mimic",
-            "policy_action_dim": controller.action_dim,
-            "action_joint_names": robot_data.joint_names,
-            "action_layout": "joint_position,linear_velocity_body,wrench_logits,torque_reference,angular_velocity_body",
-            "end_effector_names": controller.end_effector_names,
-            "desired_linear_velocity_scale": controller.desired_linear_velocity_scale,
-            "desired_angular_velocity_scale": controller.desired_angular_velocity_scale,
-            "torque_action_scale": controller.torque_action_scale,
+            "action_type": "atlas_reference_contact_policy",
+            "policy_action_dim": 14,
+            "action_layout": "per_foot:activation,linear_weight_logits_xyz,angular_weight_logits_xyz;left_foot,right_foot",
+            "action_transform": "activation=clip(u,0,1);weights=w_min+(w_max-w_min)*sigmoid(u)",
+            "contact_weight_min": controller.contact_weight_min,
+            "contact_weight_max": controller.contact_weight_max,
+            "soft_contact_rows": "world_linear_xyz,world_angular_xyz",
+            "actor_inputs": "reference_only:frames_0_1_5_10",
+            "contact_force_max": list(controller.contact_force_max),
         })
+    else:
+        metadata["action_scale"] = env.action_manager.get_term("joint_pos")._scale[0].cpu().tolist()
+        controller = getattr(env, "hybrid_controller", None)
+        if controller is not None:
+            # Preserve legacy joint action_scale while describing the complete
+            # HybridMimic policy output, shared by hybrid and floating.
+            metadata.update({
+                "action_type": "hybrid_mimic",
+                "policy_action_dim": controller.action_dim,
+                "action_joint_names": robot_data.joint_names,
+                "action_layout": "joint_position,linear_velocity_body,wrench_logits,torque_reference,angular_velocity_body",
+                "end_effector_names": controller.end_effector_names,
+                "desired_linear_velocity_scale": controller.desired_linear_velocity_scale,
+                "desired_angular_velocity_scale": controller.desired_angular_velocity_scale,
+                "torque_action_scale": controller.torque_action_scale,
+            })
 
     model = onnx.load(onnx_path)
 

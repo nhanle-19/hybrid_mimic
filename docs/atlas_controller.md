@@ -1,261 +1,168 @@
-# Atlas dynamics with the HybridMimic policy interface
+# Atlas reference-conditioned contact policy
 
-`Tracking-Atlas-T1-v0` and `Tracking-Atlas-T1-Eval-v0` now use the same
-**57-action policy interface**, observations, rewards, and joint PD plus
-feedforward torque application as the existing hybrid/floating-model tasks.
-`AtlasEnv` inherits the shared `FloatingModelEnv`/`HybridEnv` runtime and replaces
-the controller with batched Torch analytical dynamics and a float64 GPU QP.
-The Pinocchio/OSQP implementation remains an explicit evaluation reference.
+This is a preliminary continuous contact approximation. QP feasibility alone
+is not tracking success; closed-loop validation remains required.
 
-**Current experiment:** `T1AtlasControllerCfg.enforce_stance = False` disables
-the hard contact-acceleration equality `J_contact*qdd + dJ_contact*qdot = 0`
-for training and evaluation. Hard stance is currently supported only by the
-CPU reference backend (`backend=osqp`) during evaluation. GPU training rejects
-`enforce_stance=True`.
-Contact forces, friction/nonnegativity, dynamics balance and combined PD + FF
-torque limits remain active. Stance acceleration is still recorded, but does
-not reject a solution while this switch is off; diagnostics include the switch
-value. The standalone `AtlasQP` retains strict stance constraints by default.
+## Policy and observations
 
-This replaces the earlier 29-action reference-residual Atlas design. Old
-29-action Atlas checkpoints cannot be resumed. Matching the floating-model
-policy dimensions does not establish successful transfer between controllers;
-train a new Atlas policy for a controlled comparison.
+The existing candidate bodies remain `left_foot_link`, `right_foot_link`.
+There are 14 raw policy outputs, seven per foot in left/right order:
 
-## Policy output and torque application
+- Support activation: `c = clip(u, 0, 1)`, allowing exact zero and one.
+- Six motion weights: `W = diag(w_min + (w_max-w_min)*sigmoid(u[1:7]))`.
+  Defaults are `w_min=0`, `w_max=100`. Components are linear XYZ, angular XYZ.
 
-Joint channels are in **simulator joint order**, exactly as in HybridMimic.
-The adapter explicitly reorders them to/from the analytical model internally.
+The actor sees **only reference motion** at offsets 0, 1, 5, and 10 frames:
+reference joint positions/velocities and body positions, orientations, linear
+and angular velocities. Future indices clamp at the last frame. At 50 Hz the
+lookahead is 0, 20, 100, and 200 ms. There are no actual-state transforms,
+previous actions, or sensor values in the actor input.
 
-| Slice | Meaning |
-| --- | --- |
-| `[0:23]` | Normalized joint-position targets relative to the configured default pose |
-| `[23:26]` | Desired body-frame linear velocity, scaled by 0.25 m/s |
-| `[26:31]` | Five wrench-cost logits: auxiliary base, then configured end effectors |
-| `[31:54]` | Torque references, scaled by 0.1 times each joint's effort limit |
-| `[54:57]` | Desired body-frame angular velocity, scaled by 0.5 rad/s |
+The critic receives that reference window plus the inherited privileged robot
+state, tracking information and previous actions. Previous two- and 29-output
+Atlas checkpoints are incompatible; train a new policy.
 
-The end-effector order is inherited from `T1HybridControllerCfg`; all joint and
-end-effector names are exported in ONNX metadata. Action decoding and velocity
-feedback call the same `ctrl2components` and `highlvlPD` functions as floating.
+## Motion objective and dynamics
+
+For each candidate body, including one without support, the QP adds
 
 ```
-q_target = configured_default_pose + joint_action_scale * policy_joint_output
-policy targets + measured state -> Atlas QP -> feedforward torque
-applied torque = joint PD torque + feedforward torque (actuator effort-limited)
+a_target_i = a_ref_i + diag(Kv)*(v_ref_i-v_i)
+r_i = Ji*nudot + Jdot_i*nu - a_target_i
+L_contact = 0.5 * r_i.T * Wi * r_i
 ```
 
-The reference motion reaches the policy through observations and tracking
-rewards. It is **not directly added to the posture or velocity targets**. Its
-foot heights are also used to plan the constrained solver's support schedule.
-Zero policy outputs are a pipeline check, not a reference-tracking controller.
+All six stationary-contact equalities are removed. `Ji`, velocity and
+acceleration are expressed in **world-aligned axes at the body-frame origin**,
+with spatial ordering `[linear, angular]`. Reference acceleration is a centered
+finite difference of reference body spatial velocity, using the motion's FPS;
+endpoints use one-sided differences. `Kv=(10,10,10,5,5,5)` by default.
+These are soft body-motion requests, not assertions of physical contact.
 
-Joint PD owns posture tracking. The Atlas QP has no joint-posture tracking task,
-and its momentum target contains no desired joint-posture acceleration. The
-small acceleration regularizer remains for numerical conditioning.
+The QP retains centroidal momentum tracking, posture tracking, pelvis tracking,
+regularization, rigid-body dynamics, and torque limits. The existing rho force
+coefficients remain the force decision variables. No contact-motion slack
+variables are introduced. Actuator stiffness, damping, armature and friction
+are zero; nonzero actuator PD gains are rejected, so QP bounds cover the entire
+commanded torque.
 
-At every physics step, the adapter computes `u_PD` from the actual position
-action scale/offset, current joint state, velocity target, and actuator gains.
-Inverse dynamics determines the combined torque; the controller returns
-`u_FF = u_total - u_PD`. The QP enforces:
+## Support geometry and force capacity
+
+The previous controller used a manually specified full-sole rectangle.
+Inspection of the USD found one box collision shape per foot: approximately
+0.223 by 0.100 by 0.030 m, centered at (0.010, 0, -0.015) in the foot frame.
+`scripts/export_atlas_contacts.py` exports its bottom-face vertices and source
+hashes to `atlas_contacts.json`. The existing four-corner rho representation now
+uses those collider-derived vertices; no new contact bodies or hand-placed sole
+locations are added.
+
+Actual body poses, not reference activation or reference contact labels, decide
+which vertices may carry force. The floor is the existing horizontal USD box,
+with top z=0 and bounds ±100 m. Vertices must be within 1 mm above the floor and
+no more than 3 cm penetrating it. Of those, only vertices within 10 micrometers
+of the lowest vertex height are retained. Thus a tilted foot uses its low edge
+or corner, not full-foot moment arms. Side/inverted contact is unsupported
+(foot normal must be within 60 degrees of upright). Contact overrides may
+remove support but cannot create unavailable support.
+
+For every supported foot:
 
 ```
--tau_max <= u_PD + u_FF <= tau_max
-# Equivalently, the available feedforward interval is:
--tau_max - u_PD <= u_FF <= tau_max - u_PD
+0 <= Fn_i = sum(rho_i) <= c_i * Fmax_i
+rho_i >= 0
 ```
 
-The policy's torque-reference cost applies to `u_FF`. Feedforward torque may
-exceed an individual effort limit when needed to cancel a large PD contribution;
-it is the sum that is bounded. Inverse-dynamics residuals and the torque-limit
-reward also use the sum. Diagnostics record `pd_torque`, `feedforward_torque`,
-and `commanded_torque` (their sum) separately from simulator `applied_torque`.
+`Fmax=(600,600)` N initially. Each friction ray has unit vertical component, so
+the normal-force expression uses the existing rho mapping exactly. The friction
+pyramid remains inside the Coulomb cone (`mu=0.6`). Moments arise only from
+forces at available collider vertices. Unsupported coefficients are eliminated;
+`c=0` or unavailable geometry gives exactly zero wrench. This preserves the
+admissible moment restrictions while reducing edge/corner support capability.
 
-## Analytical controller
+Limitations: flat terrain, a conservative rigid box bottom face, no side/rolling
+contact, finite contact-gap tolerance, no impulse/contact-transition model,
+and no guarantee that PhysX's distributed contact matches the predicted patch.
+The geometry mask itself changes discretely. This is not validated general
+slipping or rolling control.
 
-`AtlasTorchModel` uses `atlas_dynamics.json`, exported from the actual T1 USD
-rigid-body tree, to compute batched dynamics on CUDA. `AtlasModel` builds the
-independent Pinocchio reference from the same data. Both compute full mass/bias matrices,
-centroidal momentum maps and frame Jacobians/biases at every physics step.
-Simulator startup checks compare mass, inertia, CoM offsets, link frames and
-independently measured body-sum momentum. Hybrid actuator armature is included
-in the joint block of the optimization mass matrix.
+## Rollout and rewards
 
-The hybrid-mode decision vector is `[generalized_acceleration, rho, base_wrench]`.
-There are 29 acceleration variables, four nonnegative friction-ray coefficients
-per contact point, and six auxiliary-base-wrench variables. Each foot uses four
-sole points. The CPU reference compacts inactive contacts. With no hands active, its sizes are:
+Defaults remain **1,024 environments**, batched CUDA dynamics/QP, 500 Hz physics
+and 50 Hz policy. The actor's actions pass through the QP every physics step.
+`backend=osqp` uses the same assembly with an explicit CPU reference solve.
 
-| Foot support | Variables |
-| --- | ---: |
-| Flight | 35 |
-| One foot | 51 |
-| Two feet | 67 |
+All six inherited motion-tracking rewards and fall terminations are restored.
+Existing penalties remain: action changes -0.1, joint limits -10, undesired
+contacts -0.1, and foot-to-foot collision -0.2. Excessive slip adds -1 times
+squared tangential body-origin speed above 0.05 m/s, gated by measured ground
+normal force above 1 N. There is no feasibility-only reward.
 
-The objective includes analytical momentum-rate tracking, base acceleration
-targets, the policy's torque references, and wrench costs proportional to
-`exp(-clip(logit, -10, 10))`. Angular wrench costs use the inherited factor of 20.
-The first logit weights the auxiliary base wrench, preserving its role in the
-existing hybrid/floating interface. End-effector logits weight each active
-contact's resultant force/moment; inactive contacts have zero force.
+On a failed numerical solve, the action applies joint damping torque
+`clip(-2*qdot, -tau_max, tau_max)` and records the failure. This fallback is
+bounded but does not promise balance or dynamically feasible contact forces.
+Failures are counted in training logs and latched per environment until reset.
+Any infeasible, nonconverged, nonfinite, or residual-invalid solve terminates
+that environment at the next policy boundary, even if a later decimation solve
+succeeds. Bounded damping remains active until that reset.
 
-The auxiliary base wrench is an **optimization aid, not a physical applied
-force**. It is recorded separately as `auxiliary_base_wrench`. Consequently,
-small inverse-dynamics residuals in this mode include that auxiliary term;
-they do not prove physically realizable support. QP torque bounds apply to the
-combined PD-plus-feedforward command, and simulator actuator limits remain active.
+Atlas rewards retain body pose/velocity imitation, joint-position limits, and
+the separate foot-to-foot collision penalty. Global trunk pose rewards remain
+intentional: body pose targets are anchor-aligned and do not fully constrain
+global translation/heading. Action smoothness is the mean squared change of
+the two clipped support activations and twelve motion weights normalized to
+their configured ranges. Undesired contacts above 1 N apply only to Trunk, H1,
+and H2; limb contacts may provide support. This reward allowance does not add
+hand/knee contacts to the QP's foot-only support model.
 
-Hard constraints enforce centroidal balance including the auxiliary wrench,
-stance acceleration when enabled, nonnegative friction-ray coefficients, and combined
-joint torque limits. OSQP uses float64 and checks solver status and residuals.
-An infeasible solve raises an error rather than silently changing the solution.
+Slip uses rigid-body velocity at measured foot-ground contact points, projected
+onto each contact tangent plane. Per-foot excess speed above 0.05 m/s is squared
+and averaged by normal force, gated at 1 N total support force. A stationary
+toe pivot is therefore unpenalized. Non-timeout terminations receive a -10
+event penalty, with reward-manager timestep scaling canceled explicitly.
 
-The GPU solver keeps all contact slots in a fixed batch, with inactive force
-maps zeroed, and eliminates the six base-wrench equality variables. It uses
-variable/row equilibration and up to 60 predictor/corrector iterations. Numerical
-solves stay on the simulation device; convergence/failure checks synchronize
-small status values with the host. There is no CPU solver fallback. The OSQP
-reference permits up to 100,000 iterations.
+Diagnostics record predicted and actual contact wrenches in world axes at the
+foot origin, tracking RMSE, support activation, geometry masks, all weights,
+solver failures, commanded/applied torque, and torque saturation. Actual wrenches
+sum normal and friction forces and their measured contact-point moments. A
+custom ground-only contact sensor allocates detailed contact buffers on the
+installed Isaac Lab version. Measurements are paired with the preceding physics
+step prediction; reset-crossing samples are dropped.
 
-GPU training enables `batched_warm_start=True`: the solver caches its primal
-and dual solution on CUDA, converts it into the next problem's scaling, and
-starts there. Reset environments and changed contact sets start cold. The
-objective, float64 arithmetic, convergence tolerances and physical residual
-checks are unchanged. Factorization status remains on device until the batch
-status check; triangular solves avoid the implicit synchronization in
-`torch.cholesky_solve`.
+## Validation and commands
 
-For a timing comparison, append `env.hybrid_controller.batched_warm_start=False`
-to the training command to disable warm starts. The standalone benchmark accepts
-`--warm-start` / `--no-warm-start` and perturbs the PD contribution between solves:
+Offline manual standing and four-second slow right-foot-lift checks:
 
 ```bash
-python scripts/benchmark_atlas_batched.py --batches 1024 --repeats 20 --warm-start
-python scripts/benchmark_atlas_batched.py --batches 1024 --repeats 20 --no-warm-start
+python scripts/check_atlas_contact_policy.py
+python -m pytest tests/test_atlas_gpu.py tests/test_atlas_qp.py tests/test_atlas_contact.py tests/test_atlas_standing.py tests/test_exporter_metadata.py -q
 ```
 
-With 24 policy steps per rollout and decimation 10, each PPO iteration performs
-240 batched QP solves. Batch convergence waits for the hardest member, so contact
-changes, resets and saturated torques can vary collection time even at a fixed
-environment count. Compare collection and learning timings separately.
+These use prescribed kinematic snapshots, not realized simulator trajectories.
+The validation report is `eval_data/atlas/reference_contact_validation/`.
 
-Warm-start validation: 45 CPU/CUDA regression tests passed, including changes
-in contact sets and partial reset invalidation. Two local 128-environment PPO
-iterations completed and saved checkpoints. Second-iteration collection time
-was 22.862 s with warm starts versus 24.788 s in a matching cold-start run.
-These short RTX 4060 Laptop measurements are indicative, not a server timing
-guarantee. The 1,024-environment standalone warm-start benchmark also passed
-all physical checks.
-
-If solving or residual validation still fails, the runtime writes the QP matrices,
-bounds, state and PD contribution to `eval_data/atlas/failures/qp_failure_*.npz`
-and prints the path. Copy that file for diagnosis of the exact failing problem.
-
-The standalone `AtlasQP.solve(..., hybrid=None)` mode remains available for
-strict physical numerical tests: it has no auxiliary base wrench or hybrid
-policy objective. Its original variable counts are 29/45/61. The registered
-training/evaluation tasks use hybrid mode.
-
-## Contacts and configuration
-
-The foot planner normalizes reference sole heights using their tenth percentile
-and declares stance within 0.025 m of that floor. This remains a heuristic, not
-ground-truth contact labeling. An explicit boolean NPY `(motion_frames, 2)` can
-replace it through the evaluation script's `--contact_schedule` option.
-Measured hand contact above 10 N adds a single contact point at the hand-link
-origin on the flat ground. Hand geometry and normals are approximations;
-non-ground contacts need an appropriate contact model before use.
-
-The foot patch is x=[-0.09,0.10], y=[-0.04,0.04], z=-0.03 m in foot-link coordinates.
-Four rays per point form an inscribed friction pyramid with coefficient 0.6.
-Foot diagnostics record point forces, normal/tangential forces, friction
-utilization, CoP and planned versus sensor contact information.
-
-Runtime access is through `env.unwrapped.hybrid_controller`:
-
-```python
-controller.set_active_contacts(mask)  # (num_envs, 2), left/right foot
-controller.set_active_contacts(None)  # return to planned foot schedule
-controller.set_external_wrenches(env_id, known_wrenches)
-```
-
-External-wrench inputs describe forces applied by the caller; the setter does
-not apply them in PhysX. Fixed inertial/material settings and deterministic
-motion initialization remain the Atlas baseline; hybrid domain randomization
-is not enabled. Hybrid policy/observation/reward structure and PD gains are
-preserved. CPU OSQP is not optimized for thousands of parallel environments.
-
-## Training and evaluation
-
-From the repository root:
+On a host with a working GPU, test manual standing before training:
 
 ```bash
-conda activate hybridmimic
-python -m pip install -r requirements-atlas.txt
-
-read -rsp "W&B API key: " WANDB_API_KEY
-echo
-
-CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
-  --task Tracking-Atlas-T1-v0 \
+python scripts/rsl_rl/eval_atlas.py --task Standing-Atlas-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --device cuda:0 \
-  --num_envs 128 \
-  --logger wandb \
-  --log_project_name hybrid_mimic \
-  --run_name atlas_hybrid_g18_push_kick_right \
-  --headless
+  --qp_only --manual_support 1 1 --manual_weight 50 \
+  --num_envs 1 --steps 200 --device cuda:0 --headless
 ```
 
-Runs default to 30,000 iterations and save under `logs/rsl_rl/t1_atlas/`.
-Use a new run rather than resuming an earlier 29-action Atlas checkpoint.
+For a slow-lift rollout supply a validated slow-lift reference clip to
+`Tracking-Atlas-T1-Eval-v0`; the QP still follows actual geometry. The offline
+slow-lift scenario above is not a substitute for this closed-loop test.
+
+Short training smoke command:
 
 ```bash
-python scripts/rsl_rl/eval_atlas.py \
-  --task Tracking-Atlas-T1-Eval-v0 \
+python scripts/rsl_rl/train.py --task Tracking-Atlas-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --num_envs 1 --steps 141 --zero_policy --headless
-
-python scripts/plot_atlas.py --input eval_data/atlas/diagnostics.npz
+  --num_envs 32 --max_iterations 2 --device cuda:0 --headless \
+  --logger tensorboard --run_name reference_contact_smoke
 ```
 
-For a trained policy, replace `--zero_policy` with `--load_run RUN_DIRECTORY
---checkpoint model_ITERATION.pt`. Diagnostics are sampled every physics step;
-reset boundaries are excluded from measured finite differences. Predicted
-combined torque and simulator applied torque are recorded separately.
-
-Numerical and metadata regression checks:
-
-```bash
-python -m pytest tests/test_atlas_batched.py tests/test_atlas_qp.py tests/test_exporter_metadata.py -q
-```
-
-The September 10 evaluation and its 16 numerical tests documented the earlier
-29-action direct-torque design. Those rollout results do not validate this
-57-action hybrid integration. Numerical checks alone are not evidence of stable
-learned tracking; evaluate a newly trained policy separately.
-
-Validation on September 11: all 25 numerical/metadata tests passed. A CPU run
-with two environments completed one PPO iteration (48 transitions), saved a
-checkpoint through W&B offline mode, and exported a checked ONNX graph with
-57 action outputs. Reloading that checkpoint completed five evaluation steps
-(50 physics samples) and saved finite applied torques and diagnostics. The
-maximum QP inverse-dynamics residual, including the auxiliary base wrench, was
-1.25e-6. Diagnostic plots were generated successfully. These are pipeline checks,
-not a completed training run or a GPU performance/learned-tracking validation.
-
-After separating posture PD from the QP and bounding their summed torque,
-29 tests passed, including large positive/negative PD contributions that require
-feedforward cancellation. A five-step CPU checkpoint evaluation produced 50
-physics samples: maximum combined utilization was 1.000000009 (solver roundoff),
-and the maximum recorded applied-versus-commanded difference was 2.38e-5 Nm.
-
-GPU migration validation: 39 regression tests passed, including CUDA dynamics
-and mixed-contact QP comparisons against Pinocchio/OSQP. A CUDA training smoke
-run with 128 environments completed one PPO iteration (3,072 transitions) and
-saved `model_0.pt`; collection took 35.107 s and learning 0.232 s on the local
-RTX 4060 Laptop GPU. The default is now 128 environments. A 1,024-environment
-trial encountered PhysX GPU kernel-launch errors and was stopped; that size is
-not validated on this machine. These checks do not establish long-run tracking
-quality. Host work remains for initialization, status checks, logging and file
-exports; numerical dynamics, QP solves, simulation and PPO use CUDA.
+The current host has no working NVIDIA driver. The smoke attempt failed during
+Isaac Sim startup; no successful training rollout or GPU throughput result is
+claimed. Do not launch a long run until manual closed-loop standing/lift and the
+short training test pass on a working simulator host.

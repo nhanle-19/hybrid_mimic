@@ -1,8 +1,8 @@
 """Device-resident batched convex QP solver; no environment loop or CPU fallback.
 
 Mehrotra predictor/corrector interior point method for strictly convex objectives
-and linear inequalities. Atlas eliminates its six auxiliary-base equality rows
-analytically before calling this kernel.
+and linear inequalities. The Atlas controller eliminates centroidal balance and
+active-foot stance equalities before calling this kernel.
 """
 import torch
 

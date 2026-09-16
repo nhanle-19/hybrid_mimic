@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'source/whole_body_tr
 from atlas_model import AtlasModel, FEET
 from atlas_qp import AtlasQP, Contact, ExternalWrench, MotionTask, friction_rays
 from atlas_control import force_diagnostics, reference_contact_schedule
+from atlas_control import build_reference_tasks, swing_tasks
+from types import SimpleNamespace
 
 
 @pytest.fixture
@@ -20,6 +22,18 @@ def model():
 def state_at_rest(model):
     q = pin.neutral(model.model); q[2] = .72
     return model.state(q, np.zeros(model.model.nv))
+
+
+def test_no_swing_task_retains_posture_and_pelvis(model):
+    state = state_at_rest(model)
+    _, tasks = build_reference_tasks(state, state, np.zeros(2))
+    assert [task.name for task in tasks] == ['posture', 'pelvis_orientation']
+    assert swing_tasks(state, state, ()) == []
+    cfg = SimpleNamespace(swing_weight=0., posture_weight=.1, pelvis_weight=5.)
+    assert swing_tasks(state, state, (), cfg) == []
+    # An explicit positive weight remains available for controlled comparisons.
+    cfg.swing_weight = 10.
+    assert len(swing_tasks(state, state, (), cfg)) == 2
 
 
 @pytest.mark.parametrize('seed', range(5))
@@ -140,132 +154,43 @@ def test_tilted_reference_keeps_low_foot_in_contact(model):
     np.testing.assert_array_equal(reference_contact_schedule([state]*10), [[True, False]]*10)
 
 
-def hybrid_objective(model):
-    return dict(base_body='Trunk', base_weight=.001,
-                contact_weights={f: .001 for f in FEET}, angular_force_scale=20.,
-                torque_reference=np.zeros(23), torque_weights=np.ones(23))
-
-
-def test_hybrid_torque_reference_and_base_wrench(model):
-    """Hybrid mode must use policy torque references, not silently drop them."""
+def test_policy_only_changes_contact_weights_not_reference_feedback(model):
+    from atlas_control import contact_weights
     state = state_at_rest(model)
-    solver = AtlasQP(np.full(23, 60.))
-    objective = hybrid_objective(model)
-    baseline = solver.solve(state, np.zeros(6), [], hybrid=objective)
-    objective['torque_reference'] = np.linspace(-5., 5., 23)
-    changed = solver.solve(state, np.zeros(6), [], hybrid=objective)
-    assert changed['variable_count'] == 35
-    assert np.linalg.norm(changed['torque']-baseline['torque']) > 1.
-    assert max(changed['metrics'].values()) < 2e-5
-    # Auxiliary support is an optimization output, explicitly accounted for.
-    assert np.linalg.norm(changed['auxiliary_base_wrench']) > 1.
-    generalized = state['frames']['Trunk']['J'].T@changed['auxiliary_base_wrench']
-    inverse = pin.rnea(model.model, model.data, state['q'], state['v'], changed['acceleration'])
-    np.testing.assert_allclose(inverse-generalized, np.r_[np.zeros(6), changed['torque']], atol=2e-5)
-    objective['base_weight'] = 100.
-    costly_base = solver.solve(state, np.zeros(6), [], hybrid=objective)
-    assert np.linalg.norm(costly_base['auxiliary_base_wrench']) < np.linalg.norm(changed['auxiliary_base_wrench'])
+    q = state['q'].copy(); q[0] += .1; q[7] += .2
+    reference = model.state(q, np.zeros(29))
+    rate, tasks = build_reference_tasks(state, reference, np.zeros(2))
+    assert np.linalg.norm(rate) > 0
+    changed_rate, changed_tasks = build_reference_tasks(state, reference, np.array([-10., 10.]))
+    np.testing.assert_array_equal(changed_rate, rate)
+    for before, after in zip(tasks, changed_tasks):
+        np.testing.assert_array_equal(before.target_minus_bias, after.target_minus_bias)
+        np.testing.assert_array_equal(before.jacobian, after.jacobian)
+    np.testing.assert_allclose(contact_weights([0., 0.]), [50.05, 50.05])
+    np.testing.assert_allclose(contact_weights([-1e6, 1e6]), [.1, 100.])
+    with pytest.raises(ValueError, match='two finite'):
+        build_reference_tasks(state, reference, np.zeros(29))
+    with pytest.raises(ValueError, match='two finite'):
+        contact_weights([float('nan'), 0.])
+    with pytest.raises(ValueError, match='bounds'):
+        contact_weights([0., 0.], SimpleNamespace(contact_weight_min=10., contact_weight_max=1.))
 
 
-@pytest.mark.parametrize('body', ['left_foot_link', 'right_foot_link', 'left_hand_link', 'right_hand_link'])
-def test_hybrid_contact_logits_affect_physical_force_cost(model, body):
-    state = state_at_rest(model)
-    solver = AtlasQP(np.full(23, 60.))
-    contact = Contact(body) if body in FEET else Contact(body, points=np.zeros((1, 3)), constrain_rotation=False)
-    objective = hybrid_objective(model)
-    objective['base_weight'] = 1.
-    objective['contact_weights'] = {body: .00001}
-    cheap = solver.solve(state, np.zeros(6), [contact], hybrid=objective)
-    objective['contact_weights'][body] = 100.
-    expensive = solver.solve(state, np.zeros(6), [contact], hybrid=objective)
-    def force_norm(result):
-        return np.linalg.norm(sum(f for _, f in result['contact_forces'][body]))
-    assert force_norm(expensive) < force_norm(cheap)
-    assert max(expensive['metrics'].values()) < 2e-5
-    # Feet diagnostics remain valid when a hand point is also represented.
-    force_diagnostics(expensive, state, solver.torque_limits)
-
-
-def test_hybrid_limits_apply_to_pd_plus_feedforward(model):
+def test_tangential_weights_have_effect_without_new_variables(model):
     state = state_at_rest(model)
     limits = np.full(23, 60.)
-    pd = np.linspace(-180., 180., 23)
-    result = AtlasQP(limits).solve(state, np.zeros(6), [],
-        hybrid=hybrid_objective(model), pd_torque=pd)
-    total = pd+result['torque']
-    np.testing.assert_allclose(total, result['total_torque'], atol=1e-10)
-    assert np.max(np.abs(total)-limits) <= 2e-5
-    # FF must be allowed to counteract an already over-limit PD command.
-    assert np.max(np.abs(result['torque'])) > limits.max()
-    generalized = state['frames']['Trunk']['J'].T@result['auxiliary_base_wrench']
-    inverse = pin.rnea(model.model, model.data, state['q'], state['v'], result['acceleration'])
-    np.testing.assert_allclose(inverse-generalized, np.r_[np.zeros(6), total], atol=2e-5)
-    diag = force_diagnostics(result, state, limits)
-    np.testing.assert_allclose(diag['torque_utilization'], np.abs(total)/limits)
-
-
-@pytest.mark.parametrize('pd', [np.zeros(22), np.full(23, np.nan)])
-def test_reject_invalid_pd_torque(model, pd):
-    with pytest.raises(ValueError, match='PD torque'):
-        AtlasQP(np.full(23, 60.)).solve(state_at_rest(model), np.zeros(6), [], pd_torque=pd)
-
-
-def test_hybrid_balance_has_no_joint_posture_task(model):
-    from atlas_control import hybrid_balance_tasks
-    state = state_at_rest(model)
-    linear, angular = np.array([.2, -.1, .3]), np.array([.1, .2, -.3])
-    rate, tasks = hybrid_balance_tasks(state, linear, angular, 200.)
-    assert len(tasks) == 1 and tasks[0].name == 'base'
-    np.testing.assert_allclose(tasks[0].jacobian[:, 6:], 0., atol=1e-12)
-    nominal = np.zeros(29)
-    base = state['frames']['Trunk']
-    nominal[:6] = np.linalg.solve(base['J'][:, :6], np.r_[linear, angular]-base['bias'])
-    np.testing.assert_allclose(rate, state['Ag']@nominal+state['Ag_bias'])
-
-
-def test_infeasible_qp_writes_replay_data(model, tmp_path):
-    state = state_at_rest(model)
-    impossible = MotionTask(np.zeros((1, 29)), np.ones(1), 1., hard=True)
-    with pytest.raises(RuntimeError, match='problem saved to'):
-        AtlasQP(np.full(23, 60.), failure_directory=tmp_path).solve(state, np.zeros(6), [], [impossible])
-    files = list(tmp_path.glob('qp_failure_*.npz'))
-    assert len(files) == 1
-    with np.load(files[0], allow_pickle=False) as data:
-        assert 'infeasible' in str(data['status'])
-        assert data['hessian'].shape == (29, 29)
-        assert data['constraint_matrix'].shape[0] == len(data['lower']) == len(data['upper'])
-        np.testing.assert_array_equal(data['q'], state['q'])
-
-
-def test_disabled_stance_allows_acceleration_but_keeps_torque_and_friction_bounds(model):
-    state = state_at_rest(model)
-    foot = FEET[0]
-    task = MotionTask(state['frames'][foot]['J'], np.array([0., 0., 1., 0., 0., 0.]),
-                      1., 'moving_contact', hard=True)
-    pd = np.linspace(-100., 100., 23)
-    args = (state, np.zeros(6), [Contact(foot)], [task])
-    with pytest.raises(RuntimeError):
-        AtlasQP(np.full(23, 60.)).solve(*args, hybrid=hybrid_objective(model), pd_torque=pd)
-    result = AtlasQP(np.full(23, 60.), enforce_stance=False).solve(
-        *args, hybrid=hybrid_objective(model), pd_torque=pd)
-    assert not result['stance_constraint_enabled']
-    assert result['metrics']['stance'] > .9
-    assert max(value for key, value in result['metrics'].items() if key != 'stance') < 2e-5
-    assert np.max(np.abs(pd+result['torque'])) < 60.+2e-5
-    assert result['metrics']['friction_violation'] < 2e-5
-    assert result['metrics']['rho_violation'] < 2e-5
-
-
-@pytest.mark.parametrize('error', [ValueError('OSQP solve error!'), KeyboardInterrupt()])
-def test_solver_exception_saves_problem(model, tmp_path, monkeypatch, error):
-    import atlas_qp
-    def interrupted(_):
-        raise error
-    monkeypatch.setattr(atlas_qp.osqp.OSQP, 'solve', interrupted)
-    with pytest.raises(RuntimeError, match='problem saved to'):
-        AtlasQP(np.full(23, 60.), failure_directory=tmp_path, enforce_stance=False).solve(
-            state_at_rest(model), np.zeros(6), [])
-    with np.load(next(tmp_path.glob('qp_failure_*.npz')), allow_pickle=False) as data:
-        assert int(data['iterations']) == -1
-        assert not bool(data['stance_constraint_enabled'])
-        assert type(error).__name__ in str(data['failure_reason'])
+    contact = Contact(FEET[0])
+    desired = np.array([100., 40., 0., 0., 0., 0.])
+    qp = AtlasQP(limits)
+    low = qp.solve(state, desired, [contact], contact_weights={FEET[0]: .1})
+    high = qp.solve(state, desired, [contact], contact_weights={FEET[0]: 100.})
+    hard = qp.solve(state, desired, [contact])
+    low_acc = low['contact_acceleration'][FEET[0]]
+    high_acc = high['contact_acceleration'][FEET[0]]
+    assert np.linalg.norm(low_acc[:2]) > 1e-3
+    assert np.linalg.norm(high_acc[:2]) < np.linalg.norm(low_acc[:2])*.9
+    for result in (low, high, hard):
+        assert result['variable_count'] == 45
+        assert max(result['metrics'].values()) < 2e-5
+        np.testing.assert_allclose(result['contact_acceleration'][FEET[0]][2:], 0., atol=2e-5)
+    np.testing.assert_allclose(hard['contact_acceleration'][FEET[0]], 0., atol=2e-5)

@@ -27,7 +27,7 @@ def exporter(monkeypatch):
     return module
 
 
-@pytest.mark.parametrize("hybrid", [False, True])
+@pytest.mark.parametrize("hybrid", [False, True, "atlas"])
 @pytest.mark.parametrize("nominal", [False, True])
 def test_metadata_export(exporter, tmp_path, hybrid, nominal):
     joints = [f"joint_{i}" for i in range(23)]
@@ -42,7 +42,12 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
              command_manager=NS(active_terms=["motion"], get_term=lambda _: motion),
              observation_manager=NS(active_terms={"policy": ["joint_pos"]},
                                     cfg=NS(policy=NS(history_length=1))))
-    if hybrid:
+    if hybrid == "atlas":
+        terms.clear()
+        terms["atlas"] = NS(dynamics=NS(joint_names=list(reversed(joints))), cfg=NS(controller=NS(
+            contact_weight_min=0., contact_weight_max=100., contact_force_max=(600.,600.))))
+        env.action_manager.active_terms = list(terms)
+    elif hybrid:
         env.hybrid_controller = NS(action_dim=57, end_effector_names=["left_foot", "right_foot", "left_hand", "right_hand"],
             desired_linear_velocity_scale=.25, desired_angular_velocity_scale=.5, torque_action_scale=.1)
     model = onnx.helper.make_model(onnx.helper.make_graph([], "metadata_test", [], []))
@@ -53,6 +58,15 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
     assert metadata["run_path"] == "test_run"
     assert metadata["joint_names"].split(",") == joints
     assert [float(x) for x in metadata["default_joint_pos"].split(",")] == [2. if nominal else 1.] * 23
+    if hybrid == "atlas":
+        assert metadata["action_type"] == "atlas_reference_contact_policy"
+        assert metadata["policy_action_dim"] == "14"
+        assert metadata["action_layout"] == "per_foot:activation,linear_weight_logits_xyz,angular_weight_logits_xyz;left_foot,right_foot"
+        assert metadata["contact_weight_min"] == "0.0"
+        assert metadata["contact_weight_max"] == "100.0"
+        assert metadata["action_transform"] == "activation=clip(u,0,1);weights=w_min+(w_max-w_min)*sigmoid(u)"
+        assert "action_scale" not in metadata
+        return
     scales = [float(x) for x in metadata["action_scale"].split(",")]
     assert scales == [.25] * 23
     if hybrid:

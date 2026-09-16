@@ -31,6 +31,7 @@ parser.add_argument(
 )
 parser.add_argument("--output_name", type=str, required=True, help="The name of the motion npz file.")
 parser.add_argument("--output_fps", type=int, default=50, help="The fps of the output motion.")
+parser.add_argument("--local_only", action="store_true", help="Save the converted NPZ locally and exit without uploading to W&B.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -313,6 +314,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, joi
             output_path = output_dir / f"{Path(args_cli.output_name).name}_training.npz"
             np.savez(output_path, **log)
             print(f"[INFO]: Converted training motion saved locally: {output_path}", flush=True)
+
+            if args_cli.local_only:
+                return
 
             import wandb
 

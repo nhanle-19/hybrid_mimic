@@ -2,13 +2,18 @@
 
 The separate **Atlas-style centroidal controller** is available as
 `Tracking-Atlas-T1-v0` and `Tracking-Atlas-T1-Eval-v0`. It uses physical point
-contacts and an inequality-constrained QP behind the same 57-action HybridMimic
-policy interface and PD-plus-feedforward step loop as `floating_model`.
-In Atlas, joint PD handles posture; the QP handles balance/contact dynamics
-without a duplicate posture-tracking objective and limits the combined PD plus
-feedforward torque.
+contacts, an inequality-constrained QP, and a reference-conditioned contact policy interface.
 See [the formulation, tests, evaluation commands, and documented deviations](docs/atlas_controller.md).
 The `floating_model` task remains the baseline.
+
+For a standing-only QP test, use `Standing-Atlas-T1-v0` with
+`scripts/rsl_rl/eval_atlas.py --qp_only`. It holds the supplied motion's first
+pose with zero reference velocities and both feet in stance.
+See [the standing test command](docs/atlas_controller.md#standing-only-qp-test).
+
+To test Atlas using simulator-measured foot–ground contact, add
+`--contact_source ground_force` to `eval_atlas.py`.
+See [the recorded ground-force test](docs/atlas_controller.md#simulator-ground-force-contact-mode).
 
 This repository variant adds a new HybridMimic task for the Booster T1 that keeps the same RSL-RL training structure as the hybrid controller task, but replaces the centroidal controller with a floating-base whole-body controller inspired by Koolen et al., *Design of a Momentum-Based Control Framework and Application to the Humanoid Robot Atlas*.
 
@@ -227,21 +232,21 @@ CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/trai
   --task Tracking-Atlas-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --device cuda:0 \
-  --num_envs 128 \
+  --num_envs 1024 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
   --run_name atlas_g18_push_kick_right
 ```
 
-Simulation, analytical dynamics, batched QP solves, and PPO training use the
-same exposed GPU. Atlas training requires CUDA and the `batched` backend; it
-rejects CPU/OSQP configurations. File loading, logging, and checkpoint exports
-still use the host. This runs the default 30,000 iterations
+Simulation, policy training, analytical dynamics, and batched QP solves use the
+exposed GPU. Atlas defaults to 1,024 parallel environments and 30,000 iterations
 and saves checkpoints under `logs/rsl_rl/t1_atlas/`. Train a fresh policy because
-old 29-action Atlas checkpoints are incompatible with this 57-action interface.
-The policy layout now matches HybridMimic/Floating Model; controller behavior
-still differs, so matching dimensions do not establish policy transfer quality.
+the 14-output Atlas interface is incompatible with earlier Atlas and Floating
+Model checkpoints. For each foot the reference-only actor produces support
+activation and six motion weights. Actual collider geometry gates force
+availability; all six contact-motion requests are soft. Tracking rewards and
+fall termination are retained, with a measured-slip penalty.
 See [Atlas validation and evaluation](docs/atlas_controller.md) for the current
 tracking limitations and evaluation commands.
 
