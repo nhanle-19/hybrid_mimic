@@ -18,6 +18,9 @@ class AtlasActionsCfg:
 
 
 def configure_atlas(cfg):
+    # One QP solve per policy action; hold torques for ten physics substeps.
+    cfg.sim.dt = .002
+    cfg.decimation = 10
     cfg.actions = AtlasActionsCfg()
     cfg.observations = AtlasObservationsCfg()
     cfg.scene.num_envs = 1024

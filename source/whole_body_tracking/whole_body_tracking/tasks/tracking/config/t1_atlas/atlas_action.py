@@ -1,4 +1,4 @@
-"""Isaac action term: analytical Atlas QP at every physics step, direct torque."""
+"""Atlas action interface; active backends use a policy-rate direct-torque QP."""
 import numpy as np
 import torch
 

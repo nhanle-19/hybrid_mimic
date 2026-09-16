@@ -88,7 +88,10 @@ slipping or rolling control.
 ## Rollout and rewards
 
 Defaults remain **1,024 environments**, batched CUDA dynamics/QP, 500 Hz physics
-and 50 Hz policy. The actor's actions pass through the QP every physics step.
+and 50 Hz policy/QP. Each new policy action triggers one QP solve; its torque
+is held for all ten physics substeps. Dynamics and QP assembly are skipped
+during those held substeps. Resets clear the affected torque buffers and
+request a fresh solve. This applies to both batched and OSQP backends.
 `backend=osqp` uses the same assembly with an explicit CPU reference solve.
 
 All six inherited motion-tracking rewards and fall terminations are restored.

@@ -1,4 +1,4 @@
-"""Device-resident Atlas training action; CPU transfers only for diagnostics."""
+"""Policy-rate Atlas QP with zero-order-held torques between updates."""
 import numpy as np
 import torch
 
@@ -43,7 +43,12 @@ class AtlasGPUAction(AtlasAction):
         self.qp_failed = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
         self.last_prediction = None
         self.previous_wrench = None
+        self._qp_update_pending = True
         print(f'[INFO] Atlas backend={cfg.backend}: {env.num_envs} environments; dynamics and QP on {env.device}, float64')
+
+    def process_actions(self, actions):
+        super().process_actions(actions)
+        self._qp_update_pending = True
 
     def set_active_contacts(self, mask):
         if mask is None:
@@ -164,12 +169,18 @@ class AtlasGPUAction(AtlasAction):
         return result
 
     def apply_actions(self):
+        # Pair diagnostics with the first physics sample after the solve,
+        # including when the next QP update is still nine substeps away.
+        self._finish_pending(None)
+        if not self._qp_update_pending:
+            self._asset.set_joint_effort_target(self._torques)
+            self._clock += 1
+            return
         if self.references is None:
             self._reference_states()
         state = self._states()
         if not self.validated:
             self._validate_simulator_model(self._cpu_states(state))
-        self._finish_pending(state)
         times = self._env.command_manager.get_term('motion').time_steps
         ref = select_state(self.references, times)
         ground = self._gpu_ground_forces()
@@ -214,6 +225,7 @@ class AtlasGPUAction(AtlasAction):
                 qp_residual=result['residual'], foot_position_w=torch.stack([state['frames'][f]['position'] for f in FEET], 1),
                 reference_foot_position_w=torch.stack([ref['frames'][f]['position'] for f in FEET], 1))
         self._asset.set_joint_effort_target(self._torques)
+        self._qp_update_pending = False
         self._clock += 1
 
     def save_diagnostics(self, path, finalize=True, completed=True, failure_reason=''):
@@ -226,7 +238,8 @@ class AtlasGPUAction(AtlasAction):
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(path, **{k: np.asarray([r[k] for r in self.records]) for k in self.records[0]},
             foot_names=np.asarray(FEET), joint_names=np.asarray(self.dynamics.joint_names),
-            physics_dt=self._env.physics_dt, controller_config_json=np.asarray(json.dumps(self.cfg.controller.to_dict())),
+            physics_dt=self._env.physics_dt, qp_dt=self._env.step_dt,
+            controller_config_json=np.asarray(json.dumps(self.cfg.controller.to_dict())),
             evaluation_completed=completed, failure_reason=np.asarray(failure_reason))
 
     def reset(self, env_ids=None):
@@ -234,6 +247,8 @@ class AtlasGPUAction(AtlasAction):
         self.estimated_contacts[ids] = False
         self.external[ids] = 0
         self._raw[ids] = 0
+        self._torques[ids] = 0
+        self._qp_update_pending = True
         self.qp_failed[ids] = False
         if self.last_prediction is not None:
             self.last_prediction['_valid'][ids] = False

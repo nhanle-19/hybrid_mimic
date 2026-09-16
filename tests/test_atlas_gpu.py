@@ -211,12 +211,16 @@ def test_gpu_action_reset_and_ground_contacts(action_modules):
     term.qp_failed = torch.ones(2, dtype=torch.bool)
     term.external = torch.ones((2, 24, 6))
     term._raw = torch.ones((2, 14))
+    term._torques = torch.ones((2, 23))
+    term._qp_update_pending = False
     term.pending = [{'sample': 0}, {'sample': 1}]
     term.last_prediction = None
     term.set_active_contacts([[True, False], [False, True]])
     assert term.contact_override.device.type == 'cpu'
     term.reset(torch.tensor([1]))
     assert term.qp_failed.tolist() == [True, False]
+    assert term._torques[0].all() and not term._torques[1].any()
+    assert term._qp_update_pending
     assert term.estimated_contacts[0].all() and not term.estimated_contacts[1].any()
     assert term.external[0].all() and not term.external[1].any()
     assert term._raw[0].all() and not term._raw[1].any()
@@ -246,6 +250,7 @@ def test_action_applies_bounded_fallback_and_logs_failure(action_modules, cfg):
     term._raw = support_actions()
     term._torques = torch.zeros((1, 23))
     term._gpu_ground_forces = lambda: torch.zeros((1, 2, 3))
+    term._actual_wrenches = lambda: torch.zeros((1, 2, 6))
     term.estimated_contacts = torch.zeros((1, 2), dtype=torch.bool)
     term.contact_override = None
     term.limits = torch.full((1, 23), 10., dtype=torch.float64)
@@ -255,6 +260,7 @@ def test_action_applies_bounded_fallback_and_logs_failure(action_modules, cfg):
     term.qp_failed = torch.zeros(1, dtype=torch.bool)
     term.previous_wrench = term.last_prediction = None
     term._clock = 0
+    term._qp_update_pending = True
     term.pin_to_sim = list(range(23))
     applied = []
     term._asset = SimpleNamespace(set_joint_effort_target=lambda x: applied.append(x.clone()))
@@ -265,17 +271,44 @@ def test_action_applies_bounded_fallback_and_logs_failure(action_modules, cfg):
     assert applied[0].abs().max() <= 10.
     torch.testing.assert_close(applied[0], torch.full_like(applied[0], -10.))
     assert term.qp_failed.item()
+    # The remaining nine physics substeps hold torque and skip dynamics/QP.
+    original_states = term._states
+    term._states = lambda: pytest.fail('Dynamics recomputed during torque hold')
+    for _ in range(9):
+        term.apply_actions()
+        torch.testing.assert_close(applied[-1], applied[0])
+    assert term._clock == 10
+    assert term.failure_count.item() == 1
+    term._states = original_states
     # A successful later substep must not erase an earlier failure or resume
     # QP torques before the termination manager can reset the environment.
     result = term.solver.solve(state, state, term._raw.double(),
                               available_vertices(state, cfg), term.limits)
     result['failed'].zero_()
     result['torque'].zero_()
-    term.solver = SimpleNamespace(solve=lambda *args: result)
+    calls = []
+    def solve(*args):
+        calls.append(True)
+        return result
+    term.solver = SimpleNamespace(solve=solve)
+    term.process_actions(term._raw.clone())
     term.apply_actions()
+    assert len(calls) == 1
     assert term.qp_failed.item()
     assert term.failure_count.item() == 1
-    torch.testing.assert_close(applied[1], applied[0])
+    torch.testing.assert_close(applied[-1], applied[0])
+    # Reset discards the old command and permits a fresh successful solve.
+    term.external = torch.zeros((1, 24, 6))
+    term.reset()
+    assert not term._torques.any()
+    term.process_actions(support_actions())
+    term.apply_actions()
+    assert len(calls) == 2
+    assert not term.qp_failed.any()
+    assert not applied[-1].any()
+    for _ in range(9):
+        term.apply_actions()
+    assert len(calls) == 2
 
 
 def test_reference_window_has_no_actual_state_inputs(monkeypatch):
