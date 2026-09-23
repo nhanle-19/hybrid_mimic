@@ -27,7 +27,7 @@ def exporter(monkeypatch):
     return module
 
 
-@pytest.mark.parametrize("hybrid", [False, True, "atlas"])
+@pytest.mark.parametrize("hybrid", [False, True, "wbc_acc", "wbc_force"])
 @pytest.mark.parametrize("nominal", [False, True])
 def test_metadata_export(exporter, tmp_path, hybrid, nominal):
     joints = [f"joint_{i}" for i in range(23)]
@@ -42,9 +42,9 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
              command_manager=NS(active_terms=["motion"], get_term=lambda _: motion),
              observation_manager=NS(active_terms={"policy": ["joint_pos"]},
                                     cfg=NS(policy=NS(history_length=1))))
-    if hybrid == "atlas":
+    if hybrid in ("wbc_acc", "wbc_force"):
         terms.clear()
-        terms["atlas"] = NS(dynamics=NS(joint_names=list(reversed(joints))), cfg=NS(controller=NS(
+        terms[hybrid] = NS(dynamics=NS(joint_names=list(reversed(joints))), cfg=NS(controller=NS(
             contact_weight_min=0., contact_weight_max=100., contact_force_max=(600.,600.))))
         env.action_manager.active_terms = list(terms)
     elif hybrid:
@@ -58,8 +58,18 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
     assert metadata["run_path"] == "test_run"
     assert metadata["joint_names"].split(",") == joints
     assert [float(x) for x in metadata["default_joint_pos"].split(",")] == [2. if nominal else 1.] * 23
-    if hybrid == "atlas":
-        assert metadata["action_type"] == "atlas_reference_contact_policy"
+    if hybrid == "wbc_force":
+        assert metadata["action_type"] == "wbc_force_reference_force_limit_policy"
+        assert metadata["policy_action_dim"] == "2"
+        assert metadata["action_layout"] == "left_foot_normal_force_capacity,right_foot_normal_force_capacity"
+        assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip(u,0,1)"
+        assert metadata["normal_force_axis"] == "world_z"
+        assert [float(x) for x in metadata["contact_force_max"].split(",")] == [600., 600.]
+        assert "contact_weight_max" not in metadata
+        assert "action_scale" not in metadata
+        return
+    if hybrid == "wbc_acc":
+        assert metadata["action_type"] == "wbc_acc_reference_contact_policy"
         assert metadata["policy_action_dim"] == "14"
         assert metadata["action_layout"] == "per_foot:activation,linear_weight_logits_xyz,angular_weight_logits_xyz;left_foot,right_foot"
         assert metadata["contact_weight_min"] == "0.0"

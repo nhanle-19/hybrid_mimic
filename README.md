@@ -1,35 +1,21 @@
-# HybridMimic Floating Model Task
+# HybridMimic WBC tasks
 
-The separate **Atlas-style centroidal controller** is available as
-`Tracking-Atlas-T1-v0` and `Tracking-Atlas-T1-Eval-v0`. It uses physical point
-contacts, an inequality-constrained QP, and a reference-conditioned contact policy interface.
-See [the formulation, tests, evaluation commands, and documented deviations](docs/atlas_controller.md).
-The `floating_model` task remains the baseline.
-
-For a standing-only QP test, use `Standing-Atlas-T1-v0` with
-`scripts/rsl_rl/eval_atlas.py --qp_only`. It holds the supplied motion's first
-pose with zero reference velocities and both feet in stance.
-See [the standing test command](docs/atlas_controller.md#standing-only-qp-test).
-
-To test Atlas using simulator-measured foot–ground contact, add
-`--contact_source ground_force` to `eval_atlas.py`.
-See [the recorded ground-force test](docs/atlas_controller.md#simulator-ground-force-contact-mode).
-
-This repository variant adds a new HybridMimic task for the Booster T1 that keeps the same RSL-RL training structure as the hybrid controller task, but replaces the centroidal controller with a floating-base whole-body controller inspired by Koolen et al., *Design of a Momentum-Based Control Framework and Application to the Humanoid Robot Atlas*.
-
-The new task IDs are:
+Two Booster T1 tasks learn reference-conditioned settings for a whole-body QP
+controller. WBC-ACC learns force caps and foot-acceleration tracking weights;
+WBC-FORCE learns only force caps and removes the foot-acceleration objectives.
 
 | Use | Task |
 | --- | --- |
-| Training | `Tracking-FloatingModel-T1-v0` |
-| Evaluation | `Tracking-FloatingModel-T1-Eval-v0` |
+| Training | `Tracking-WBC-ACC-T1-v0` |
+| Evaluation | `Tracking-WBC-ACC-T1-Eval-v0` |
+| Standing controller test | `Standing-WBC-ACC-T1-v0` |
+| Force-cap training | `Tracking-WBC-FORCE-T1-v0` |
+| Force-cap evaluation | `Tracking-WBC-FORCE-T1-Eval-v0` |
+| Force-cap standing test | `Standing-WBC-FORCE-T1-v0` |
 
-The task formerly named `momentum` is now `floating_model`. New training runs
-use `logs/rsl_rl/t1_floating_model/`. To evaluate or resume a checkpoint saved
-under the old experiment folder, use the new task ID and add
-`--experiment_name t1_momentum`. Existing run directories and comparison NPZs
-retain their original names. The comparison plotter accepts `--floating_model`
-(`--momentum` remains an alias) and labels this controller as "Floating model".
+See [the controller formulation and validation commands](docs/wbc_acc_controller.md).
+See [WBC-FORCE's learned force inequalities and commands](docs/wbc_force_controller.md).
+The original PD and centroidal-hybrid tasks remain available.
 
 ## Setup
 
@@ -159,98 +145,58 @@ the key in the same shell, prefix the training command with
 
 ## Train
 
-All training examples use W&B logging in the `hybrid_mimic` project. Activate
-`hybridmimic` before running them. Each example prompts for an API key and
-passes it to that training process with `WANDB_API_KEY="$WANDB_API_KEY"`.
-The motion source (local NPZ or W&B artifact) is independent of the logger.
-`CUDA_VISIBLE_DEVICES=0` selects GPU 0 for each training process; change `0` to
-the GPU index you want to use. Training defaults to 30,000 iterations; use
-`--max_iterations` only to override that default.
-
-Use the new Floating Model task with the existing RSL-RL training script:
-
-```bash
-read -rsp "W&B API key: " WANDB_API_KEY
-echo
-
-CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
-  --task Tracking-FloatingModel-T1-v0 \
-  --registry_name ENTITY/PROJECT/MOTION_ARTIFACT:latest \
-  --headless \
-  --logger wandb \
-  --log_project_name hybrid_mimic \
-  --run_name RUN_NAME
-```
-
-If the artifact path does not include an alias, the training script appends `:latest`.
-
-Remove `--headless` to run with the Isaac Sim GUI.
-
-### Train from a local motion file
-
-The converter saves `retargeted_motion/<output_name>_training.npz` in the
-repository before uploading to W&B. For the G18 command above, this is:
-
-```text
-retargeted_motion/g18_push_kick_right_t1_training.npz
-```
-
-For training on another machine, transfer this converted file to that machine
-first. Use `--motion_file` instead of `--registry_name`:
-
-```bash
-read -rsp "W&B API key: " WANDB_API_KEY
-echo
-
-CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
-  --task Tracking-FloatingModel-T1-v0 \
-  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --num_envs 1024 \
-  --headless \
-  --logger wandb \
-  --log_project_name hybrid_mimic \
-  --run_name floating_model_g18_push_kick_right
-```
-
-This loads the motion locally and logs training metrics to W&B using the API
-key supplied to the command. The input must be the converted file
-containing joint velocities and body transforms; the raw retargeted NPZ and
-terminal logs cannot be used directly for training.
-
-### Train the Atlas controller
+### Train the WBC-ACC controller
 
 Use W&B logging in the same `hybrid_mimic` project, with GPU 0 exposed:
 
 ```bash
 conda activate hybridmimic
-python -m pip install -r requirements-atlas.txt
+python -m pip install -r requirements-wbc_acc.txt
 
 read -rsp "W&B API key: " WANDB_API_KEY
 echo
 
 CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
-  --task Tracking-Atlas-T1-v0 \
+  --task Tracking-WBC-ACC-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --device cuda:0 \
   --num_envs 1024 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
-  --run_name atlas_g18_push_kick_right
+  --run_name wbc_acc_g18_push_kick_right
 ```
 
 Simulation, policy training, analytical dynamics, and batched QP solves use the
-exposed GPU. Atlas defaults to 1,024 parallel environments and 30,000 iterations
-and saves checkpoints under `logs/rsl_rl/t1_atlas/`. Train a fresh policy because
-the 14-output Atlas interface is incompatible with earlier Atlas and Floating
-Model checkpoints. For each foot the reference-only actor produces support
+exposed GPU. WBC-ACC defaults to 1,024 parallel environments and 30,000 iterations
+and saves checkpoints under `logs/rsl_rl/t1_wbc_acc/`. Train a fresh policy because
+the 14-output contact-policy interface is incompatible with older action layouts. For each foot the reference-only actor produces support
 activation and six motion weights. Actual collider geometry gates force
 availability; all six contact-motion requests are soft. Tracking rewards and
 fall termination are retained, with a measured-slip penalty. An alive reward adds
 +1 per simulated second survived, excluding failure steps and including timeouts,
 in place of the fixed termination penalty.
-See [Atlas validation and evaluation](docs/atlas_controller.md) for the current
+See [WBC-ACC validation and evaluation](docs/wbc_acc_controller.md) for the current
 tracking limitations and evaluation commands.
+
+### Train WBC-FORCE
+
+The NN outputs two normalized normal-force capacities, left then right. The QP
+enforces `0 <= Fz_i <= 600 * clip(action_i, 0, 1)` N for each foot. Actual
+support geometry, friction, dynamics, and torque limits still apply. Momentum,
+posture, and pelvis tracking remain; foot-acceleration objectives are absent.
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task Tracking-WBC-FORCE-T1-v0 \
+  --motion_file retargeted_motion/b22_side_step_left_female1_t1_training.npz \
+  --device cuda:0 --num_envs 1024 --headless \
+  --logger tensorboard --run_name wbc_force_side_step
+```
+
+This uses the same PPO settings and reference-only actor observations as
+WBC-ACC. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
+the two-output policy cannot load a fourteen-output WBC-ACC checkpoint.
 
 ### Train the PD baseline
 
@@ -276,26 +222,6 @@ This runs the full configured iteration count. For a short pipeline check, use
 Check that PPO iterations complete with finite losses and checkpoints are saved
 under `logs/rsl_rl/t1_flat/`.
 
-## Play
-
-To load and visualize a trained Floating Model policy from a W&B run:
-
-```bash
-python scripts/rsl_rl/play.py \
-  --task Tracking-FloatingModel-T1-v0 \
-  --num_envs 2 \
-  --wandb_path ENTITY/PROJECT/RUN_ID
-```
-
-Optional flags:
-
-```bash
---headless
---video --video_length 500
-```
-
-Playback also exports the loaded policy to ONNX in the checkpoint run directory.
-
 ## Record the reference motion
 
 Replay the converted training NPZ directly on T1 and record one full motion
@@ -316,259 +242,48 @@ Omit `--headless --video` for looping interactive playback. The existing
 alternative to `--motion_file`. Use the converted `_training.npz`, which has
 full-body transforms and velocities; raw retargeted files need conversion first.
 
-## Tracking Evaluation
+## Evaluation
 
-Use the evaluation task for repeatable motion-tracking rollouts:
-
-```bash
-mkdir -p eval_data
-
-python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-FloatingModel-T1-Eval-v0 \
-  --num_envs 2 \
-  --wandb_path ENTITY/PROJECT/RUN_ID \
-  --headless
-```
-
-To evaluate a specific checkpoint:
+Evaluate a saved policy with controller diagnostics:
 
 ```bash
-python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-FloatingModel-T1-Eval-v0 \
-  --num_envs 2 \
-  --wandb_path ENTITY/PROJECT/RUN_ID \
-  --checkpoint_no ITERATION \
-  --headless
-```
-
-Tracking data is written to:
-
-```text
-eval_data/tracking_play_data.npz
-```
-
-### Compare PD and floating_model with video recording
-
-Run these commands from the repository root to evaluate the local PD and floating_model
-runs below. Both use the same reference motion and checkpoint iteration.
-Each evaluation overwrites `eval_data/tracking_play_data.npz`, so copy its output
-before running the other controller:
-
-```bash
-conda activate hybridmimic
-mkdir -p eval_data/comparison
-
-python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-Flat-T1-Eval-v0 \
-  --num_envs 2 \
-  --load_run 2026-09-07_19-19-43_momentum_g18_push_kick_right \
+python scripts/rsl_rl/eval_wbc.py \
+  --task Tracking-WBC-ACC-T1-Eval-v0 \
+  --motion_file retargeted_motion/b22_side_step_left_female1_t1_training.npz \
+  --load_run RUN_DIRECTORY \
   --checkpoint model_29999.pt \
-  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --headless --video --video_length 500 &&
-cp eval_data/tracking_play_data.npz eval_data/comparison/pd.npz
+  --num_envs 1 --steps 500 --device cuda:0 --headless
 
-python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-FloatingModel-T1-Eval-v0 \
-  --num_envs 2 \
-  --experiment_name t1_momentum \
-  --load_run 2026-09-09_00-17-56_momentum_g18_push_kick_right \
-  --checkpoint model_29999.pt \
-  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --headless --video --video_length 500 &&
-cp eval_data/tracking_play_data.npz eval_data/comparison/momentum.npz
+python scripts/plot_wbc.py --input logs/rsl_rl/t1_wbc_acc/RUN_DIRECTORY/diagnostics.npz
 ```
 
-The PD run is under `logs/rsl_rl/t1_flat`, despite having `momentum` in its name.
-Videos are saved in each run's `videos/play/` directory. The `&&` copies the data
-only when evaluation exits successfully; if shutdown fails after saving data,
-verify the output belongs to that evaluation and copy it before starting the next run.
+For a controller-only standing test, use `Standing-WBC-ACC-T1-v0` with
+`--qp_only --manual_support 1 1 --manual_weight 50` instead of the checkpoint
+arguments. Add `--video` to record the rollout.
 
-After both NPZ files are saved, generate comparison plots without launching Isaac Sim:
+The same evaluator supports `Tracking-WBC-FORCE-T1-Eval-v0` and
+`Standing-WBC-FORCE-T1-v0`. For WBC-FORCE, `--manual_support LEFT RIGHT` sets
+the two normalized force caps during `--qp_only`; `--manual_weight` does not
+apply. For either learned policy, videos go to the checkpoint run's
+`videos/play/` folder and diagnostics to its `diagnostics.npz`. WBC-FORCE runs
+are under `logs/rsl_rl/t1_wbc_force/`. Plot a run with
+`scripts/plot_wbc.py --input <run folder>/diagnostics.npz`.
+QP-only evaluations have no checkpoint folder and use `eval_data/<controller>/`.
+Explicit `--video_dir` and `--output` options override these defaults.
+
+For generic tracking recordings, `scripts/rsl_rl/tracking_play.py` accepts the
+same evaluation task, `--load_run`, `--checkpoint`, and `--motion_file`. It saves
+`eval_data/tracking_play_data.npz`. Save PD and controller recordings separately
+and compare matching reference trajectories with:
 
 ```bash
-python scripts/compare_tracking.py
+python scripts/compare_tracking.py \
+  --pd eval_data/comparison/pd.npz \
+  --controller eval_data/comparison/wbc_acc.npz \
+  --controller_label wbc_acc
 ```
 
-This writes `tracking_errors.png`, `body_position_rmse.png`, `kick_height.png`,
-`control_effort.png`, and `metrics.csv` to `eval_data/comparison/plots/`.
-The script checks that reference trajectories match and trims trailing zero-filled
-frames from legacy recordings. Time uses the default 0.02-second control interval
-(override with `--dt` if needed). Shading shows the range across environments,
-not a confidence interval. Absolute joint power is mechanical effort, not electrical
-consumption. These plots describe the saved rollouts and do not measure failure rates.
-
-### Contact-model diagnostics
-
-Plot each foot's height, horizontal speed, vertical velocity, and angular speed:
-
-```bash
-python scripts/plot_contact_diagnostics.py
-```
-
-The existing NPZs contain only kinematic proxies, not measured contact states.
-The plotter uses saved body-name metadata when available. For legacy T1 files it
-corrects the old evaluator's order (trunk, left foot, right foot, left hand,
-right hand); new evaluations explicitly save the requested body order.
-
-To add normal contact-force measurements and floating_model QP wrench predictions,
-rerun evaluation with `--record_contacts`:
-
-```bash
-python scripts/rsl_rl/tracking_play.py \
-  --task Tracking-FloatingModel-T1-Eval-v0 \
-  --num_envs 2 \
-  --experiment_name t1_momentum \
-  --load_run 2026-09-09_00-17-56_momentum_g18_push_kick_right \
-  --checkpoint model_29999.pt \
-  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
-  --headless --record_contacts &&
-cp eval_data/tracking_play_data.npz eval_data/comparison/momentum_contacts.npz
-
-python scripts/plot_contact_diagnostics.py \
-  --input eval_data/comparison/momentum_contacts.npz
-```
-
-Figures go to `eval_data/comparison/contact_plots/`, one per environment.
-Green shading marks net normal force magnitude above 10 N (override with
-`--contact_threshold`); red lines mark reset samples, which should be excluded
-from physical interpretation. Sensor forces are sampled after each control step;
-QP predictions come from the final physics substep. This 50 Hz recording can miss
-brief impacts; impact and acceleration-residual studies need physics-rate logging.
-Isaac Lab 2.2 `net_forces_w` contains summed normal forces, not friction forces or
-contact moments. It cannot establish a measured friction ratio or center of pressure.
-The sensor is not ground-filtered, so other collisions can also activate it.
-
-The current floating_model QP enforces floating-base dynamics, but does not impose
-`J_c qdd + Jdot_c qdot = 0`, unilateral/friction constraints, or a support polygon.
-It includes a penalized auxiliary base wrench and wrench variables for every
-configured end effector, without explicit contact activation. Compare predicted
-normal forces with measured contact timing before attributing tracking errors to
-a rigid flat-foot constraint. Motion during force-detected contact can motivate
-investigating sliding or rocking, but body velocity is not sole-point slip velocity.
-
-## Impulse Evaluation
-
-Use `eval_env.py` to measure recovery from randomized external pushes:
-
-```bash
-mkdir -p eval_data
-
-python scripts/rsl_rl/eval_env.py \
-  --task Tracking-FloatingModel-T1-v0 \
-  --num_envs 36 \
-  --wandb_path ENTITY/PROJECT/RUN_ID \
-  --headless
-```
-
-Floating Model impulse results are written to:
-
-```text
-eval_data/floating_model_eval_data.npz
-```
-
-## Implementation
-
-The Floating Model task is implemented as a sibling of the original hybrid task, so the existing flat and centroidal-hybrid tasks are left unchanged.
-
-Task registration lives in:
-
-```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/__init__.py
-```
-
-It registers:
-
-```text
-Tracking-FloatingModel-T1-v0
-Tracking-FloatingModel-T1-Eval-v0
-```
-
-The task config lives in:
-
-```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/flat_env_cfg.py
-```
-
-It subclasses the existing T1 hybrid config so the new task keeps the same robot, observations, action layout, rewards, command setup, and RSL-RL structure.
-
-The environment lives in:
-
-```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/floating_model_env.py
-```
-
-`FloatingModelEnv` subclasses the existing `HybridEnv` and overrides only `_initialize_hybrid_runtime()`. That swap replaces the original `HybridController` with `FloatingModelController`, while preserving the existing step loop, action manager, reward bookkeeping, and PD-plus-feedforward torque application.
-
-The controller lives in:
-
-```text
-source/whole_body_tracking/whole_body_tracking/utils/floating_model.py
-```
-
-The controller keeps the same policy action format as the hybrid task:
-
-```text
-joint position targets
-desired COM linear velocity
-contact logits
-reference torques
-desired COM angular velocity
-```
-
-Instead of using the centroidal approximation from `utils/hybrid.py`, the new controller builds a whole-body QP over:
-
-```text
-generalized accelerations qdd
-contact wrenches f
-```
-
-The QP uses the generalized mass matrix, contact Jacobians, PhysX gravity/Coriolis compensation terms, desired COM acceleration, desired base angular acceleration, joint-space acceleration targets, contact-force weighting, and torque-reference weighting.
-
-After solving the QP, it recovers joint torques with the inverse-dynamics form:
-
-```text
-tau = M_joint qdd - J_contact_joint^T f + bias_joint
-```
-
-The resulting feedforward torque is clamped by Isaac joint effort limits and passed back through the existing hybrid action manager, which combines it with the joint-space PD position target.
-
-Controller tuning parameters live in:
-
-```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/controller_cfg.py
-```
-
-The RSL-RL config lives in:
-
-```text
-source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_floating_model/agents/rsl_rl_ppo_cfg.py
-```
-
-It inherits the hybrid PPO settings and changes the experiment name to:
-
-```text
-t1_floating_model
-```
-
-Impulse evaluation was updated in:
-
-```text
-scripts/rsl_rl/eval_env.py
-```
-
-so `Tracking-FloatingModel-T1-v0` writes its own result file instead of being grouped with the PD baseline.
-
-## Notes
-
-This is a practical Isaac Lab implementation of the paper's momentum-based control structure, not a line-for-line copy of the Atlas controller. The paper formulates a QP over desired generalized accelerations and contact-force basis multipliers, then computes torques through inverse dynamics. This implementation follows that structure using the runtime model quantities available from Isaac/PhysX for the Booster T1.
-
-The controller requires Isaac/PhysX to expose:
-
-```text
-root_physx_view.get_generalized_mass_matrices()
-root_physx_view.get_gravity_compensation_forces()
-root_physx_view.get_coriolis_and_centrifugal_compensation_forces()
-root_physx_view.get_jacobians()
-```
-
-If your Isaac Lab build does not expose generalized mass matrices, the task will raise a clear runtime error when the Floating Model controller initializes.
+The preserved long training runs remain under `logs/rsl_rl/`. Saved parameter
+snapshots and historical metrics retain their original labels; use the current
+task ID for loading a compatible checkpoint. Runs from the removed controller
+are retained as historical artifacts when they have at least ten checkpoints.

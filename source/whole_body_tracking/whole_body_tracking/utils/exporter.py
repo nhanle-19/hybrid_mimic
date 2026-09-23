@@ -122,11 +122,24 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         "body_names": env.command_manager.get_term("motion").cfg.body_names,
     }
 
-    if "atlas" in env.action_manager.active_terms:
-        atlas = env.action_manager.get_term("atlas")
-        controller = atlas.cfg.controller
+    if "wbc_force" in env.action_manager.active_terms:
+        controller = env.action_manager.get_term("wbc_force").cfg.controller
         metadata.update({
-            "action_type": "atlas_reference_contact_policy",
+            "action_type": "wbc_force_reference_force_limit_policy",
+            "policy_action_dim": 2,
+            "action_layout": "left_foot_normal_force_capacity,right_foot_normal_force_capacity",
+            "action_transform": "normal_force_limit=contact_force_max*clip(u,0,1)",
+            "contact_force_max": list(controller.contact_force_max),
+            "normal_force_limit_units": "N",
+            "normal_force_axis": "world_z",
+            "foot_acceleration_objectives": False,
+            "actor_inputs": "reference_only:frames_0_1_5_10",
+        })
+    elif "wbc_acc" in env.action_manager.active_terms:
+        wbc_acc = env.action_manager.get_term("wbc_acc")
+        controller = wbc_acc.cfg.controller
+        metadata.update({
+            "action_type": "wbc_acc_reference_contact_policy",
             "policy_action_dim": 14,
             "action_layout": "per_foot:activation,linear_weight_logits_xyz,angular_weight_logits_xyz;left_foot,right_foot",
             "action_transform": "activation=clip(u,0,1);weights=w_min+(w_max-w_min)*sigmoid(u)",
@@ -141,7 +154,7 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         controller = getattr(env, "hybrid_controller", None)
         if controller is not None:
             # Preserve legacy joint action_scale while describing the complete
-            # HybridMimic policy output, shared by hybrid and floating.
+            # HybridMimic policy output for the centroidal-hybrid task.
             metadata.update({
                 "action_type": "hybrid_mimic",
                 "policy_action_dim": controller.action_dim,

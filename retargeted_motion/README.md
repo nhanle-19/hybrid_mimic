@@ -39,17 +39,17 @@ python scripts/csv_to_npz.py \
   --input_fps 30 --output_fps 50 --output_name a7_crouch_t1 \
   --headless --local_only
 
-python scripts/rsl_rl/eval_atlas.py \
-  --task Tracking-Atlas-T1-Eval-v0 \
+python scripts/rsl_rl/eval_wbc.py \
+  --task Tracking-WBC-ACC-T1-Eval-v0 \
   --motion_file retargeted_motion/a7_crouch_t1_training.npz \
-  --qp_only --contact_source reference \
+  --qp_only \
   --num_envs 1 --steps 218 --headless --video \
-  --video_dir eval_data/atlas/crouch/videos \
-  --output eval_data/atlas/crouch/diagnostics.npz
+  --video_dir eval_data/wbc_acc/crouch/videos \
+  --output eval_data/wbc_acc/crouch/diagnostics.npz
 
-python scripts/plot_atlas.py \
-  --input eval_data/atlas/crouch/diagnostics.npz \
-  --output_dir eval_data/atlas/crouch/plots
+python scripts/plot_wbc.py \
+  --input eval_data/wbc_acc/crouch/diagnostics.npz \
+  --output_dir eval_data/wbc_acc/crouch/plots
 ```
 
 The raw retargeted clip has 132 frames. With the conversion settings above,

@@ -1,4 +1,4 @@
-"""Plot PD and floating_model tracking NPZs without launching Isaac Sim."""
+"""Plot PD and controller tracking NPZs without launching Isaac Sim."""
 
 import argparse
 import csv
@@ -49,22 +49,25 @@ def load_data(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pd", type=Path, default=Path("eval_data/comparison/pd.npz"))
-    parser.add_argument("--floating_model", "--momentum", dest="floating_model", type=Path, default=Path("eval_data/comparison/momentum.npz"))
+    parser.add_argument("--controller", type=Path, required=True, help="Controller tracking NPZ to compare with PD.")
+    parser.add_argument("--controller_label", default="Controller", help="Legend label for the controller recording.")
     parser.add_argument("--output_dir", type=Path, default=Path("eval_data/comparison/plots"))
     parser.add_argument("--dt", type=float, default=0.02, help="Control interval in seconds.")
     args = parser.parse_args()
     if args.dt <= 0:
         parser.error("--dt must be positive")
-    runs = {"PD": load_data(args.pd), "Floating model": load_data(args.floating_model)}
-    if runs["PD"]["ref_pos"].shape != runs["Floating model"]["ref_pos"].shape:
+    if args.controller_label == "PD":
+        parser.error("--controller_label must differ from PD")
+    runs = {"PD": load_data(args.pd), args.controller_label: load_data(args.controller)}
+    if runs["PD"]["ref_pos"].shape != runs[args.controller_label]["ref_pos"].shape:
         raise ValueError("Evaluations must have matching frame and environment counts")
     for key in ["ref_pos", "ref_vel"]:
-        if not np.allclose(runs["PD"][key], runs["Floating model"][key], atol=1e-5, rtol=1e-5):
+        if not np.allclose(runs["PD"][key], runs[args.controller_label][key], atol=1e-5, rtol=1e-5):
             raise ValueError(f"Reference trajectories differ ({key}); use matching motion and resets")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     steps, envs = runs["PD"]["sim_pos"].shape[:2]
     time = (np.arange(steps) + 1) * args.dt
-    colors = {"PD": "#2563eb", "Floating model": "#e07818"}
+    colors = {"PD": "#2563eb", args.controller_label: "#e07818"}
     plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False})
 
     def save(fig, name):
