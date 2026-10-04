@@ -18,7 +18,8 @@ class WBCACCGPUAction(WBCACCAction):
         ActionTerm.__init__(self, cfg, env)
         if cfg.backend not in ('batched', 'osqp'):
             raise ValueError('WBC backend must be batched or osqp')
-        if cfg.backend == 'batched' and torch.device(env.device).type != 'cuda':
+        if (cfg.backend == 'batched' and torch.device(env.device).type != 'cuda'
+                and not cfg.allow_cpu_batched_evaluation):
             raise ValueError(f'{self.log_prefix} GPU training requires --device cuda:0 (no CPU fallback). '
                              f'Use actions.{self.action_name}.backend=osqp explicitly for CPU evaluation.')
         if cfg.contact_source not in ('reference', 'ground_force'):
@@ -208,6 +209,10 @@ class WBCACCGPUAction(WBCACCAction):
         saturation = (torque.abs() >= .99*self.limits).double().mean(-1)
         logs = self._env.extras.setdefault('log', {})
         logs[f'{self.log_prefix}/solver_failure_fraction'] = failed.float().mean()
+        if 'contact_authority' in result:
+            authority = result['contact_authority']
+            logs[f'{self.log_prefix}/authority_near_boundary_fraction'] = ((authority < .01) | (authority > .99)).float().mean()
+            logs[f'{self.log_prefix}/authority_mean'] = authority.mean()
         logs[f'{self.log_prefix}/solver_failures_total'] = self.failure_count.sum().float()
         logs[f'{self.log_prefix}/joint_tracking_rmse'] = tracking_error.mean()
         logs[f'{self.log_prefix}/torque_saturation_fraction'] = saturation.mean()
@@ -230,8 +235,10 @@ class WBCACCGPUAction(WBCACCAction):
                 joint_tracking_rmse=tracking_error, torque_saturation=saturation, commanded_torque=torque,
                 qp_residual=result['residual'], foot_position_w=torch.stack([state['frames'][f]['position'] for f in FEET], 1),
                 reference_foot_position_w=torch.stack([ref['frames'][f]['position'] for f in FEET], 1))
-            if 'contact_weights' in result:
-                self.last_prediction['contact_weights'] = result['contact_weights']
+            for key in ('contact_weights', 'contact_authority', 'wrench_limits',
+                        'solver_converged', 'solver_optimality_residual', 'solver_complementarity'):
+                if key in result:
+                    self.last_prediction[key] = result[key]
         self._asset.set_joint_effort_target(self._torques)
         self._qp_update_pending = False
         self._clock += 1

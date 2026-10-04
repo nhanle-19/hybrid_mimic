@@ -1,4 +1,4 @@
-"""Evaluate WBC-ACC or WBC-FORCE and save controller/physics diagnostics."""
+"""Evaluate WBC-ACC, WBC-FORCE, or WBC-AUTHORITY and save controller/physics diagnostics."""
 import argparse
 import math
 import sys
@@ -12,13 +12,17 @@ parser.add_argument('--task', default='Tracking-WBC-ACC-T1-Eval-v0')
 parser.add_argument('--motion_file', required=True)
 parser.add_argument('--num_envs', type=int, default=1)
 parser.add_argument('--qp_backend', choices=('batched', 'osqp'), default='batched',
-                    help='GPU batched QP by default; osqp is the explicit CPU reference backend.')
+                    help='Batched torch QP (CUDA or explicit CPU evaluation); osqp is the CPU reference solver.')
 parser.add_argument('--steps', type=int, default=141)
+parser.add_argument('--nominal_standing', action='store_true', help='QP-only WBC-AUTHORITY standing validation with a grounded symmetric pose instead of the supplied first frame.')
+parser.add_argument('--fail_on_reset', action='store_true', help='Fail validation on the first episode termination or timeout; save partial diagnostics.')
 parser.add_argument('--video', action='store_true', help='Record the rollout to MP4; works with --headless.')
 parser.add_argument('--video_dir', help='Defaults to <checkpoint run>/videos/play; QP-only uses eval_data/<controller>/videos.')
 parser.add_argument('--output', help='Defaults to <checkpoint run>/diagnostics.npz; QP-only uses eval_data/<controller>/diagnostics.npz.')
 parser.add_argument('--manual_support', type=float, nargs=2, default=(1., 1.), metavar=('LEFT', 'RIGHT'),
                     help='Manual normalized force limits for --qp_only (actual geometry still gates support).')
+parser.add_argument('--manual_authority', type=float, nargs=12, metavar='C',
+                    help='QP-only WBC-AUTHORITY fractions: left xyz/rxyz, then right xyz/rxyz.')
 parser.add_argument('--manual_weight', type=float, default=50., help='All six manual motion weights per foot for --qp_only.')
 parser.add_argument('--qp_only', '--zero_policy', dest='zero_policy', action='store_true',
                     help='Simulate reference tracking with manual support activations and motion weights.')
@@ -29,6 +33,8 @@ if not args.zero_policy and args.load_run is None:
     parser.error('Provide --qp_only for controller-only simulation, or --load_run for a learned WBC policy')
 if args.zero_policy and args.load_run is not None:
     parser.error('--qp_only/--zero_policy cannot be combined with --load_run')
+if args.manual_authority is not None and (not args.zero_policy or not all(math.isfinite(x) and 0 <= x <= 1 for x in args.manual_authority)):
+    parser.error('--manual_authority requires --qp_only and twelve fractions in [0,1]')
 if args.steps < 1:
     parser.error('--steps must be positive')
 if not all(math.isfinite(x) and 0 <= x <= 1 for x in args.manual_support):
@@ -36,7 +42,9 @@ if not all(math.isfinite(x) and 0 <= x <= 1 for x in args.manual_support):
 if args.video:
     args.enable_cameras = True
 sys.argv = [sys.argv[0]]+hydra
-app = AppLauncher(args).app
+# Keep the launcher alive and preserve Python errors/exit status during cleanup.
+app_launcher = AppLauncher(args, fast_shutdown=False)
+app = app_launcher.app
 
 import gymnasium as gym
 import torch
@@ -52,11 +60,22 @@ def main(env_cfg, agent_cfg):
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.seed = agent_cfg.seed
     env_cfg.commands.motion.motion_file = args.motion_file
-    action_name = 'wbc_force' if hasattr(env_cfg.actions, 'wbc_force') else 'wbc_acc'
+    action_name = next(name for name in ('wbc_authority', 'wbc_force', 'wbc_acc') if hasattr(env_cfg.actions, name))
+    authority_policy = action_name == 'wbc_authority'
+    if args.manual_authority is not None and not authority_policy:
+        raise ValueError('--manual_authority requires a WBC-AUTHORITY task')
     force_only = action_name == 'wbc_force'
     action_cfg = getattr(env_cfg.actions, action_name)
+    if args.nominal_standing:
+        if not (authority_policy and args.zero_policy and action_cfg.standing_only):
+            raise ValueError('--nominal_standing requires a QP-only Standing-WBC-AUTHORITY task')
+        from whole_body_tracking.tasks.tracking.config.t1_wbc_authority.motion import WBCAuthorityNominalStandingMotion
+        env_cfg.commands.motion.class_type = WBCAuthorityNominalStandingMotion
     action_cfg.record_diagnostics = True
     action_cfg.backend = args.qp_backend
+    # Deliberate evaluation on CPU uses the same batched algorithm; training
+    # keeps its CUDA requirement and never silently falls back.
+    action_cfg.allow_cpu_batched_evaluation = args.qp_backend == 'batched' and torch.device(args.device).type == 'cpu'
     controller = action_cfg.controller
     # Resolve the checkpoint before creating the environment or video recorder.
     # An absolute root avoids duplicated prefixes in Isaac Lab's path resolver.
@@ -72,10 +91,11 @@ def main(env_cfg, agent_cfg):
     output = str(Path(args.output).resolve() if args.output else output_root / 'diagnostics.npz')
     video_dir = str(Path(args.video_dir).resolve() if args.video_dir else default_video_dir)
     print(f'[INFO] Evaluation diagnostics: {output}', flush=True)
-    if not force_only and not controller.contact_weight_min < args.manual_weight < controller.contact_weight_max:
+    if not (force_only or authority_policy) and not controller.contact_weight_min < args.manual_weight < controller.contact_weight_max:
         raise ValueError('Manual weight must be strictly between configured bounds')
     print(f'[INFO] {action_name}: actual geometry gates support; learned normal-force bounds.'
-          + (' No foot-acceleration objectives.' if force_only else ' Soft foot-acceleration objectives.'), flush=True)
+          + (' Coupled directional authority constraints.' if authority_policy else
+             ' No foot-acceleration objectives.' if force_only else ' Soft foot-acceleration objectives.'), flush=True)
     env_cfg.sim.device = args.device
     env = gym.make(args.task, cfg=env_cfg, render_mode='rgb_array' if args.video else None)
     if args.video:
@@ -85,13 +105,32 @@ def main(env_cfg, agent_cfg):
             fps=round(1 / env.unwrapped.step_dt), disable_logger=True)
         print(f'[INFO] Recording {action_name} video to: {Path(video_dir).resolve()}', flush=True)
     env = RslRlVecEnvWrapper(env)
+    reset_count, reset_steps, step_count = 0, [], 0
+    termination_counts = {name: 0 for name in env.unwrapped.termination_manager.active_terms}
+
+    def save_run(completed, failure_reason=''):
+        import json
+        import numpy as np
+        term = env.unwrapped.action_manager.get_term(action_name)
+        term.save_diagnostics(output, completed=completed, failure_reason=failure_reason)
+        with np.load(output, allow_pickle=False) as archive:
+            data = dict(archive)
+        data.update(episode_reset_count=reset_count, episode_reset_steps=np.asarray(reset_steps, dtype=np.int64),
+                    policy_steps_completed=step_count, termination_counts_json=np.asarray(json.dumps(termination_counts)))
+        np.savez_compressed(output, **data)
+
     try:
         obs, _ = env.reset()
         if args.zero_policy:
             actions = torch.zeros((args.num_envs, env.unwrapped.action_manager.total_action_dim),
                                   device=env.unwrapped.device)
-            if force_only:
-                actions[:] = actions.new_tensor(args.manual_support)
+            if authority_policy:
+                from whole_body_tracking.utils.wbc_authority_gpu_control import encode_authorities
+                values = args.manual_authority or [args.manual_support[0]]*6+[args.manual_support[1]]*6
+                actions[:] = encode_authorities(actions.new_tensor(values).reshape(1, 2, 6))
+            elif force_only:
+                from whole_body_tracking.utils.wbc_force_gpu_control import encode_force_capacities
+                actions[:] = encode_force_capacities(actions.new_tensor([args.manual_support]))
             else:
                 actions[:, 0], actions[:, 7] = args.manual_support
                 probability = (args.manual_weight-controller.contact_weight_min)/(controller.contact_weight_max-controller.contact_weight_min)
@@ -106,7 +145,6 @@ def main(env_cfg, agent_cfg):
             runner.load(path)
             policy = runner.get_inference_policy(device=env.unwrapped.device)
             print(f'[INFO] Loaded {action_name} policy: {path}', flush=True)
-        reset_count = 0
         completed = True
         with torch.inference_mode():
             for step in range(args.steps):
@@ -114,17 +152,25 @@ def main(env_cfg, agent_cfg):
                     completed = False
                     break
                 obs, _, dones, _ = env.step(policy(obs))
-                reset_count += int(dones.sum().item())
+                step_count = step+1
+                resets = int(dones.sum().item())
+                reset_count += resets
+                if resets:
+                    reset_steps.append(step_count)
+                    manager = env.unwrapped.termination_manager
+                    for name in termination_counts:
+                        termination_counts[name] += int(manager.get_term(name).sum().item())
+                    if args.fail_on_reset:
+                        raise RuntimeError(f'Pre-training validation failed: episode reset at step {step_count}; {termination_counts}')
                 if (step+1) % max(1, args.steps//5) == 0:
                     print(f'[INFO] {action_name} evaluation: {step+1}/{args.steps}', flush=True)
-        env.unwrapped.action_manager.get_term(action_name).save_diagnostics(output, completed=completed,
-            failure_reason='' if completed else 'Simulator window closed')
+        save_run(completed, '' if completed else 'Simulator window closed')
         print(f'[INFO] Episode resets during evaluation: {reset_count} (includes terminations and timeouts).', flush=True)
         print(f'[INFO] Saved {action_name} diagnostics: {output}', flush=True)
     except Exception as error:
         term = env.unwrapped.action_manager.get_term(action_name)
         if term.records:
-            term.save_diagnostics(output, finalize=False, completed=False, failure_reason=str(error))
+            save_run(False, str(error))
             print(f'[INFO] Saved partial {action_name} diagnostics: {output}', flush=True)
         raise
     finally:

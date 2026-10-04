@@ -10,10 +10,15 @@ policy retains its fourteen-output interface and acceleration objectives.
 The NN outputs two values, ordered left foot then right foot:
 
 ```
-c_i = clip(action_i, 0, 1)
+c_i = sigmoid(action_i)
 F_limit_i = c_i * contact_force_max_i
 0 <= Fz_i = sum(rho_i) <= F_limit_i
 ```
+
+The actor outputs logits; sigmoid smoothly maps them to fractions in `[0, 1]`.
+A zero logit gives 50% capacity (300 N). Manual `--manual_support` arguments
+remain fractions, including exact 0 and 1. Checkpoints trained with the former
+clipping transform must be retrained; their action semantics have changed.
 
 `contact_force_max` defaults to `(600, 600)` N. Normal force is world-Z force
 on the robot from the horizontal ground. The NN selects upper bounds; the QP
@@ -39,7 +44,7 @@ The actor still receives only reference motion at offsets 0, 1, 5, and 10 frames
 the critic receives privileged robot state. The WBC supplies actual-state
 feedback. PPO learns force-cap timing from the existing motion-tracking,
 survival, slip, collision, joint-limit, and action-smoothness rewards. The
-action-smoothness penalty is the mean squared change in the two clipped caps.
+action-smoothness penalty is the mean squared change in the two sigmoid-mapped caps.
 
 Defaults: 1,024 environments, 500 Hz physics, 50 Hz policy/QP, and 30,000 PPO
 iterations. Each QP torque is held for ten physics steps. Solver failures

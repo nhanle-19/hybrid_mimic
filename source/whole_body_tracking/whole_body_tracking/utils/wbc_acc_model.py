@@ -80,9 +80,13 @@ class WBCACCModel:
         frames = {}
         for name, fid in self.frame_ids.items():
             jac = pin.getFrameJacobian(m, d, fid, pin.LOCAL_WORLD_ALIGNED).copy()
-            djac = pin.getFrameJacobianTimeVariation(m, d, fid, pin.LOCAL_WORLD_ALIGNED).copy()
+            # Classical acceleration at zero generalized acceleration is Jdot*v.
+            # Pinocchio 2.7's LOCAL_WORLD_ALIGNED Jacobian time-variation path
+            # differs in its translational convention; this API agrees with
+            # finite differences and the torch dynamics on both 2.7 and 4.x.
+            frame_bias = pin.getFrameClassicalAcceleration(m, d, fid, pin.LOCAL_WORLD_ALIGNED).vector.copy()
             frames[name] = dict(position=d.oMf[fid].translation.copy(), rotation=d.oMf[fid].rotation.copy(),
-                                J=jac, bias=djac@v, velocity=jac@v)
+                                J=jac, bias=frame_bias, velocity=jac@v)
         # Independent body-sum momentum, rather than defining actual h as Ag@v.
         momentum = np.zeros(6)
         for jid in range(1, m.njoints):

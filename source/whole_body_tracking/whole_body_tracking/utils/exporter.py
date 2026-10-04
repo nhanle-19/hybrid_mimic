@@ -122,13 +122,27 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         "body_names": env.command_manager.get_term("motion").cfg.body_names,
     }
 
-    if "wbc_force" in env.action_manager.active_terms:
+    if "wbc_authority" in env.action_manager.active_terms:
+        controller = env.action_manager.get_term("wbc_authority").cfg.controller
+        metadata.update({
+            "action_type": "wbc_directional_contact_authority_policy",
+            "policy_action_dim": 12,
+            "action_layout": "per_foot:x,y,z,rx,ry,rz;left_foot,right_foot",
+            "action_transform": "authority=sigmoid(u)",
+            "contact_wrench_max": list(controller.contact_wrench_max),
+            "contact_authority_weights": list(controller.contact_authority_weights),
+            "wrench_frame": "world_axes_at_foot_origin",
+            "kinematic_target": "zero_spatial_acceleration",
+            "kinematic_weights": "contact_authority_weights*authority^2;geometry_gated",
+            "actor_inputs": "reference_only:frames_0_1_5_10",
+        })
+    elif "wbc_force" in env.action_manager.active_terms:
         controller = env.action_manager.get_term("wbc_force").cfg.controller
         metadata.update({
             "action_type": "wbc_force_reference_force_limit_policy",
             "policy_action_dim": 2,
             "action_layout": "left_foot_normal_force_capacity,right_foot_normal_force_capacity",
-            "action_transform": "normal_force_limit=contact_force_max*clip(u,0,1)",
+            "action_transform": "normal_force_limit=contact_force_max*sigmoid(u)",
             "contact_force_max": list(controller.contact_force_max),
             "normal_force_limit_units": "N",
             "normal_force_axis": "world_z",

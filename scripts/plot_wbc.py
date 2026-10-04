@@ -1,4 +1,4 @@
-"""Plot WBC-ACC/WBC-FORCE diagnostics with separate predictions and measurements."""
+"""Plot WBC controller diagnostics with separate predictions and measurements."""
 import argparse
 from pathlib import Path
 import matplotlib
@@ -28,7 +28,11 @@ def main():
                     ax = axes[component, foot]
                     ax.plot(t, data['predicted_contact_wrench'][mask, foot, component], label='QP prediction')
                     ax.plot(t, data['actual_contact_wrench'][mask, foot, component], ':', label='PhysX measurement')
-                    if component == 2 and 'normal_force_limits' in data:
+                    if 'wrench_limits' in data:
+                        cap = data['wrench_limits'][mask, foot, component]
+                        ax.plot(t, cap, '--', label='QP upper limit')
+                        ax.plot(t, np.zeros_like(cap) if component == 2 else -cap, '--', label='QP lower limit')
+                    elif component == 2 and 'normal_force_limits' in data:
                         ax.plot(t, data['normal_force_limits'][mask, foot], '--', label='QP upper limit')
                     ax.set_ylabel(label); ax.grid(alpha=.2)
                 axes[0, foot].set_title(str(data['foot_names'][foot])); axes[0, foot].legend()
@@ -36,7 +40,13 @@ def main():
             fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_wrenches.png', dpi=160); plt.close(fig)
             fig, axes = plt.subplots(5, 1, figsize=(12, 12), sharex=True)
             axes[0].plot(t, data['support_activation'][mask]); axes[0].set_ylabel('Support activation')
-            if 'contact_weights' in data:
+            if 'contact_authority' in data:
+                for foot in range(2):
+                    for axis, label in enumerate(('x', 'y', 'z', 'rx', 'ry', 'rz')):
+                        axes[1].plot(t, data['contact_authority'][mask, foot, axis], label=f'{foot}:{label}')
+                axes[1].set_ylabel('Contact authority'); axes[1].set_ylim(-.02, 1.02)
+                axes[1].legend(ncol=6, fontsize=7)
+            elif 'contact_weights' in data:
                 axes[1].plot(t, data['contact_weights'][mask].reshape(len(t), -1)); axes[1].set_ylabel('Six motion weights/foot')
             else:
                 axes[1].plot(t, data['normal_force_limits'][mask]); axes[1].set_ylabel('Normal-force limits (N)')

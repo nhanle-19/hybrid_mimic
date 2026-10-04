@@ -15,6 +15,10 @@ WBC-FORCE learns only force caps and removes the foot-acceleration objectives.
 
 See [the controller formulation and validation commands](docs/wbc_acc_controller.md).
 See [WBC-FORCE's learned force inequalities and commands](docs/wbc_force_controller.md).
+
+[WBC-AUTHORITY](docs/wbc_authority_controller.md) adds twelve sigmoid-mapped
+directional contact authorities coupling soft contact acceleration and admissible
+wrench limits, with separate training and evaluation tasks.
 The original PD and centroidal-hybrid tasks remain available.
 
 ## Setup

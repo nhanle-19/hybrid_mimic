@@ -79,6 +79,13 @@ class WBCACCGPUQP:
     def decode_policy(self, actions):
         return decode_actions(actions, self.cfg)
 
+    def contact_objective(self, frame, desired, weights, support, tensor):
+        target = desired['acceleration']+tensor(self.cfg.contact_velocity_gain)*(desired['velocity']-frame['velocity'])
+        return target, weights
+
+    def extra_wrench_constraints(self, state, points, rays, enabled, nv, actions):
+        return None
+
     def solve(self, state, reference, actions, masks, limits, external=None):
         n, nv = state['bias'].shape
         activation, weights = self.decode_policy(actions)
@@ -88,14 +95,14 @@ class WBCACCGPUQP:
             raise ValueError('Actual support geometry must be boolean (N,2,4)')
         point_masks = masks & (activation > 0)[:, :, None]
         rate, tasks = reference_tasks(state, reference, actions, self.cfg, point_masks.any(-1))
-        result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks, reference)
+        result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks, reference, actions)
         result.update(desired_rate=rate, activation=activation, available=point_masks,
                       normal_force_limits=activation*actions.new_tensor(self.cfg.contact_force_max))
         if weights is not None:
             result['contact_weights'] = weights
         return result
 
-    def _solve_fixed(self, s, rate, tasks, limits, external, weights, activation, point_masks, ref):
+    def _solve_fixed(self, s, rate, tasks, limits, external, weights, activation, point_masks, ref, actions):
         n, nv = s['bias'].shape
         nr, nx = 32, nv+32
         zeros = lambda *shape: s['M'].new_zeros(shape)
@@ -139,9 +146,9 @@ class WBCACCGPUQP:
         # each body origin. a_ref differentiates that same spatial velocity.
         for i, foot in enumerate(FEET if weights is not None else ()):
             frame, desired = s['frames'][foot], ref['frames'][foot]
-            target_acceleration = desired['acceleration']+tensor(self.cfg.contact_velocity_gain)*(desired['velocity']-frame['velocity'])
+            target_acceleration, weight = self.contact_objective(
+                frame, desired, weights[:, i], point_masks[:, i].any(-1), tensor)
             j = torch.cat((frame['J'], zeros(n, 6, nr)), -1)
-            weight = weights[:, i]
             hessian += j.transpose(-1, -2)@(weight[:, :, None]*j)
             linear += mv(j.transpose(-1, -2), weight*(frame['bias']-target_acceleration))
         for jacobian, target, weight in tasks:
@@ -162,19 +169,47 @@ class WBCACCGPUQP:
         inequality = torch.cat((torque_map, -torque_map, nonnegative, normal_rows), 1)
         bound = torch.cat((limits-torque_bias, limits+torque_bias,
                            (~enabled).to(s['q'].dtype), torch.where(support, capacities, 1.)), -1)
-        q, r = torch.linalg.qr(equality.transpose(-1, -2), mode='complete')
-        ne = equality.shape[1]
-        offset = mv(q[:, :, :ne], torch.linalg.solve_triangular(
-            r[:, :ne].transpose(-1, -2), target[..., None], upper=False).squeeze(-1))
-        basis = q[:, :, ne:]
+        extra = self.extra_wrench_constraints(s, points, rays, enabled, nv, actions)
+        if extra is not None:
+            inequality = torch.cat((inequality, extra[0]), 1)
+            bound = torch.cat((bound, extra[1]), 1)
+        fixed = None
+        if extra is not None and bool((extra[1] == 0).any()):
+            # An exact zero directional cap is an equality, not a pair of
+            # opposing zero-width barrier inequalities. Keep batch dimensions
+            # fixed, including rank-deficient / repeated zero-wrench rows.
+            zero = extra[1] == 0
+            exact_rows = torch.where(zero[..., None], extra[0], 0.)
+            equality = torch.cat((equality, exact_rows), 1)
+            target = torch.cat((target, torch.zeros_like(extra[1])), 1)
+            inequality[:, -extra[1].shape[1]:] = torch.where(zero[..., None], 0., extra[0])
+            bound[:, -extra[1].shape[1]:] = torch.where(zero, 1., extra[1])
+            norm = equality.abs().amax(-1).clamp_min(1.)
+            u, singular, vh = torch.linalg.svd(equality/norm[..., None], full_matrices=True)
+            cutoff = singular[:, :1]*max(equality.shape[1:])*torch.finfo(singular.dtype).eps
+            independent = singular > cutoff
+            coefficients = torch.where(independent, mv(u.transpose(-1, -2), target/norm)/singular.clamp_min(torch.finfo(singular.dtype).tiny), 0.)
+            offset = mv(vh[:, :singular.shape[1]].transpose(-1, -2), coefficients)
+            rank = independent.sum(-1)
+            fixed = torch.arange(nx, device=s['M'].device)[None] < rank[:, None]
+            basis = vh.transpose(-1, -2)*~fixed[:, None, :]
+        else:
+            q, r = torch.linalg.qr(equality.transpose(-1, -2), mode='complete')
+            ne = equality.shape[1]
+            offset = mv(q[:, :, :ne], torch.linalg.solve_triangular(
+                r[:, :ne].transpose(-1, -2), target[..., None], upper=False).squeeze(-1))
+            basis = q[:, :, ne:]
         h = basis.transpose(-1, -2)@hessian@basis
+        if fixed is not None:
+            h += torch.diag_embed(fixed.to(h.dtype))
         g = mv(basis.transpose(-1, -2), linear+mv(hessian, offset))
         if self.backend == 'osqp':
-            reduced, converged = self._osqp(h, g, inequality@basis, bound-mv(inequality, offset))
+            reduced, info = self._osqp(h, g, inequality@basis, bound-mv(inequality, offset),
+                                      tolerance=self.solver_tolerance)
         else:
             reduced, info = solve_batched_qp(h, g, inequality@basis, bound-mv(inequality, offset),
                 max_iterations=self.max_iterations, tolerance=self.solver_tolerance)
-            converged = info['converged']
+        converged = info['converged']
         x = offset+mv(basis, reduced)
         torque = mv(torque_map, x)+torque_bias
         acceleration, rho = x[:, :nv], x[:, nv:]*enabled
@@ -197,15 +232,19 @@ class WBCACCGPUQP:
         return dict(torque=torque, acceleration=acceleration, rho=rho,
                     rate=mv(s['Ag'], acceleration)+s['Ag_bias'], residual=residual,
                     contact_acceleration=torch.stack([mv(s['frames'][foot]['J'], acceleration)+s['frames'][foot]['bias'] for foot in FEET], 1),
-                    failed=~valid, wrenches=torch.stack(wrenches, 1))
+                    failed=~valid, wrenches=torch.stack(wrenches, 1),
+                    solver_converged=converged, solver_optimality_residual=info['residual'],
+                    solver_complementarity=info['complementarity'])
 
     @staticmethod
-    def _osqp(hessian, linear, inequality, bound):
+    def _osqp(hessian, linear, inequality, bound, tolerance=1e-9):
         import numpy as np
         import osqp
         from scipy import sparse
         out = torch.zeros_like(linear)
         valid = torch.zeros(len(linear), dtype=torch.bool, device=linear.device)
+        residuals = torch.full_like(valid, torch.inf, dtype=linear.dtype)
+        gaps = torch.full_like(residuals, torch.inf)
         for i in range(len(linear)):
             solver = osqp.OSQP()
             scale = hessian[i].diagonal().clamp_min(1e-12).rsqrt()
@@ -215,9 +254,19 @@ class WBCACCGPUQP:
             row = torch.where(row_norm > 0, row_norm.clamp_min(1e-12).reciprocal(), 1.)
             solver.setup(P=sparse.csc_matrix(np.triu(h.cpu().numpy())), q=(linear[i]*scale).cpu().numpy(),
                          A=sparse.csc_matrix((g*row[:, None]).cpu().numpy()), l=np.full(bound.shape[1], -np.inf),
-                         u=(bound[i]*row).cpu().numpy(), eps_abs=1e-10, eps_rel=1e-10, max_iter=100000, verbose=False, polish=True)
+                         u=(bound[i]*row).cpu().numpy(), eps_abs=min(tolerance, 1e-10), eps_rel=min(tolerance, 1e-10), max_iter=100000, verbose=False, polish=True)
             result = solver.solve()
-            if result.info.status_val == 1 and result.x is not None:
-                out[i] = torch.as_tensor(result.x, device=linear.device)*scale
-                valid[i] = True
-        return out, valid
+            if result.x is not None and result.y is not None and result.info.status_val in (1, 2):
+                primal = torch.as_tensor(result.x, device=linear.device)
+                dual = torch.as_tensor(result.y, device=linear.device)
+                scaled_g, scaled_b = g*row[:, None], bound[i]*row
+                slack = scaled_b-mv(scaled_g, primal)
+                stationarity = mv(h, primal)+linear[i]*scale+mv(scaled_g.T, dual)
+                residuals[i] = torch.maximum(stationarity.abs().max()/(1+(linear[i]*scale).abs().max()),
+                                            (-slack).clamp_min(0).max()/(1+scaled_b.abs().max()))
+                gaps[i] = (slack*dual).abs().mean()
+                out[i] = primal*scale
+                objective_scale = 1+(primal*mv(h, primal)).abs().sum()+(primal*linear[i]*scale).abs().sum()
+                valid[i] = (result.info.status_val == 1 or
+                            bool((residuals[i] <= tolerance) & (gaps[i]/objective_scale <= tolerance) & (dual >= -tolerance).all()))
+        return out, dict(converged=valid, residual=residuals, complementarity=gaps)

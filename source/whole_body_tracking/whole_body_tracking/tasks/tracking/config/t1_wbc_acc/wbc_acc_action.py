@@ -286,6 +286,7 @@ class WBCACCActionCfg(ActionTermCfg):
     class_type: type = WBCACCAction
     asset_name: str = 'robot'
     backend: str = 'batched'
+    allow_cpu_batched_evaluation: bool = False
     batched_max_iterations: int = 100
     batched_tolerance: float = 1e-9
     controller: T1WBCACCControllerCfg = T1WBCACCControllerCfg()
