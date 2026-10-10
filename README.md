@@ -248,6 +248,19 @@ full-body transforms and velocities; raw retargeted files need conversion first.
 
 ## Evaluation
 
+WBC training and evaluation prepare the reference consistently: resets use the
+robot's physical joint limits, penetrating reference frames are raised using the
+actual sole geometry, and body transforms and velocities are rebuilt. The source
+NPZ is unchanged. Preparation statistics are printed at startup and saved in
+evaluation diagnostics. This changes the observations and targets; start a fresh
+training run instead of resuming a checkpoint trained on the unprepared clip.
+
+The batched QP uses a `1e-6` scaled optimality tolerance, while the separate
+physical feasibility tolerance remains `2e-5`. Exact zero authority constraints
+eliminate force rays that must be zero before the interior-point solve.
+`--force_full_contact --qp_only` is an evaluation diagnostic that bypasses actual
+contact geometry; it is not a training fix or a physical contact model.
+
 Evaluate a saved policy with controller diagnostics:
 
 ```bash
@@ -274,6 +287,80 @@ are under `logs/rsl_rl/t1_wbc_force/`. Plot a run with
 `scripts/plot_wbc.py --input <run folder>/diagnostics.npz`.
 QP-only evaluations have no checkpoint folder and use `eval_data/<controller>/`.
 Explicit `--video_dir` and `--output` options override these defaults.
+
+### Toes-up standing reference
+
+Generate a stationary pose with the left heel grounded, toes raised 15 degrees,
+and the right foot flat. Hip/knee pitch compensate for the ankle tilt to keep
+the heel grounded. The generator exports a reference without a physics rollout.
+
+```bash
+conda activate hybridmimic
+python scripts/toy_standing_reference.py --device cpu --headless --tilt_deg 15 --seconds 10
+```
+
+The output is `eval_data/toy_standing/reference.npz`: a 10-second stationary clip
+at 50 FPS, in simulator joint/body order with zero velocities. Use `--side right`
+to switch feet or `--tilt_deg 0` for flat feet; supported angles are 0–30 degrees.
+
+Record the reference as a video (direct pose playback, without physics):
+
+```bash
+python scripts/replay_npz.py --device cuda:0 --headless --video \
+  --motion_file eval_data/toy_standing/reference.npz \
+  --output_file eval_data/toy_standing/reference.mp4
+```
+
+For interactive playback, omit `--headless --video --output_file ...`.
+The same NPZ is ready for `--motion_file` in `Standing-WBC-FORCE-T1-v0` and
+`Standing-WBC-AUTHORITY-T1-v0`. NN/manual force and authority settings are left
+for the subsequent WBC experiment. Do not use `--nominal_standing`, which would
+replace this reference with a symmetric pose.
+
+### Manual-output WBC toy tasks
+
+Two dedicated tasks hold frame zero of the toes-up reference with zero reference
+velocities: `Toy-Standing-WBC-FORCE-T1-v0` and
+`Toy-Standing-WBC-AUTHORITY-T1-v0`. They use the existing WBC solvers and
+direct-torque actuation, with deterministic initialization, no observation noise,
+and no learned policy. Actual foot geometry determines the available support.
+Both stop evaluation at the first fall/tracking termination or QP failure and
+save available diagnostics. The episode timeout extends past the requested run.
+The toy tasks use a 0.5 mm contact-patch height tolerance to avoid switching a
+nearly level foot between sole, edge, and corner support due to GPU PhysX jitter.
+Every vertex must still pass the 1 mm ground-gap check; the raised left toes
+remain excluded. Solver tolerances and manual force limits are unchanged.
+
+Manual NN outputs belong in `configs/toy_wbc_inputs.json`. Force is configured
+with raw outputs `[-1.386294, 0.405465]`: 20% left and 60% right, giving normal-force
+ceilings of 120 N and 360 N. Authority entries remain `null`. If the selected
+controller has unset entries, the launcher exits before starting Isaac Sim;
+it does not substitute defaults. Only that controller's entries need filling.
+
+| JSON key | Raw NN output order |
+| --- | --- |
+| `force` | Left normal-force limit logit, right normal-force limit logit |
+| `authority` | Left x/y/z/rx/ry/rz authority logits, then right x/y/z/rx/ry/rz |
+
+These are raw policy outputs, not forces in newtons or fractions in [0,1]. The
+existing controllers apply sigmoid internally. The selected vector is held
+constant throughout the run and recorded as `manual_nn_outputs` in diagnostics.
+Time-varying inputs and their values can be added when the experiment is defined.
+
+Once the selected inputs are filled, run either task:
+
+```bash
+python scripts/rsl_rl/eval_toy_wbc.py --controller force --device cuda:0 --headless --video
+python scripts/rsl_rl/eval_toy_wbc.py --controller authority --device cuda:0 --headless --video
+```
+
+The default run is 500 control steps (10 seconds). Use `--steps`, `--motion_file`,
+`--inputs`, or `--output_dir` to override these settings. Omit `--headless` for
+the simulator window, or use `--device cpu` without video for CPU evaluation.
+Outputs are separated into `eval_data/toy_standing/force/` and
+`eval_data/toy_standing/authority/`, each containing `diagnostics.npz` and, when
+requested, a `videos/` directory. Unlike reference playback, these videos show
+the robot's simulated response to the WBC torques.
 
 For generic tracking recordings, `scripts/rsl_rl/tracking_play.py` accepts the
 same evaluation task, `--load_run`, `--checkpoint`, and `--motion_file`. It saves

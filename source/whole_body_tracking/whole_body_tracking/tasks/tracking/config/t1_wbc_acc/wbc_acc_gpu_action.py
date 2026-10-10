@@ -146,6 +146,9 @@ class WBCACCGPUAction(WBCACCAction):
         for i, name in enumerate(('left_foot_ground_contact', 'right_foot_ground_contact')):
             view = self._env.scene.sensors[name].contact_physx_view
             normal, points, normals, _, counts, starts = view.get_contact_data(dt=self._env.physics_dt)
+            # PhysX shares these metadata buffers with get_friction_data(),
+            # which overwrites them with friction-patch counts and offsets.
+            counts, starts = counts.clone(), starts.clone()
             friction, friction_points, friction_counts, friction_starts = view.get_friction_data(dt=self._env.physics_dt)
             origin = self._asset.data.body_link_pos_w[:, self._asset.body_names.index(FEET[i])]
             for forces, locations, count, start in ((normal.reshape(-1, 1)*normals, points, counts, starts),
@@ -193,6 +196,8 @@ class WBCACCGPUAction(WBCACCAction):
         ground = self._gpu_ground_forces()
         self.estimated_contacts[:] = ground[..., 2] > 1.
         masks = available_vertices(state, self.cfg.controller, self._env.scene.env_origins.double())
+        if getattr(self.cfg, 'force_full_contact', False):
+            masks = torch.ones_like(masks)
         if self.contact_override is not None:
             masks &= self.contact_override[:, :, None]  # May remove support, never create it.
         result = self.solver.solve(state, ref, self._raw.double(), masks, self.limits,
@@ -256,6 +261,8 @@ class WBCACCGPUAction(WBCACCAction):
             physics_dt=self._env.physics_dt, qp_dt=self._env.step_dt,
             controller_config_json=np.asarray(json.dumps(self.cfg.controller.to_dict())),
             policy_type=np.asarray(self.action_name), policy_action_dim=self.action_dim,
+            wrench_measurement_version=2,
+            force_full_contact=getattr(self.cfg, 'force_full_contact', False),
             evaluation_completed=completed, failure_reason=np.asarray(failure_reason))
 
     def reset(self, env_ids=None):

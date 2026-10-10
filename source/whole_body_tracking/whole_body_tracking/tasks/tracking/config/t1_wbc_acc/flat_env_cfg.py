@@ -9,7 +9,7 @@ from whole_body_tracking.tasks.tracking.config.t1.flat_env_cfg import T1FlatEnvC
 from whole_body_tracking.tasks.tracking.tracking_env_cfg import EventEvalCfg
 from .wbc_acc_action import WBCACCActionCfg
 from whole_body_tracking.assets import ASSET_DIR
-from .motion import WBCACCEvaluationMotion, WBCACCStandingMotion, foot_collision
+from .motion import WBCACCTrainingMotion, WBCACCEvaluationMotion, WBCACCStandingMotion, foot_collision
 
 
 @configclass
@@ -41,6 +41,9 @@ def configure_wbc_acc(cfg):
         dynamic_friction_range=(.6, .6), restitution_range=(0., 0.))
     # Fixed inertial model, no gain/material/random CoM perturbations or unknown pushes.
     cfg.scene.robot = cfg.scene.robot.copy()
+    # The retargeted reference uses physical joint limits. A soft-limit inset
+    # at reset would bend straight knees without updating the target pose.
+    cfg.scene.robot.soft_joint_pos_limit_factor = 1.
     for actuator in cfg.scene.robot.actuators.values():
         actuator.stiffness = 0.
         actuator.damping = 0.
@@ -50,6 +53,7 @@ def configure_wbc_acc(cfg):
         actuator.viscous_friction = 0.
     cfg.scene.contact_forces.debug_vis = False
     cfg.commands.motion.debug_vis = False
+    cfg.commands.motion.class_type = WBCACCTrainingMotion
     cfg.commands.motion.pose_range = {}
     cfg.commands.motion.velocity_range = {}
     cfg.commands.motion.joint_position_range = (0., 0.)

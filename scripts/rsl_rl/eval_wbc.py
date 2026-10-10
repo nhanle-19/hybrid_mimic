@@ -23,16 +23,39 @@ parser.add_argument('--manual_support', type=float, nargs=2, default=(1., 1.), m
                     help='Manual normalized force limits for --qp_only (actual geometry still gates support).')
 parser.add_argument('--manual_authority', type=float, nargs=12, metavar='C',
                     help='QP-only WBC-AUTHORITY fractions: left xyz/rxyz, then right xyz/rxyz.')
+parser.add_argument('--manual_inputs', type=Path,
+                    help='JSON with force/authority raw NN output arrays; bypasses manual fraction encoding.')
 parser.add_argument('--manual_weight', type=float, default=50., help='All six manual motion weights per foot for --qp_only.')
 parser.add_argument('--qp_only', '--zero_policy', dest='zero_policy', action='store_true',
                     help='Simulate reference tracking with manual support activations and motion weights.')
+parser.add_argument('--force_full_contact', action='store_true',
+                    help='QP-only diagnostic: allow all vertices on both feet regardless of actual contact geometry.')
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args, hydra = parser.parse_known_args()
+toy_task = args.task.startswith('Toy-Standing-WBC-')
+manual_values = None
+if toy_task and (not args.zero_policy or args.manual_inputs is None or args.nominal_standing):
+    parser.error('Toy standing tasks require --qp_only --manual_inputs FILE and the supplied toes-up reference')
+if args.manual_inputs is not None:
+    if not args.zero_policy or any(item.split('=')[0] in
+            ('--manual_support', '--manual_authority', '--manual_weight') for item in sys.argv[1:]):
+        parser.error('--manual_inputs requires --qp_only and cannot be mixed with manual fraction/weight flags')
+    from manual_wbc_inputs import load_manual_inputs
+    manual_controller = ('authority' if 'WBC-AUTHORITY' in args.task else
+                         'force' if 'WBC-FORCE' in args.task else '')
+    try:
+        manual_values = load_manual_inputs(args.manual_inputs, manual_controller)
+    except (ValueError, OSError) as error:
+        parser.error(str(error))
+if toy_task:
+    args.fail_on_reset = True
 if not args.zero_policy and args.load_run is None:
     parser.error('Provide --qp_only for controller-only simulation, or --load_run for a learned WBC policy')
 if args.zero_policy and args.load_run is not None:
     parser.error('--qp_only/--zero_policy cannot be combined with --load_run')
+if args.force_full_contact and not args.zero_policy:
+    parser.error('--force_full_contact requires --qp_only')
 if args.manual_authority is not None and (not args.zero_policy or not all(math.isfinite(x) and 0 <= x <= 1 for x in args.manual_authority)):
     parser.error('--manual_authority requires --qp_only and twelve fractions in [0,1]')
 if args.steps < 1:
@@ -60,6 +83,9 @@ def main(env_cfg, agent_cfg):
     env_cfg.scene.num_envs = args.num_envs
     env_cfg.seed = agent_cfg.seed
     env_cfg.commands.motion.motion_file = args.motion_file
+    if toy_task:
+        # Finish the requested hold before the environment's timeout boundary.
+        env_cfg.episode_length_s = args.steps * env_cfg.sim.dt * env_cfg.decimation + 1.
     action_name = next(name for name in ('wbc_authority', 'wbc_force', 'wbc_acc') if hasattr(env_cfg.actions, name))
     authority_policy = action_name == 'wbc_authority'
     if args.manual_authority is not None and not authority_policy:
@@ -72,6 +98,7 @@ def main(env_cfg, agent_cfg):
         from whole_body_tracking.tasks.tracking.config.t1_wbc_authority.motion import WBCAuthorityNominalStandingMotion
         env_cfg.commands.motion.class_type = WBCAuthorityNominalStandingMotion
     action_cfg.record_diagnostics = True
+    action_cfg.force_full_contact = args.force_full_contact
     action_cfg.backend = args.qp_backend
     # Deliberate evaluation on CPU uses the same batched algorithm; training
     # keeps its CUDA requirement and never silently falls back.
@@ -93,7 +120,9 @@ def main(env_cfg, agent_cfg):
     print(f'[INFO] Evaluation diagnostics: {output}', flush=True)
     if not (force_only or authority_policy) and not controller.contact_weight_min < args.manual_weight < controller.contact_weight_max:
         raise ValueError('Manual weight must be strictly between configured bounds')
-    print(f'[INFO] {action_name}: actual geometry gates support; learned normal-force bounds.'
+    contact_description = ('diagnostic override enables all contact vertices on both feet'
+                           if args.force_full_contact else 'actual geometry gates support')
+    print(f'[INFO] {action_name}: {contact_description}; policy/manual normal-force bounds.'
           + (' Coupled directional authority constraints.' if authority_policy else
              ' No foot-acceleration objectives.' if force_only else ' Soft foot-acceleration objectives.'), flush=True)
     env_cfg.sim.device = args.device
@@ -117,6 +146,12 @@ def main(env_cfg, agent_cfg):
             data = dict(archive)
         data.update(episode_reset_count=reset_count, episode_reset_steps=np.asarray(reset_steps, dtype=np.int64),
                     policy_steps_completed=step_count, termination_counts_json=np.asarray(json.dumps(termination_counts)))
+        preparation = getattr(env.unwrapped.command_manager.get_term('motion'), 'reference_preparation', None)
+        if preparation is not None:
+            data['reference_preparation_json'] = np.asarray(json.dumps(preparation))
+        if manual_values is not None:
+            data.update(manual_nn_outputs=np.asarray(manual_values),
+                        manual_inputs_file=np.asarray(str(args.manual_inputs.resolve())))
         np.savez_compressed(output, **data)
 
     try:
@@ -124,7 +159,11 @@ def main(env_cfg, agent_cfg):
         if args.zero_policy:
             actions = torch.zeros((args.num_envs, env.unwrapped.action_manager.total_action_dim),
                                   device=env.unwrapped.device)
-            if authority_policy:
+            if manual_values is not None:
+                if len(manual_values) != actions.shape[1]:
+                    raise ValueError('Manual NN output count does not match the task action dimension')
+                actions[:] = actions.new_tensor(manual_values)
+            elif authority_policy:
                 from whole_body_tracking.utils.wbc_authority_gpu_control import encode_authorities
                 values = args.manual_authority or [args.manual_support[0]]*6+[args.manual_support[1]]*6
                 actions[:] = encode_authorities(actions.new_tensor(values).reshape(1, 2, 6))

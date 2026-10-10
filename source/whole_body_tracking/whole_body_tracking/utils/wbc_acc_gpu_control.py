@@ -111,6 +111,26 @@ class WBCACCGPUQP:
         mu = self.friction
         rays = tensor([[0., 0., -mu, mu], [mu, -mu, 0., 0.], [1., 1., 1., 1.]])
         enabled = point_masks.reshape(n, 8).repeat_interleave(4, dim=-1)
+        extra = self.extra_wrench_constraints(s, points, rays, enabled, nv, actions)
+        if extra is not None and bool((extra[1] == 0).any()):
+            # rho >= 0 and a same-sign zero wrench row imply that every
+            # participating rho is exactly zero. Eliminate those force rays
+            # before the interior-point solve: their feasible face has no
+            # strictly positive slack. Repeat because removing rays can make
+            # another zero row one-sided. This changes no feasible forces.
+            coefficients = extra[0][..., nv:]
+            zero = extra[1] == 0
+            for _ in range(nr):
+                active = coefficients*enabled[:, None]
+                nonnegative = (active >= 0).all(-1)
+                nonpositive = (active <= 0).all(-1)
+                forced = (zero[..., None] & (
+                    (nonnegative[..., None] & (active > 0)) |
+                    (nonpositive[..., None] & (active < 0)))).any(1)
+                changed = enabled & forced
+                enabled = enabled & ~forced
+                if not bool(changed.any()):
+                    break
         qmap, gmap = zeros(n, 6, nr), zeros(n, nv, nr)
         for i, foot in enumerate(FEET):
             frame = s['frames'][foot]
@@ -203,11 +223,22 @@ class WBCACCGPUQP:
         if fixed is not None:
             h += torch.diag_embed(fixed.to(h.dtype))
         g = mv(basis.transpose(-1, -2), linear+mv(hessian, offset))
+        reduced_inequality = inequality@basis
+        reduced_bound = bound-mv(inequality, offset)
+        # Exact zero wrench limits can make a nonnegativity inequality an
+        # identity after equality elimination. SVD roundoff leaves ~1e-16
+        # coefficients; row scaling would magnify them into fictitious bounds.
+        # Remove only numerically constant, satisfied rows. Original physical
+        # inequalities are still checked on the reconstructed solution below.
+        roundoff = 64*torch.finfo(h.dtype).eps*inequality.abs().sum(-1).clamp_min(1.)
+        redundant = (reduced_inequality.abs().amax(-1) <= roundoff) & (reduced_bound >= -roundoff)
+        reduced_inequality = torch.where(redundant[..., None], 0., reduced_inequality)
+        reduced_bound = torch.where(redundant, 1., reduced_bound)
         if self.backend == 'osqp':
-            reduced, info = self._osqp(h, g, inequality@basis, bound-mv(inequality, offset),
+            reduced, info = self._osqp(h, g, reduced_inequality, reduced_bound,
                                       tolerance=self.solver_tolerance)
         else:
-            reduced, info = solve_batched_qp(h, g, inequality@basis, bound-mv(inequality, offset),
+            reduced, info = solve_batched_qp(h, g, reduced_inequality, reduced_bound,
                 max_iterations=self.max_iterations, tolerance=self.solver_tolerance)
         converged = info['converged']
         x = offset+mv(basis, reduced)

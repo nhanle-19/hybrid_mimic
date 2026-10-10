@@ -19,7 +19,4 @@ class WBCAuthorityAction(WBCACCGPUAction):
 @configclass
 class WBCAuthorityActionCfg(WBCACCActionCfg):
     class_type: type = WBCAuthorityAction
-    # Optimality tolerance in equilibrated coordinates; physical residuals
-    # still must meet residual_tolerance independently.
-    batched_tolerance: float = 1e-7
     controller: T1WBCAuthorityControllerCfg = T1WBCAuthorityControllerCfg()

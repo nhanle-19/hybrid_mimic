@@ -40,3 +40,22 @@ class T1WBCForceStandingEnvCfg(T1WBCACCStandingEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         configure_wbc_force(self)
+
+
+@configclass
+class T1WBCForceToyStandingEnvCfg(T1WBCForceStandingEnvCfg):
+    """Deterministic toes-up reference fixture with fall and QP failure checks."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        from whole_body_tracking.tasks.tracking.tracking_env_cfg import TerminationsCfg
+        self.scene.num_envs = 1
+        self.commands.motion.motion_file = 'eval_data/toy_standing/reference.npz'
+        # GPU PhysX contact jitter exceeds the generic 10-micrometre patch
+        # threshold. Keep a nearly level sole available within 0.5 mm; the
+        # independent 1 mm ground-gap gate still applies to every vertex.
+        self.actions.wbc_force.controller.contact_patch_height_tolerance = .0005
+        self.terminations = TerminationsCfg()
+        self.terminations.ee_body_pos.params['body_names'] = list(self.commands.motion.eef_names)
+        self.terminations.qp_infeasible = TerminationTermCfg(
+            func=qp_failed, params={'action_name': 'wbc_force'})

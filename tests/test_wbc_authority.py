@@ -91,6 +91,45 @@ def test_contact_objective_uses_zero_acceleration_and_squared_authority(authorit
     torch.testing.assert_close(actual['torque'], expected['torque'])
 
 
+@pytest.mark.parametrize('corner', range(4))
+def test_zero_moment_authority_at_single_corner_matches_osqp(authority_cfg, corner):
+    """A corner cannot exert pure vertical force with all moments fixed to zero.
+
+    This feasible boundary used to make the batched solver diverge, terminating
+    episodes even though the independent OSQP solve succeeded.
+    """
+    state = standing_state(WBCACCTorchModel())
+    masks = torch.zeros((1,2,4), dtype=torch.bool)
+    masks[0,0,corner] = True
+    values = torch.tensor([[[0.,0.,1.,0.,0.,0.]]*2], dtype=torch.float64)
+    limits = torch.full((1,23),60.,dtype=torch.float64)
+    args = (state,state,encode_authorities(values),masks,limits)
+    actual = WBCAuthorityGPUQP(authority_cfg, solver_tolerance=1e-9).solve(*args)
+    expected = WBCAuthorityGPUQP(authority_cfg, backend='osqp').solve(*args)
+    assert not actual['failed'].any() and not expected['failed'].any()
+    assert actual['wrenches'].abs().max() < 2e-5
+    torch.testing.assert_close(actual['acceleration'],expected['acceleration'],atol=2e-3,rtol=1e-3)
+
+
+@pytest.mark.parametrize('device', DEVICES)
+def test_gpu_rollout_precision_regressions_match_osqp(authority_cfg, device):
+    """Captured feasible states previously terminated at a 1.4e-7 KKT floor."""
+    from pathlib import Path
+    import numpy as np
+    with np.load(Path(__file__).parent/'fixtures/wbc_authority_precision.npz') as archive:
+        data = {k: torch.as_tensor(archive[k], device=device) for k in archive.files}
+    model = WBCACCTorchModel(device)
+    state = model.state(data['state_q'], data['state_v'])
+    reference = model.state(data['reference_q'], data['reference_v'])
+    args = (state, reference, data['actions'], data['masks'], data['limits'])
+    actual = WBCAuthorityGPUQP(authority_cfg, max_iterations=100, solver_tolerance=1e-6).solve(*args)
+    expected = WBCAuthorityGPUQP(authority_cfg, backend='osqp', solver_tolerance=1e-9).solve(*args)
+    assert not actual['failed'].any() and not expected['failed'].any()
+    assert actual['residual'].max() < 2e-5
+    torch.testing.assert_close(actual['torque'], expected['torque'], atol=1e-4, rtol=1e-5)
+    torch.testing.assert_close(actual['acceleration'], expected['acceleration'], atol=1e-3, rtol=1e-4)
+
+
 def test_action_interface_and_reward(action_modules, monkeypatch):
     import importlib.util
     import sys

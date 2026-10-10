@@ -33,6 +33,9 @@ def test_standing_freezes_pose_and_never_resets_at_clip_boundary(monkeypatch, fr
     spec = importlib.util.spec_from_file_location('standing_motion_test', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # Reference preparation is tested independently; this fixture isolates
+    # standing's hold/clip-boundary behavior from simulator initialization.
+    monkeypatch.setattr(module.WBCACCTrainingMotion, '__init__', MotionCommand.__init__)
     poses = ('joint_pos', '_body_pos_w', '_body_quat_w')
     velocities = ('joint_vel', '_body_lin_vel_w', '_body_ang_vel_w')
     motion = SimpleNamespace(**{name: torch.arange(frames * 3).reshape(frames, 3).float() + 1

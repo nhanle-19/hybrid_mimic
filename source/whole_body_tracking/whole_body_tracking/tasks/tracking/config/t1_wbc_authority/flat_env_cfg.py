@@ -44,3 +44,15 @@ class T1WBCAuthorityStandingEnvCfg(T1WBCACCStandingEnvCfg):
         # QP failures and timeouts as in permissive playback evaluation.
         self.terminations = TerminationsCfg()
         configure_wbc_authority(self)
+
+
+@configclass
+class T1WBCAuthorityToyStandingEnvCfg(T1WBCAuthorityStandingEnvCfg):
+    """Same toes-up reference fixture as the force-only toy task."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 1
+        self.commands.motion.motion_file = 'eval_data/toy_standing/reference.npz'
+        self.actions.wbc_authority.controller.contact_patch_height_tolerance = .0005
+        self.terminations.ee_body_pos.params['body_names'] = list(self.commands.motion.eef_names)

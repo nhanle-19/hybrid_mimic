@@ -288,7 +288,11 @@ class WBCACCActionCfg(ActionTermCfg):
     backend: str = 'batched'
     allow_cpu_batched_evaluation: bool = False
     batched_max_iterations: int = 100
-    batched_tolerance: float = 1e-9
+    # Scaled optimality stopping criterion, separate from the physical
+    # feasibility check below. GPU rollout regressions hit a ~1.4e-7
+    # stationarity floor despite physical residuals <1e-12. At 1e-6 their
+    # torques agree with independent OSQP solutions within 1.1e-5 Nm.
+    batched_tolerance: float = 1e-6
     controller: T1WBCACCControllerCfg = T1WBCACCControllerCfg()
     friction: float = .6
     contact_height_tolerance: float = .025
@@ -299,3 +303,4 @@ class WBCACCActionCfg(ActionTermCfg):
     residual_tolerance: float = 2e-5
     record_diagnostics: bool = False
     standing_only: bool = False
+    force_full_contact: bool = False  # Diagnostic override; normal contact geometry remains the default.

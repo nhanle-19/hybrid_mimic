@@ -54,5 +54,9 @@ def bad_motion_body_pos_z_only(
     command: MotionCommand = env.command_manager.get_term(command_name)
 
     body_indexes = _get_body_indexes(command, body_names)
-    error = torch.abs(command.body_pos_relative_w[:, body_indexes, -1] - command.robot_body_pos_w[:, body_indexes, -1])
+    # Terminations run before the first command update after reset, when the
+    # aligned-position cache can still be zero/stale. Alignment changes only
+    # horizontal position and yaw, so current reference world z is equivalent
+    # and is valid immediately after reset.
+    error = torch.abs(command.body_pos_w[:, body_indexes, -1] - command.robot_body_pos_w[:, body_indexes, -1])
     return torch.any(error > threshold, dim=-1)

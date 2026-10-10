@@ -15,29 +15,72 @@ def main():
     args.output_dir = args.output_dir or args.input.parent/'plots'
     with np.load(args.input, allow_pickle=False) as archive:
         data = dict(archive)
+    legacy_wrenches = ('actual_contact_wrench' in data
+                       and int(data.get('wrench_measurement_version', 1)) < 2)
+    if legacy_wrenches:
+        print('WARNING: Legacy wrench measurements may omit contacts due to shared PhysX buffers. '
+              'Run a fresh evaluation with the corrected logger; replotting cannot repair these measurements.')
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if 'evaluation_completed' in data and not bool(data['evaluation_completed']):
         print(f"Partial evaluation: {data['failure_reason']}")
     for env in np.unique(data['env_id']):
         mask = data['env_id'] == env
         t = data['time'][mask]
+        torque_series = [
+            (key, label, style) for key, label, style in (
+                ('commanded_torque', 'Commanded', '-'),
+                ('applied_torque', 'Applied', '--'),
+            ) if key in data
+        ]
+        if torque_series:
+            joint_count = data[torque_series[0][0]].shape[1]
+            rows = (joint_count + 2) // 3
+            fig, axes = plt.subplots(rows, 3, figsize=(15, 2.3 * rows), sharex=True, squeeze=False)
+            joint_names = data.get('joint_names', [f'Joint {j}' for j in range(joint_count)])
+            for joint, ax in enumerate(axes.flat):
+                if joint >= joint_count:
+                    ax.set_visible(False)
+                    continue
+                for key, label, style in torque_series:
+                    ax.plot(t, np.abs(data[key][mask, joint]), style, label=label, linewidth=1.2)
+                ax.set_title(str(joint_names[joint]), fontsize=9)
+                ax.set_ylabel('|Torque| (N·m)')
+                peak = max(np.max(np.abs(data[key][mask, joint])) for key, _, _ in torque_series)
+                ax.set_ylim(0, 1.2 * peak if peak > 0 else 1.0)
+                ax.set_xlabel('Time (s)')
+                ax.grid(alpha=.2)
+            axes[0, 0].legend(fontsize=8)
+            fig.suptitle(f'Joint torque magnitudes — environment {env}')
+            fig.tight_layout()
+            fig.savefig(args.output_dir/f'env{env}_torques.png', dpi=160)
+            plt.close(fig)
         if 'predicted_contact_wrench' in data:
             fig, axes = plt.subplots(6, 2, figsize=(12, 14), sharex=True)
             for foot in range(2):
                 for component, label in enumerate(('Fx (N)', 'Fy (N)', 'Fz (N)', 'Mx (Nm)', 'My (Nm)', 'Mz (Nm)')):
                     ax = axes[component, foot]
-                    ax.plot(t, data['predicted_contact_wrench'][mask, foot, component], label='QP prediction')
-                    ax.plot(t, data['actual_contact_wrench'][mask, foot, component], ':', label='PhysX measurement')
-                    if 'wrench_limits' in data:
+                    ax.plot(t, data['predicted_contact_wrench'][mask, foot, component], color='tab:blue', linewidth=1.8, label='QP predicted contact wrench')
+                    ax.plot(t, data['actual_contact_wrench'][mask, foot, component], ':', color='tab:orange', linewidth=1.5,
+                            label='Legacy measurement (unverified)' if legacy_wrenches else 'PhysX measured contact wrench')
+                    if 'wrench_limits' in data and 'contact_authority' not in data:
                         cap = data['wrench_limits'][mask, foot, component]
-                        ax.plot(t, cap, '--', label='QP upper limit')
-                        ax.plot(t, np.zeros_like(cap) if component == 2 else -cap, '--', label='QP lower limit')
-                    elif component == 2 and 'normal_force_limits' in data:
-                        ax.plot(t, data['normal_force_limits'][mask, foot], '--', label='QP upper limit')
+                        ax.plot(t, cap, '--', color='tab:green', label='QP upper bound')
+                        ax.plot(t, np.zeros_like(cap) if component == 2 else -cap, '-.', color='tab:red', label='QP lower bound')
+                    elif component == 2 and 'normal_force_limits' in data and 'contact_authority' not in data:
+                        ax.plot(t, data['normal_force_limits'][mask, foot], '--', color='tab:green', linewidth=1.8, label='QP normal-force cap (Fz only)')
                     ax.set_ylabel(label); ax.grid(alpha=.2)
-                axes[0, foot].set_title(str(data['foot_names'][foot])); axes[0, foot].legend()
+                    ax.margins(y=.2)
+                axes[0, foot].set_title(str(data['foot_names'][foot]))
                 axes[-1, foot].set_xlabel('Time (s)')
-            fig.tight_layout(); fig.savefig(args.output_dir/f'env{env}_wrenches.png', dpi=160); plt.close(fig)
+            legend_entries = {}
+            for ax in axes.flat:
+                handles, labels = ax.get_legend_handles_labels()
+                legend_entries.update(zip(labels, handles))
+            fig.suptitle('Foot contact wrenches: signed forces (Fx, Fy, Fz) and moments (Mx, My, Mz)', y=.995)
+            fig.legend(legend_entries.values(), legend_entries.keys(), loc='upper center',
+                       bbox_to_anchor=(.5, .975), ncol=2, fontsize=9)
+            fig.tight_layout(rect=(0, 0, 1, .935))
+            fig.savefig(args.output_dir/f'env{env}_wrenches.png', dpi=160); plt.close(fig)
             fig, axes = plt.subplots(5, 1, figsize=(12, 12), sharex=True)
             axes[0].plot(t, data['support_activation'][mask]); axes[0].set_ylabel('Support activation')
             if 'contact_authority' in data:

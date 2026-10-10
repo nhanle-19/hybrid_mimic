@@ -11,7 +11,26 @@ def foot_collision(env, sensor_cfg, threshold):
     return (torch.linalg.vector_norm(forces, dim=-1) > threshold).flatten(1).any(dim=1).float()
 
 
-class WBCACCEvaluationMotion(MotionCommand):
+class WBCACCTrainingMotion(MotionCommand):
+    """Use one corrected reference for reset, observations, rewards, and the QP."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        from whole_body_tracking.utils.wbc_reference import prepare_wbc_reference
+        root = self.robot.body_names.index('Trunk')
+        action_name = next(name for name in ('wbc_authority', 'wbc_force', 'wbc_acc') if hasattr(env.cfg.actions, name))
+        controller = getattr(env.cfg.actions, action_name).controller
+        values, self.reference_preparation = prepare_wbc_reference(
+            self.motion.joint_pos.cpu().numpy(), self.motion._body_pos_w[:, root].cpu().numpy(),
+            self.motion._body_quat_w[:, root].cpu().numpy(), self.robot.joint_names, self.robot.body_names,
+            self.robot.data.soft_joint_pos_limits[0].cpu().numpy(), float(self.motion.fps[0]), controller.ground_height)
+        for name, value in values.items():
+            target = getattr(self.motion, '_'+name if name.startswith('body_') else name)
+            target.copy_(torch.as_tensor(value, device=target.device, dtype=target.dtype))
+        print(f'[INFO] WBC reference preparation: {self.reference_preparation}', flush=True)
+
+
+class WBCACCEvaluationMotion(WBCACCTrainingMotion):
     def _resample_command(self, env_ids):
         if len(env_ids):
             self.reset_command(env_ids)
