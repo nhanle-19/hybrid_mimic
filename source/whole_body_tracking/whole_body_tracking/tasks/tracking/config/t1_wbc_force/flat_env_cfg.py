@@ -1,10 +1,9 @@
-"""Separate force-limit policy task sharing the WBC-ACC simulation and rewards."""
+"""Force-limit policy task sharing WBC-ACC simulation with survival-only reward."""
 from isaaclab.utils import configclass
-from isaaclab.managers import RewardTermCfg, TerminationTermCfg
-from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg
+from isaaclab.managers import TerminationTermCfg
+from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg, WBCAliveOnlyRewardsCfg
 from ..t1_wbc_acc.rewards import qp_failed
 from .wbc_force_action import WBCForceActionCfg
-from .rewards import mapped_force_action_rate
 
 
 @configclass
@@ -17,7 +16,7 @@ def configure_wbc_force(cfg):
     cfg.actions = WBCForceActionsCfg()
     cfg.actions.wbc_force.record_diagnostics = previous.record_diagnostics
     cfg.actions.wbc_force.standing_only = previous.standing_only
-    cfg.rewards.action_rate_l2 = RewardTermCfg(func=mapped_force_action_rate, weight=-.1)
+    cfg.rewards = WBCAliveOnlyRewardsCfg()
     cfg.terminations.qp_infeasible = TerminationTermCfg(func=qp_failed, params={'action_name': 'wbc_force'})
 
 

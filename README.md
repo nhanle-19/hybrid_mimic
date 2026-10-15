@@ -199,7 +199,9 @@ python scripts/rsl_rl/train.py \
 ```
 
 This uses the same PPO settings and reference-only actor observations as
-WBC-ACC. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
+WBC-ACC. WBC-FORCE and WBC-AUTHORITY use only the alive reward (weight 1.0),
+giving 0.02 reward per non-terminal control step; their termination conditions
+still apply. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
 the two-output policy cannot load a fourteen-output WBC-ACC checkpoint.
 
 ### Train the PD baseline

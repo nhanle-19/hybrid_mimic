@@ -1,10 +1,9 @@
-"""Separate authority-limit policy task sharing the WBC-ACC simulation and rewards."""
+"""Authority-limit policy task sharing WBC-ACC simulation with survival-only reward."""
 from isaaclab.utils import configclass
-from isaaclab.managers import RewardTermCfg, TerminationTermCfg
-from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg
+from isaaclab.managers import TerminationTermCfg
+from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg, WBCAliveOnlyRewardsCfg
 from ..t1_wbc_acc.rewards import qp_failed
 from .wbc_authority_action import WBCAuthorityActionCfg
-from .rewards import mapped_authority_action_rate
 from whole_body_tracking.tasks.tracking.tracking_env_cfg import TerminationsCfg
 
 
@@ -18,7 +17,7 @@ def configure_wbc_authority(cfg):
     cfg.actions = WBCAuthorityActionsCfg()
     cfg.actions.wbc_authority.record_diagnostics = previous.record_diagnostics
     cfg.actions.wbc_authority.standing_only = previous.standing_only
-    cfg.rewards.action_rate_l2 = RewardTermCfg(func=mapped_authority_action_rate, weight=-.1)
+    cfg.rewards = WBCAliveOnlyRewardsCfg()
     cfg.terminations.qp_infeasible = TerminationTermCfg(func=qp_failed, params={'action_name': 'wbc_authority'})
 
 
