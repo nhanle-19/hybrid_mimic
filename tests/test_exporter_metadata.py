@@ -21,6 +21,7 @@ def exporter(monkeypatch):
         module.__dict__.update(attrs)
         monkeypatch.setitem(sys.modules, name, module)
     path = Path(__file__).resolve().parents[1] / "source/whole_body_tracking/whole_body_tracking/utils/exporter.py"
+    monkeypatch.syspath_prepend(str(path.parent))
     spec = importlib.util.spec_from_file_location("metadata_exporter_under_test", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -46,7 +47,7 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         terms.clear()
         terms[hybrid] = NS(dynamics=NS(joint_names=list(reversed(joints))), cfg=NS(controller=NS(
             contact_weight_min=0., contact_weight_max=100., contact_force_max=(600.,600.),
-            contact_wrench_max=(360.,360.,600.,60.,60.,30.), contact_authority_weights=(100.,)*6)))
+            contact_authority_weights=(100.,)*3)))
         env.action_manager.active_terms = list(terms)
     elif hybrid:
         env.hybrid_controller = NS(action_dim=57, end_effector_names=["left_foot", "right_foot", "left_hand", "right_hand"],
@@ -60,18 +61,22 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
     assert metadata["joint_names"].split(",") == joints
     assert [float(x) for x in metadata["default_joint_pos"].split(",")] == [2. if nominal else 1.] * 23
     if hybrid == "wbc_authority":
-        assert metadata["policy_action_dim"] == "12"
-        assert metadata["action_transform"] == "authority=sigmoid(u)"
+        assert metadata["policy_action_dim"] == "6"
+        assert metadata["action_transform"] == "authority=clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)"
+        assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["wrench_frame"] == "world_axes_at_foot_origin"
-        assert metadata["kinematic_target"] == "zero_spatial_acceleration"
-        assert [float(x) for x in metadata["contact_wrench_max"].split(",")] == [360.,360.,600.,60.,60.,30.]
+        assert metadata["kinematic_target"] == "zero_linear_acceleration"
+        assert "contact_wrench_max" not in metadata
+        assert [float(x) for x in metadata["fixed_normal_force_limits"].split(",")] == [600.,600.]
+        assert metadata["action_layout"] == "per_foot:x,y,z;left_foot,right_foot"
         assert "action_scale" not in metadata
         return
     if hybrid == "wbc_force":
         assert metadata["action_type"] == "wbc_force_reference_force_limit_policy"
         assert metadata["policy_action_dim"] == "2"
         assert metadata["action_layout"] == "left_foot_normal_force_capacity,right_foot_normal_force_capacity"
-        assert metadata["action_transform"] == "normal_force_limit=contact_force_max*sigmoid(u)"
+        assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)"
+        assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["normal_force_axis"] == "world_z"
         assert [float(x) for x in metadata["contact_force_max"].split(",")] == [600., 600.]
         assert "contact_weight_max" not in metadata

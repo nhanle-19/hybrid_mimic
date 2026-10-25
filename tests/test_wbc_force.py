@@ -62,6 +62,17 @@ def test_no_reference_foot_acceleration_objective(cfg):
     torch.testing.assert_close(result['torque'], expected['torque'], atol=1e-10, rtol=0)
 
 
+def test_thousand_newton_caps_are_independent_not_normalized(cfg):
+    cfg.contact_force_max = (1000., 1000.)
+    state = standing_state(WBCACCTorchModel())
+    fractions = torch.tensor([[.12, 1.]], dtype=torch.float64)
+    result = WBCForceGPUQP(cfg).solve(state, state, encode_force_capacities(fractions),
+        available_vertices(state, cfg), torch.full((1, 23), 60., dtype=torch.float64))
+    assert not result['failed'].any()
+    torch.testing.assert_close(result['normal_force_limits'], torch.tensor([[120., 1000.]], dtype=torch.float64))
+    assert (result['wrenches'][:, :, 2] <= result['normal_force_limits']+2e-5).all()
+
+
 @pytest.mark.parametrize('actions', [torch.zeros(2, 14), torch.zeros(2), torch.tensor([[float('nan'), 0.]])])
 def test_reject_invalid_actions(actions):
     with pytest.raises(ValueError, match='two finite'):
@@ -69,8 +80,8 @@ def test_reject_invalid_actions(actions):
 
 
 def test_force_mapping_and_disabled_swing(cfg):
-    torch.testing.assert_close(decode_force_actions(torch.tensor([[-2., 2.], [.2, .7]])),
-                               torch.tensor([[0.11920292, 0.88079708], [0.549834, 0.66818777]]))
+    torch.testing.assert_close(decode_force_actions(torch.tensor([[-3., 3.], [0., 0.]])),
+                               torch.tensor([[0., 1.], [.5, .5]]))
     cfg.swing_weight = 1.
     with pytest.raises(ValueError, match='foot-acceleration objectives are disabled'):
         WBCForceGPUQP(cfg)
@@ -112,19 +123,21 @@ def test_force_action_initialization_and_reset(action_modules, monkeypatch):
         term.process_actions(torch.zeros((2, 14)))
     env.action_manager = SimpleNamespace(action=torch.tensor([[2., -.2], [.5, .25]]),
                                         prev_action=torch.tensor([[1., 0.], [0., .25]]))
-    torch.testing.assert_close(modules['rewards'].mapped_force_action_rate(env), torch.tensor([0.012452522737547168, 0.00749814]), atol=1e-7, rtol=1e-5)
+    torch.testing.assert_close(modules['rewards'].mapped_force_action_rate(env),
+                               torch.tensor([0.012452522737547168, 0.00749814])/.8**2, atol=1e-7, rtol=1e-5)
 
 
 def test_manual_capacities_round_trip():
     caps = torch.tensor([[0., 1.], [.01, .75], [.5, .5]], dtype=torch.float64)
     logits = encode_force_capacities(caps)
     assert torch.isfinite(logits).all()
+    assert logits[0].tolist() == [-3., 3.]
     torch.testing.assert_close(decode_force_actions(logits), caps)
     assert decode_force_actions(logits)[0].tolist() == [0., 1.]
 
 
-def test_force_mapping_preserves_variation_beyond_old_clip_boundaries():
-    logits = torch.tensor([[-2., 2.], [-1., 3.]], requires_grad=True)
+def test_force_mapping_preserves_interior_variation():
+    logits = torch.tensor([[-2., 1.], [-1., 2.]], requires_grad=True)
     fractions = decode_force_actions(logits)
     assert ((fractions > 0) & (fractions < 1)).all()
     assert (fractions[1] > fractions[0]).all()

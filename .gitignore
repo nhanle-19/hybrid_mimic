@@ -67,4 +67,5 @@ eval_data/
 
 # Local SMPL-X motion dataset
 /ACCAD/
+/HDM05/
 /models_smplx_v1_1/

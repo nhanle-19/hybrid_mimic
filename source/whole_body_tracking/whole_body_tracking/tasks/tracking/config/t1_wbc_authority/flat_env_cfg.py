@@ -1,4 +1,4 @@
-"""Authority-limit policy task sharing WBC-ACC simulation with survival-only reward."""
+"""Translational contact-cost policy sharing WBC-ACC simulation and survival reward."""
 from isaaclab.utils import configclass
 from isaaclab.managers import TerminationTermCfg
 from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg, WBCAliveOnlyRewardsCfg

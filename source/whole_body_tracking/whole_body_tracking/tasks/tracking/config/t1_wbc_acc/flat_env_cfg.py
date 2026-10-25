@@ -14,7 +14,7 @@ from .motion import WBCACCTrainingMotion, WBCACCEvaluationMotion, WBCACCStanding
 
 @configclass
 class WBCAliveOnlyRewardsCfg:
-    """Survival-only reward shared by WBC-FORCE and WBC-AUTHORITY."""
+    """Survival-only reward retained by WBC-AUTHORITY."""
 
     alive = RewardTermCfg(func=alive_reward, weight=1.)
 

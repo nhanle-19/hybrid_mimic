@@ -52,13 +52,13 @@ def audit(device='cpu'):
     cases, fractions, masks = [], [], []
     def add(name, c, mask=None):
         cases.append(name)
-        fractions.append(torch.as_tensor(c, dtype=torch.float64, device=device).expand(2, 6).clone())
+        fractions.append(torch.as_tensor(c, dtype=torch.float64, device=device).expand(2, 3).clone())
         masks.append(torch.ones((2, 4), dtype=torch.bool, device=device) if mask is None else mask)
     for value in (0., 1e-12, 1e-8, 1e-4, .01, .1, .5, 1.):
         add(f'uniform_{value}', value)
-    for axis in range(6):
+    for axis in range(3):
         for value in (0., 1e-10, .01):
-            c = torch.ones((2, 6), dtype=torch.float64, device=device)
+            c = torch.ones((2, 3), dtype=torch.float64, device=device)
             c[0, axis] = value
             add(f'left_axis_{axis}_{value}', c)
     # Mixed geometry in one batch, including no support, corners, edges, feet.
@@ -88,7 +88,7 @@ def audit(device='cpu'):
         inverse[:, 6:] -= result['torque']
         wrench = result['wrenches']
         errors = torch.stack((inverse.abs().amax(-1),
-                              (wrench.abs()-result['wrench_limits']).clamp_min(0).flatten(1).amax(-1),
+                              (wrench[..., 2]-result['normal_force_limits']).clamp_min(0).amax(-1),
                               (-wrench[..., 2]).clamp_min(0).amax(-1),
                               (wrench[..., :2].norm(dim=-1)-.6*wrench[..., 2]).clamp_min(0).amax(-1),
                               (result['torque'].abs()-limits).clamp_min(0).amax(-1)), -1)

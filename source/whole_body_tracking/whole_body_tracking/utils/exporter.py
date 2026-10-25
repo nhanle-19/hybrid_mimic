@@ -13,6 +13,11 @@ from isaaclab_rl.rsl_rl.exporter import _OnnxPolicyExporter
 
 from whole_body_tracking.tasks.tracking.mdp import MotionCommand
 
+try:
+    from .wbc_contact_mapping import CONTACT_DEAD_ZONE
+except ImportError:
+    from wbc_contact_mapping import CONTACT_DEAD_ZONE
+
 
 def export_motion_policy_as_onnx(
     env: ManagerBasedRLEnv,
@@ -125,15 +130,16 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
     if "wbc_authority" in env.action_manager.active_terms:
         controller = env.action_manager.get_term("wbc_authority").cfg.controller
         metadata.update({
-            "action_type": "wbc_directional_contact_authority_policy",
-            "policy_action_dim": 12,
-            "action_layout": "per_foot:x,y,z,rx,ry,rz;left_foot,right_foot",
-            "action_transform": "authority=sigmoid(u)",
-            "contact_wrench_max": list(controller.contact_wrench_max),
+            "action_type": "wbc_translational_cost_authority_policy",
+            "policy_action_dim": 6,
+            "action_layout": "per_foot:x,y,z;left_foot,right_foot",
+            "action_transform": "authority=clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)",
+            "action_dead_zone_epsilon": CONTACT_DEAD_ZONE,
+            "fixed_normal_force_limits": list(controller.contact_force_max),
             "contact_authority_weights": list(controller.contact_authority_weights),
             "wrench_frame": "world_axes_at_foot_origin",
-            "kinematic_target": "zero_spatial_acceleration",
-            "kinematic_weights": "contact_authority_weights*authority^2;geometry_gated",
+            "kinematic_target": "zero_linear_acceleration",
+            "kinematic_weights": "xyz:contact_authority_weights*authority^2;angular:0;geometry_gated",
             "actor_inputs": "reference_only:frames_0_1_5_10",
         })
     elif "wbc_force" in env.action_manager.active_terms:
@@ -142,7 +148,8 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "action_type": "wbc_force_reference_force_limit_policy",
             "policy_action_dim": 2,
             "action_layout": "left_foot_normal_force_capacity,right_foot_normal_force_capacity",
-            "action_transform": "normal_force_limit=contact_force_max*sigmoid(u)",
+            "action_transform": "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)",
+            "action_dead_zone_epsilon": CONTACT_DEAD_ZONE,
             "contact_force_max": list(controller.contact_force_max),
             "normal_force_limit_units": "N",
             "normal_force_axis": "world_z",

@@ -1,75 +1,61 @@
-"""Directional contact authority: coupled soft acceleration and wrench limits."""
+"""Cost-only translational contact authority; physical support is independent."""
 import torch
 
 try:
-    from .wbc_acc_gpu_control import WBCACCGPUQP, FEET
-    from .wbc_acc_torch_model import skew
+    from .wbc_acc_gpu_control import WBCACCGPUQP
+    from .wbc_contact_mapping import decode_contact_values, encode_contact_values, contact_action_transform
 except ImportError:
-    from wbc_acc_gpu_control import WBCACCGPUQP, FEET
-    from wbc_acc_torch_model import skew
+    from wbc_acc_gpu_control import WBCACCGPUQP
+    from wbc_contact_mapping import decode_contact_values, encode_contact_values, contact_action_transform
 
 
 def decode_authority_actions(actions):
-    """Twelve logits -> two six-axis authorities, without hard clipping."""
-    if actions.ndim != 2 or actions.shape[1] != 12 or not bool(torch.isfinite(actions).all()):
-        raise ValueError('WBC-AUTHORITY expects twelve finite logits per environment')
-    return actions.reshape(-1, 2, 6).sigmoid()
+    """Six raw outputs -> left/right xyz cost authorities with exact 0/1 regions."""
+    if actions.ndim != 2 or actions.shape[1] != 6 or not bool(torch.isfinite(actions).all()):
+        raise ValueError('WBC-AUTHORITY expects six finite logits per environment')
+    return decode_contact_values(actions.reshape(-1, 2, 3))
 
 
 def encode_authorities(authority):
     """Inverse for manual fractions; finite endpoint logits preserve exact 0/1."""
-    if (authority.ndim != 3 or authority.shape[1:] != (2, 6)
+    if (authority.ndim != 3 or authority.shape[1:] != (2, 3)
             or not authority.is_floating_point() or not bool(torch.isfinite(authority).all())
             or not bool(((authority >= 0) & (authority <= 1)).all())):
-        raise ValueError('Expected authority fractions with shape (N,2,6) in [0,1]')
-    return torch.where(authority == 0, -1000.,
-                       torch.where(authority == 1, 1000., torch.logit(authority))).flatten(1)
+        raise ValueError('Expected authority fractions with shape (N,2,3) in [0,1]')
+    return encode_contact_values(authority).flatten(1)
 
 
 class WBCAuthorityGPUQP(WBCACCGPUQP):
+    action_transform = contact_action_transform()
+
     def __init__(self, cfg, friction=.6, tolerance=2e-5, max_iterations=100, solver_tolerance=1e-7, backend="batched"):
         super().__init__(cfg, friction, tolerance, max_iterations, solver_tolerance, backend)
-        cap = torch.as_tensor(cfg.contact_wrench_max)
         weight = torch.as_tensor(cfg.contact_authority_weights)
-        if cap.shape != (6,) or not bool((torch.isfinite(cap) & (cap > 0)).all()):
-            raise ValueError('contact_wrench_max must contain six finite positive bounds')
-        if weight.shape != (6,) or not bool((torch.isfinite(weight) & (weight > 0)).all()):
-            raise ValueError('contact_authority_weights must contain six finite positive weights')
+        if weight.shape != (3,) or not bool((torch.isfinite(weight) & (weight > 0)).all()):
+            raise ValueError('contact_authority_weights must contain three finite positive weights')
+        cap = torch.as_tensor(cfg.contact_force_max)
+        if cap.shape != (2,) or not bool((torch.isfinite(cap) & (cap > 0)).all()):
+            raise ValueError('contact_force_max must contain two finite positive fixed bounds')
         if cfg.swing_weight != 0:
             raise ValueError('WBC-AUTHORITY requires swing_weight=0')
-        if tuple(cfg.contact_force_max) != (cfg.contact_wrench_max[2],)*2:
-            raise ValueError('Normal force bounds must match contact_wrench_max[2]')
 
     def decode_policy(self, actions):
         c = decode_authority_actions(actions)
-        return c[:, :, 2], c.square()
+        # Authority never disables contact or changes the fixed force caps.
+        # The shared QP uses six spatial weights; angular weights stay zero.
+        return torch.ones_like(c[:, :, 0]), torch.cat((c.square(), torch.zeros_like(c)), -1)
 
     def contact_objective(self, frame, desired, weights, support, tensor):
-        # ||diag(c) (J a + Jdot v)||^2, scaled per axis; no reference velocity
+        # Translational ||diag(c) (J a + Jdot v)||^2; no reference velocity
         # target or hard no-slip equality. Airborne feet have no contact task.
-        return torch.zeros_like(frame['bias']), weights*tensor(self.cfg.contact_authority_weights)*support[:, None]
-
-    def extra_wrench_constraints(self, state, points, rays, enabled, nv, actions):
-        n = len(enabled)
-        rows = state['M'].new_zeros((n, 2, 6, nv+32))
-        for i, foot in enumerate(FEET):
-            offsets = points[i]@state['frames'][foot]['rotation'].transpose(-1, -2)
-            wrench_map = torch.cat((rays.expand(n, 4, -1, -1), skew(offsets)@rays), -2)
-            rows[:, i, :, nv+i*16:nv+(i+1)*16] = wrench_map.transpose(1, 2).reshape(n, 6, 16)
-        rows[..., nv:] *= enabled[:, None, None, :]
-        # Fz already has its unilateral cap in the base QP. Bound the other
-        # five wrench components in both signs while retaining friction rays.
-        axes = [0, 1, 3, 4, 5]
-        rows = rows[:, :, axes].flatten(1, 2)
-        caps = (decode_authority_actions(actions)*actions.new_tensor(self.cfg.contact_wrench_max))[:, :, axes]
-        supported = enabled.reshape(n, 2, 16).any(-1)
-        caps = torch.where(supported[:, :, None], caps, 1.).flatten(1)
-        return torch.cat((rows, -rows), 1), torch.cat((caps, caps), 1)
+        scale = tensor((*self.cfg.contact_authority_weights, 0., 0., 0.))
+        return torch.zeros_like(frame['bias']), weights*scale*support[:, None]
 
     def solve(self, state, reference, actions, masks, limits, external=None):
         result = super().solve(state, reference, actions, masks, limits, external)
         c = decode_authority_actions(actions)
         result['contact_authority'] = c
-        result['wrench_limits'] = c*actions.new_tensor(self.cfg.contact_wrench_max)
-        result['contact_weights'] = c.square()*actions.new_tensor(self.cfg.contact_authority_weights)*result['available'].any(-1)[..., None]
+        _, weights = self.decode_policy(actions)
+        scale = actions.new_tensor((*self.cfg.contact_authority_weights, 0., 0., 0.))
+        result['contact_weights'] = weights*scale*result['available'].any(-1)[..., None]
         return result

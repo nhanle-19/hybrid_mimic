@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def load_manual_inputs(path, controller):
-    counts = {'force': 2, 'authority': 12}
+    counts = {'force': 2, 'authority': 6}
     if controller not in counts:
         raise ValueError('Manual NN inputs are supported for force and authority only')
     data = json.loads(Path(path).read_text())

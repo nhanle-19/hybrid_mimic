@@ -1,4 +1,4 @@
-"""Six sigmoid-mapped authorities per foot."""
+"""Three translational cost authorities per foot, with reachable 0/1 endpoints."""
 from isaaclab.utils import configclass
 from ..t1_wbc_acc.wbc_acc_action import WBCACCActionCfg
 from ..t1_wbc_acc.wbc_acc_gpu_action import WBCACCGPUAction
@@ -13,7 +13,7 @@ class WBCAuthorityAction(WBCACCGPUAction):
 
     @property
     def action_dim(self):
-        return 12
+        return 6
 
 
 @configclass

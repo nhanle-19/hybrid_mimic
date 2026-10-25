@@ -66,7 +66,8 @@ def main():
                         cap = data['wrench_limits'][mask, foot, component]
                         ax.plot(t, cap, '--', color='tab:green', label='QP upper bound')
                         ax.plot(t, np.zeros_like(cap) if component == 2 else -cap, '-.', color='tab:red', label='QP lower bound')
-                    elif component == 2 and 'normal_force_limits' in data and 'contact_authority' not in data:
+                    elif component == 2 and 'normal_force_limits' in data and (
+                            'contact_authority' not in data or data['contact_authority'].shape[-1] == 3):
                         ax.plot(t, data['normal_force_limits'][mask, foot], '--', color='tab:green', linewidth=1.8, label='QP normal-force cap (Fz only)')
                     ax.set_ylabel(label); ax.grid(alpha=.2)
                     ax.margins(y=.2)
@@ -85,7 +86,7 @@ def main():
             axes[0].plot(t, data['support_activation'][mask]); axes[0].set_ylabel('Support activation')
             if 'contact_authority' in data:
                 for foot in range(2):
-                    for axis, label in enumerate(('x', 'y', 'z', 'rx', 'ry', 'rz')):
+                    for axis, label in enumerate(('x', 'y', 'z', 'rx', 'ry', 'rz')[:data['contact_authority'].shape[-1]]):
                         axes[1].plot(t, data['contact_authority'][mask, foot, axis], label=f'{foot}:{label}')
                 axes[1].set_ylabel('Contact authority'); axes[1].set_ylim(-.02, 1.02)
                 axes[1].legend(ncol=6, fontsize=7)

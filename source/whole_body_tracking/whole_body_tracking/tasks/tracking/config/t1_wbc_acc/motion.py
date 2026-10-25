@@ -20,10 +20,13 @@ class WBCACCTrainingMotion(MotionCommand):
         root = self.robot.body_names.index('Trunk')
         action_name = next(name for name in ('wbc_authority', 'wbc_force', 'wbc_acc') if hasattr(env.cfg.actions, name))
         controller = getattr(env.cfg.actions, action_name).controller
+        # NPZ producers store fps as either a scalar or a one-element array.
+        # item() accepts both without indexing a zero-dimensional array.
+        fps = float(self.motion.fps.item())
         values, self.reference_preparation = prepare_wbc_reference(
             self.motion.joint_pos.cpu().numpy(), self.motion._body_pos_w[:, root].cpu().numpy(),
             self.motion._body_quat_w[:, root].cpu().numpy(), self.robot.joint_names, self.robot.body_names,
-            self.robot.data.soft_joint_pos_limits[0].cpu().numpy(), float(self.motion.fps[0]), controller.ground_height)
+            self.robot.data.soft_joint_pos_limits[0].cpu().numpy(), fps, controller.ground_height)
         for name, value in values.items():
             target = getattr(self.motion, '_'+name if name.startswith('body_') else name)
             target.copy_(torch.as_tensor(value, device=target.device, dtype=target.dtype))
@@ -34,6 +37,14 @@ class WBCACCEvaluationMotion(WBCACCTrainingMotion):
     def _resample_command(self, env_ids):
         if len(env_ids):
             self.reset_command(env_ids)
+
+
+class WBCACCSinglePassMotion(WBCACCEvaluationMotion):
+    """Advance once through the clip, then hold its end without resetting state."""
+
+    def _update_command(self):
+        self.time_steps.clamp_(max=self.motion.time_step_total-2)
+        super()._update_command()
 
 
 class WBCACCStandingMotion(WBCACCEvaluationMotion):

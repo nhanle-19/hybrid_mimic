@@ -239,7 +239,9 @@ class WBCACCGPUAction(WBCACCAction):
                 contact_acceleration=result['contact_acceleration'], solver_failed=failed,
                 joint_tracking_rmse=tracking_error, torque_saturation=saturation, commanded_torque=torque,
                 qp_residual=result['residual'], foot_position_w=torch.stack([state['frames'][f]['position'] for f in FEET], 1),
-                reference_foot_position_w=torch.stack([ref['frames'][f]['position'] for f in FEET], 1))
+                reference_foot_position_w=torch.stack([ref['frames'][f]['position'] for f in FEET], 1),
+                foot_rotation_w=torch.stack([state['frames'][f]['rotation'] for f in FEET], 1),
+                reference_foot_rotation_w=torch.stack([ref['frames'][f]['rotation'] for f in FEET], 1))
             for key in ('contact_weights', 'contact_authority', 'wrench_limits',
                         'solver_converged', 'solver_optimality_residual', 'solver_complementarity'):
                 if key in result:
@@ -256,7 +258,11 @@ class WBCACCGPUAction(WBCACCAction):
         if not self.records:
             raise RuntimeError('No WBCACC diagnostics recorded')
         path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+        policy_metadata = {}
+        if hasattr(self.solver, 'action_transform'):
+            policy_metadata['policy_action_transform_json'] = np.asarray(json.dumps(self.solver.action_transform))
         np.savez_compressed(path, **{k: np.asarray([r[k] for r in self.records]) for k in self.records[0]},
+            **policy_metadata,
             foot_names=np.asarray(FEET), joint_names=np.asarray(self.dynamics.joint_names),
             physics_dt=self._env.physics_dt, qp_dt=self._env.step_dt,
             controller_config_json=np.asarray(json.dumps(self.cfg.controller.to_dict())),

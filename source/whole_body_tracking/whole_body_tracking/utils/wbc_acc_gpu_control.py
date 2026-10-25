@@ -1,8 +1,9 @@
 """Batched version of the reference-conditioned contact WBCACC reference controller and physical QP.
 
 All dynamics, objective assembly, equality elimination and solves stay on the
-input torch device. Every environment uses 61 variables and 80 inequality
-rows before six balance equalities are eliminated, regardless of contact geometry.
+input torch device. The default two-foot layout uses 61 variables and 80
+inequality rows before six balance equalities are eliminated. FORCE may supply
+explicit point geometry with more regions, retaining fixed sizes per layout.
 Unavailable force columns are masked out of physics, with decoupled regularized
 dummy variables instead of zero-capacity barrier constraints.
 """
@@ -86,31 +87,48 @@ class WBCACCGPUQP:
     def extra_wrench_constraints(self, state, points, rays, enabled, nv, actions):
         return None
 
-    def solve(self, state, reference, actions, masks, limits, external=None):
+    def solve(self, state, reference, actions, masks, limits, external=None, *, contact_geometry=None):
         n, nv = state['bias'].shape
         activation, weights = self.decode_policy(actions)
-        if masks.shape == (n, 2):
+        nc = activation.shape[1]
+        if contact_geometry is None and masks.shape == (n, 2):
             masks = masks[:, :, None].expand(-1, -1, 4)
-        if masks.shape != (n, 2, 4) or masks.dtype != torch.bool:
-            raise ValueError('Actual support geometry must be boolean (N,2,4)')
+        if contact_geometry is None:
+            if nc != 2 or masks.shape != (n, 2, 4) or masks.dtype != torch.bool:
+                raise ValueError('Actual support geometry must be boolean (N,2,4)')
+        else:
+            if weights is not None or self.cfg.swing_weight:
+                raise ValueError('Explicit contact points require FORCE without foot-motion objectives')
+            if masks.ndim != 3 or masks.shape[:2] != (n, nc) or masks.dtype != torch.bool:
+                raise ValueError('Explicit support geometry must be boolean (N,contacts,points)')
+            np = masks.shape[2]
+            for key, shape in (('position', (n, nc, np, 3)), ('J', (n, nc, np, 3, nv)),
+                               ('bias', (n, nc, np, 3)), ('origin', (n, nc, 3))):
+                value = contact_geometry[key]
+                if value.shape != shape or not bool(torch.isfinite(value).all()):
+                    raise ValueError(f'Invalid explicit contact geometry: {key}')
         point_masks = masks & (activation > 0)[:, :, None]
         rate, tasks = reference_tasks(state, reference, actions, self.cfg, point_masks.any(-1))
-        result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks, reference, actions)
+        result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks,
+                                   reference, actions, contact_geometry)
         result.update(desired_rate=rate, activation=activation, available=point_masks,
                       normal_force_limits=activation*actions.new_tensor(self.cfg.contact_force_max))
         if weights is not None:
             result['contact_weights'] = weights
         return result
 
-    def _solve_fixed(self, s, rate, tasks, limits, external, weights, activation, point_masks, ref, actions):
+    def _solve_fixed(self, s, rate, tasks, limits, external, weights, activation, point_masks, ref, actions,
+                     contact_geometry=None):
         n, nv = s['bias'].shape
-        nr, nx = 32, nv+32
+        nc, np = point_masks.shape[1:]
+        nr = nc*np*4
+        nx = nv+nr
         zeros = lambda *shape: s['M'].new_zeros(shape)
         tensor = lambda value: torch.as_tensor(value, device=s['M'].device, dtype=s['M'].dtype)
-        points = sole_vertices(s['q'].device, s['q'].dtype)
+        points = sole_vertices(s['q'].device, s['q'].dtype) if contact_geometry is None else None
         mu = self.friction
         rays = tensor([[0., 0., -mu, mu], [mu, -mu, 0., 0.], [1., 1., 1., 1.]])
-        enabled = point_masks.reshape(n, 8).repeat_interleave(4, dim=-1)
+        enabled = point_masks.reshape(n, nc*np).repeat_interleave(4, dim=-1)
         extra = self.extra_wrench_constraints(s, points, rays, enabled, nv, actions)
         if extra is not None and bool((extra[1] == 0).any()):
             # rho >= 0 and a same-sign zero wrench row imply that every
@@ -131,16 +149,23 @@ class WBCACCGPUQP:
                 enabled = enabled & ~forced
                 if not bool(changed.any()):
                     break
-        qmap, gmap = zeros(n, 6, nr), zeros(n, nv, nr)
-        for i, foot in enumerate(FEET):
-            frame = s['frames'][foot]
-            offsets = points[i]@frame['rotation'].transpose(-1, -2)
-            location = frame['position'][:, None]+offsets
-            jp = frame['J'][:, None, :3]-skew(offsets)@frame['J'][:, None, 3:]
-            sl = slice(i*16, (i+1)*16)
-            qmap[:, :, sl] = torch.cat((rays.expand(n, 4, -1, -1),
-                skew(location-s['com'][:, None])@rays), -2).transpose(1, 2).reshape(n, 6, 16)
-            gmap[:, :, sl] = (jp.transpose(-1, -2)@rays).transpose(1, 2).reshape(n, nv, 16)
+        if contact_geometry is None:
+            locations, jacobians, origins = [], [], []
+            for i, foot in enumerate(FEET):
+                frame = s['frames'][foot]
+                offsets = points[i]@frame['rotation'].transpose(-1, -2)
+                locations.append(frame['position'][:, None]+offsets)
+                jacobians.append(frame['J'][:, None, :3]-skew(offsets)@frame['J'][:, None, 3:])
+                origins.append(frame['position'])
+            location = torch.stack(locations, 1)
+            jp = torch.stack(jacobians, 1)
+            origin = torch.stack(origins, 1)
+        else:
+            location, jp, origin = (contact_geometry[k] for k in ('position', 'J', 'origin'))
+        qmap = torch.cat((rays.expand(n, nc, np, -1, -1),
+                          skew(location-s['com'][:, None, None])@rays), -2)
+        qmap = qmap.permute(0, 3, 1, 2, 4).reshape(n, 6, nr)
+        gmap = (jp.transpose(-1, -2)@rays).permute(0, 3, 1, 2, 4).reshape(n, nv, nr)
         # Physical rho = enabled * latent rho. Disabled columns cannot exert
         # force, but retain independent positive quadratic curvature so the
         # fixed-size Newton system remains nonsingular without rho<=0/-rho<=0.
@@ -178,9 +203,10 @@ class WBCACCGPUQP:
             linear -= weight[:, None]*mv(j.transpose(-1, -2), target)
         equality, target = torch.cat(eq, 1), torch.cat(rhs, 1)
         nonnegative = torch.cat((zeros(n, nr, nv), -torch.diag_embed(enabled.to(s['q'].dtype))), -1)
-        normal_rows = zeros(n, 2, nx)
-        for i in range(2):
-            normal_rows[:, i, nv+i*16:nv+(i+1)*16] = enabled[:, i*16:(i+1)*16]
+        normal_rows = zeros(n, nc, nx)
+        for i in range(nc):
+            sl = slice(i*np*4, (i+1)*np*4)
+            normal_rows[:, i, nv+sl.start:nv+sl.stop] = enabled[:, sl]
         support = point_masks.any(-1)
         capacities = activation*tensor(self.cfg.contact_force_max)
         # Disabled rows are 0 <= 1, strictly feasible and independent of x.
@@ -254,16 +280,17 @@ class WBCACCGPUQP:
         torque = torch.where(valid[:, None], torque, 0.)
         acceleration = torch.where(valid[:, None], acceleration, 0.)
         rho = torch.where(valid[:, None], rho, 0.)
-        wrenches = []
-        for i, foot in enumerate(FEET):
-            frame = s['frames'][foot]
-            offsets = points[FEET.index(foot)]@frame['rotation'].transpose(-1, -2)
-            forces = rho[:, i*16:(i+1)*16].reshape(n, 4, 4)@rays.T
-            wrenches.append(torch.cat((forces.sum(1), torch.cross(offsets, forces, dim=-1).sum(1)), -1))
+        forces = rho.reshape(n, nc, np, 4)@rays.T
+        wrenches = torch.cat((forces.sum(2), torch.cross(location-origin[:, :, None], forces, dim=-1).sum(2)), -1)
+        if contact_geometry is None:
+            contact_acceleration = torch.stack([mv(s['frames'][foot]['J'], acceleration)+s['frames'][foot]['bias'] for foot in FEET], 1)
+        else:
+            contact_acceleration = mv(jp, acceleration[:, None, None])+contact_geometry['bias']
         return dict(torque=torque, acceleration=acceleration, rho=rho,
                     rate=mv(s['Ag'], acceleration)+s['Ag_bias'], residual=residual,
-                    contact_acceleration=torch.stack([mv(s['frames'][foot]['J'], acceleration)+s['frames'][foot]['bias'] for foot in FEET], 1),
-                    failed=~valid, wrenches=torch.stack(wrenches, 1),
+                    contact_acceleration=contact_acceleration,
+                    failed=~valid, wrenches=wrenches, point_forces=forces,
+                    generalized_contact_force=mv(gmap, rho),
                     solver_converged=converged, solver_optimality_residual=info['residual'],
                     solver_complementarity=info['complementarity'])
 
