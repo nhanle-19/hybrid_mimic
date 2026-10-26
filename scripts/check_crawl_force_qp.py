@@ -22,9 +22,16 @@ from wbc_crawl_contact import CRAWL_REGIONS, CrawlContactGeometry, WBCCrawlForce
 
 
 def controller_config(specification):
-    path = ROOT/'source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_wbc_acc/controller_cfg.py'
-    cls = next(node for node in ast.parse(path.read_text()).body if isinstance(node, ast.ClassDef))
-    values = {node.target.id: ast.literal_eval(node.value) for node in cls.body if isinstance(node, ast.AnnAssign)}
+    # Read the same inherited FORCE defaults as training without loading Isaac
+    # Sim. Only the contact layout and physical limits come from the crawl spec.
+    values = {}
+    for directory, name in [('t1_wbc_acc', 'T1WBCACCControllerCfg'),
+                            ('t1_wbc_force', 'T1WBCForceControllerCfg')]:
+        path = ROOT/f'source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/{directory}/controller_cfg.py'
+        cls = next(node for node in ast.parse(path.read_text()).body
+                   if isinstance(node, ast.ClassDef) and node.name == name)
+        values.update({node.target.id: ast.literal_eval(node.value)
+                       for node in cls.body if isinstance(node, ast.AnnAssign)})
     values.update(contact_force_max=tuple(specification['force_max_n']), swing_weight=0.,
                   contact_gap_tolerance=specification['contact_gap_tolerance_m'],
                   contact_patch_height_tolerance=specification['contact_patch_height_tolerance_m'],

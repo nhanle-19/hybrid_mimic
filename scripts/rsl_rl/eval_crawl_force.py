@@ -33,15 +33,15 @@ parser.add_argument('--qp-every', type=int, default=4, help='Physics steps betwe
 parser.add_argument('--qp-backend', choices=['batched', 'osqp'], default='batched')
 parser.add_argument('--record-contact-substeps', action='store_true',
                     help='Save measured contacts after every physics step for impact audits; controller rate is unchanged.')
-parser.add_argument('--posture-kp', type=float, default=1600.)
-parser.add_argument('--posture-kd', type=float, default=80.)
-parser.add_argument('--posture-weight', type=float, default=3.)
+parser.add_argument('--posture-kp', type=float, help='Override the shared FORCE posture position gain.')
+parser.add_argument('--posture-kd', type=float, help='Override the shared FORCE posture velocity gain.')
+parser.add_argument('--posture-weight', type=float, help='Override the shared FORCE posture weight.')
 parser.add_argument('--pelvis-weight', type=float, help='Diagnostic override of the body-orientation tracking weight.')
 parser.add_argument('--max-penetration', type=float, default=.03,
                     help='Actual contact penetration allowance, matching the existing WBC physics gate.')
-parser.add_argument('--com-kp', type=float, default=160.)
-parser.add_argument('--momentum-kv', type=float, default=25.)
-parser.add_argument('--vertical-momentum-weight', type=float, default=10.,
+parser.add_argument('--com-kp', type=float, help='Override the shared FORCE CoM position gain.')
+parser.add_argument('--momentum-kv', type=float, help='Override the shared FORCE linear momentum gain.')
+parser.add_argument('--vertical-momentum-weight', type=float,
                     help='Weight of vertical centroidal momentum tracking; leaves horizontal tracking weights unchanged.')
 parser.add_argument('--friction', type=float, default=.2, help='Same coefficient in the QP and both collision materials.')
 parser.add_argument('--force-max', type=float, help='Diagnostic override of every ON-region force ceiling in newtons.')
@@ -54,12 +54,12 @@ AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 if args.substeps < 1 or args.qp_every < 1 or args.substeps % args.qp_every or (args.frames is not None and args.frames < 1):
     parser.error('Positive substeps/qp-every are required; qp-every must divide substeps')
-if any(not math.isfinite(value) or value <= 0 for value in (args.posture_kp, args.posture_kd,
-        args.posture_weight, args.max_penetration, args.com_kp, args.momentum_kv, args.friction, args.reference_speed,
+if any(not math.isfinite(value) or value <= 0 for value in (args.max_penetration, args.friction, args.reference_speed,
         args.root_error_limit, args.joint_error_limit)):
     parser.error('Controller gains, weight and penetration allowance must be finite and positive')
 if any(value is not None and (not math.isfinite(value) or value <= 0)
        for value in (args.force_max, args.hand_force_max, args.pelvis_weight,
+                     args.posture_kp, args.posture_kd, args.posture_weight, args.com_kp, args.momentum_kv,
                      args.contact_separation_velocity, args.vertical_momentum_weight)):
     parser.error('Optional controller overrides must be finite and positive')
 args.output = args.output.resolve()
@@ -108,14 +108,18 @@ def main():
     fps = float(motion['fps'])
     dt = 1/(fps*args.substeps)
     cfg = controller_config(specification)
-    cfg.posture_position_gain, cfg.posture_velocity_gain = args.posture_kp, args.posture_kd
-    cfg.posture_weight = args.posture_weight
+    for field, value in (('posture_position_gain', args.posture_kp),
+                         ('posture_velocity_gain', args.posture_kd),
+                         ('posture_weight', args.posture_weight),
+                         ('com_position_gain', args.com_kp),
+                         ('linear_momentum_gain', args.momentum_kv)):
+        if value is not None:
+            setattr(cfg, field, value)
     if args.pelvis_weight is not None:
         cfg.pelvis_weight = args.pelvis_weight
     cfg.max_contact_penetration = args.max_penetration
     if args.contact_separation_velocity is not None:
         cfg.contact_separation_velocity = args.contact_separation_velocity
-    cfg.com_position_gain, cfg.linear_momentum_gain = args.com_kp, args.momentum_kv
     if args.vertical_momentum_weight is not None:
         cfg.momentum_weights = (*cfg.momentum_weights[:2], args.vertical_momentum_weight,
                                 *cfg.momentum_weights[3:])

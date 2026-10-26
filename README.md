@@ -200,68 +200,70 @@ python scripts/rsl_rl/train.py \
   --logger tensorboard --run_name wbc_force_side_step
 ```
 
-This uses the same PPO settings and reference-only actor observations as
-WBC-ACC. FORCE rewards executed motion completion (100 points for a full clip),
+This uses the same PPO settings as WBC-ACC, with **590 actor inputs**:
+five reference frames at offsets `[0, 1, 3, 5, 10]` (295 values), followed by
+five actual-state frames at offsets `[-4, -3, -2, -1, 0]` (295 values).
+Actual history is stored oldest first and sampled at the 50 Hz policy rate,
+covering the last 80 ms through the current state. Each frame has
+23 joint positions, 23 joint velocities, root position (3), root WXYZ
+quaternion (4), and root world linear/angular velocities (3 each). Per-link
+poses and velocities are derived by the robot model rather than repeated in
+the input. Actual root positions have the environment origin removed to match
+the reference coordinates. On reset, missing history repeats the first state
+of the new episode, independently for each environment. The critic receives
+both windows plus its existing privileged inputs, for **861 total values**.
+FORCE rewards executed motion completion (100 points for a full clip),
 minus a nonzero-cap penalty during reference swing and a decoded-action change
 penalty. Initial penalty weights are 0.5 and 0.05, with all three terms normalized
 by clip length. Training ends at the final reference frame; random phase starts
 receive no credit for the skipped prefix. See the [reward definition](docs/wbc_force_controller.md#learning).
-AUTHORITY retains its alive-only reward. Tracking and QP failure terminations
-still apply. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
+AUTHORITY retains its alive-only reward. FORCE keeps coarse torso-height,
+torso-tilt and QP-failure guards; hand/foot tracking error alone no longer ends
+an episode. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
 the two-output policy cannot load a fourteen-output WBC-ACC checkpoint.
+Earlier FORCE checkpoints with 236 or 1,432 actor inputs are also incompatible
+with this layout; keep `agent.resume=false` for a fresh run.
 
-For a small PPO-from-scratch test on the manually validated five-step walk,
-use [first_force_walk.py](scripts/rsl_rl/first_force_walk.py). It verifies the
-reference and label hashes/settings, applies the saved walk controller profile,
-and uses the three-term FORCE reward with the existing network architecture.
-The labels are evaluation baselines only; training receives no label loss or
-pretrained policy. Run these stages in the `hybridmimic` environment on a CUDA host:
+The five-step walk uses the same `train.py` entry point, PPO algorithm, network,
+and three-term FORCE reward. Its setup differs only in the reference motion,
+contact settings, and run parameters. FORCE training and crawl replay now use
+the same controller gains and objective weights by default. The command below
+sets the walk force maxima and contact-patch tolerance using existing Hydra
+overrides; no gain or weight overrides are needed. Training starts from a random policy and
+requires no manual labels or files from `eval_data/`.
 
-```bash
-python scripts/rsl_rl/first_force_walk.py --stage check
-python scripts/rsl_rl/first_force_walk.py --stage baselines
-python scripts/rsl_rl/first_force_walk.py --stage smoke
-python scripts/rsl_rl/first_force_walk.py --stage train
-```
-
-The baseline stage compares the manual table with constant mean, 500 N, and
-1000 N caps under the same controller settings. Inspect its `comparison.json`
-before training: completion alone is not sufficient; also compare swing-cap
-penalties and deterministic output variation. The smoke test uses 32 environments and
-two iterations; the first training run uses 256 environments and 1,000 iterations
-(override with `--num-envs` and `--iterations`). Add `--dry-run` to inspect a
-command. The launcher converts scalar controller values to floats when building
-Isaac Lab overrides, including whole-valued gains in the saved JSON profile.
-Judge output variation using the deterministic policy across the motion,
-separately from exploration noise.
-
-The training path was verified on an RTX 4060 Laptop GPU on October 25, 2026:
-the 32-environment/two-iteration smoke test and a 256-environment/five-iteration
-run both completed and saved checkpoints. The larger check executed 30,720
-transitions with zero QP failures; actor and critic weights updated and all
-logged scalar metrics remained finite. It used approximately 3.5 GiB of GPU
-memory. This verifies startup and PPO updates; full-motion learned tracking
-still requires training and deterministic evaluation. The check and its metrics
-are in `logs/rsl_rl/t1_wbc_force/2026-10-25_19-12-38_force_walk_first_train/`,
-including `readiness_validation.json`.
-
-The separate GPU baseline check remains incomplete: the saved CPU manual
-schedule terminated at step 211 of 261 on `ee_body_pos`, with zero QP failures.
-Constant mean and 1,000 N caps survived all 261 steps, but did not reproduce the
-left-foot lifts. The baseline simulator also exited with signal 11 during
-shutdown after writing all four trials; both PPO validation runs exited cleanly.
-The baseline traces and postprocessed `comparison.json` are in
-`outputs/force_walk_first_run/20261025_191316_302556_baselines/`.
-Use the command below for a training experiment; a full five-step walking result
-has not yet been demonstrated on this GPU.
+The reference-plus-history input and shared defaults were checked on an RTX
+4060 Laptop GPU on October 25, 2026. A 256-environment/two-iteration PPO run completed 12,288
+transitions, updated both networks, and saved finite checkpoints with zero QP
+failures and no nonfinite logged metrics. The run is
+`logs/rsl_rl/t1_wbc_force/2026-10-25_21-37-33_force_state_history_check/`;
+its audit is `outputs/force_state_history_20261025/validation.json`.
+A separate live check verified history ordering, policy-rate sampling,
+automatic and selective resets, and reads that do not advance history.
+The earlier shared-gain audit verified that training and crawl configurations
+match in all 19 gain, weight and damping fields:
+`outputs/shared_force_gains_20261025/unified_defaults_validation.json`.
+This verifies training execution; learned full-motion tracking still requires
+training and deterministic evaluation.
 
 Start a fresh walk training run from the repository root:
 
 ```bash
 conda activate hybridmimic
-python scripts/rsl_rl/first_force_walk.py --stage train \
-  --device cuda:0 --num-envs 256 --iterations 1000 --seed 42
+python scripts/rsl_rl/train.py \
+  --task Tracking-WBC-FORCE-T1-v0 \
+  --motion_file retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz \
+  --device cuda:0 --num_envs 256 --max_iterations 1000 --seed 42 --headless \
+  --logger tensorboard --run_name force_walk \
+  agent.resume=false agent.save_interval=100 \
+  'env.actions.wbc_force.controller.contact_force_max=[1000.0,1000.0]' \
+  env.actions.wbc_force.controller.contact_patch_height_tolerance=0.0001
 ```
+
+For a short startup check, use the same command with `--num_envs 32` and
+`--max_iterations 2`. Keep float-valued overrides such as `1000.0` in
+decimal form: Isaac Lab checks their types. All remaining controller fields
+retain the task defaults, matching the tested walk setup.
 
 | Setting | Walk training value |
 | --- | --- |
@@ -270,18 +272,104 @@ python scripts/rsl_rl/first_force_walk.py --stage train \
 | Rollout / PPO minibatch | 24 steps per environment; 6,144 transitions per rollout; 1,536 per minibatch |
 | PPO epochs / minibatches | 5 / 4 |
 | Actor and critic hidden layers | 1,024 → 512 → 256 → 256, ELU; observation normalization enabled |
+| Actor / critic inputs | 590 / 861; five reference frames + five actual-state frames, plus privileged inputs for the critic |
 | Initial learning rate / schedule | 0.001 / adaptive KL, target 0.01 |
 | Discount / GAE lambda / PPO clip | 0.99 / 0.95 / 0.2 |
 | Entropy / value loss / gradient norm limit | 0.005 / 1.0 / 1.0 |
 | Initial action standard deviation | 1.0 |
 | Physics / policy and QP rate | 500 Hz / 50 Hz |
 | Per-foot force maximum / friction | 1,000 N / 0.6 |
-| Posture position gain / velocity gain / weight | 200.0 / 28.284271247461902 / 3.0 |
+| Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
+| Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
 | Reward weights: completion / swing cap / cap change | 1.0 / −0.5 / −0.05 |
 | Checkpoint interval / logging | Every 100 iterations and at completion / TensorBoard |
 
-The launcher applies the complete saved controller profile automatically.
 Checkpoints and events are written under `logs/rsl_rl/t1_wbc_force/`.
+Evaluate deterministic outputs across the motion separately from exploration
+noise; completion alone does not establish that all five foot lifts were tracked.
+
+#### Shared FORCE defaults: measured scope
+
+One FORCE configuration supplies gains and weights for every motion, including
+crawl. There are no motion-specific gain defaults:
+
+| Controller setting | Shared value |
+| --- | --- |
+| Posture Kp / Kd / weight | 1600 / 40 / 0.1 |
+| CoM position gain | 40 |
+| Linear / angular momentum gains | 10 / 15 |
+| Momentum weights (linear xyz, angular xyz) | `[1, 1, 1, 10, 10, 10]` |
+| Pelvis Kp / Kd / weight | 60 / 12 / 5 |
+| Force / acceleration regularization weights | 0.00001 / 0.00001 |
+| Cartesian foot-tracking weight | 0 (disabled) |
+
+The source is `T1WBCForceControllerCfg`, including its inherited common fields;
+the crawl runner reads that same configuration instead of overriding balance
+gains. Physical contact layouts, force ceilings and friction remain explicit.
+
+A bounded comparison covered the nine retained manual FORCE cases. Initial
+GPU comparisons on sway, sliding and walking tested each motion's original
+settings, 200/28.28/3, 400/40/1, and 1600/40/0.1; targeted follow-ups checked
+momentum weights and Kd 80 on walking and turning. A follow-up crawl replay
+also replaced its former CoM gains 160/25 and vertical momentum weight 10 with
+the shared 40/10 and weight 1.
+
+The shared settings completed **eight of nine motions** with zero QP failures.
+The two-foot comparisons used the former limb-height tracking cutoff; the
+crawl row reflects the follow-up with all shared gains and weights:
+
+| Manual case | Device | Completed frames |
+| --- | --- | --- |
+| Standing | GPU | 500 / 500 |
+| Standing sway | GPU | 500 / 500 |
+| Wide standing sway | GPU | 500 / 500 |
+| Left-foot slide | GPU | 500 / 500 |
+| Left-foot rotation | GPU | 500 / 500 |
+| Left-toe rotation | GPU | 500 / 500 |
+| Walk in place | GPU | 261 / 261, including a fresh-process repeat |
+| Crawl forward | CPU | 599 / 599 |
+| Turn right | GPU | **320 / 661 with the former limb cutoff; falls when continued** |
+
+Each replay kept its original reference, manual force fractions, force maxima,
+friction and contact tolerances. Crawling retains its eight-contact layout but
+uses the same gains and objective weights as the two-foot cases. Historical
+artifacts were preserved.
+The unified crawl completed all 2,396 QP updates with measured ground support
+at every recorded update and zero resets or QP failures. Maximum torso-height
+error was 1.88 cm. Its validation is
+`outputs/shared_force_gains_20261025/crawl_unified/validation.json`.
+
+On walking, the former 200/28.28/3 profile stopped at frame 211. Over that same
+211-frame prefix, left/right foot RMS error improved from 52.0/50.2 mm to
+18.5/22.7 mm. The selected preset completed all five lifts in the fresh replay,
+but still reached torque limits on 83 of 261 steps. Sliding retained 0.414 mm
+left-foot RMS error, versus 1.505 mm for the 200/28.28/3 candidate.
+
+Keep this preset as the training baseline: balanced, feasible motion is the
+priority, and precise limb tracking is diagnostic rather than an acceptance
+requirement. This is a tested common starting point, not a claim of a global
+optimum or exact imitation of every reference.
+
+The right-turn exception is an actual balance problem with the frozen manual
+force schedule. Removing only the limb cutoff reaches 327/661 frames before
+the torso-height guard trips. A diagnostic replay with both torso guards also
+disabled confirms a fall: torso height drops below 0.20 m at frame 331
+(6.62 s), torso/head contact appears at frame 337, and the robot does not
+recover before the clip ends. The QP remains feasible throughout, so zero
+solver failures alone cannot establish balance. The baseline remains selected
+for contact-policy training, but the full turn is not yet validated as balanced.
+These manual replays do not establish what a learned policy can achieve.
+
+Full comparisons, frozen inputs and traces are in
+`outputs/shared_force_gains_20261025/summary.json`. Instrumented simulator cleanup
+stalled in initial runs after results were saved; later isolated benchmarks
+exited after closing all result files. The standard PPO check exited normally.
+The follow-up balance audit is
+`outputs/shared_force_gains_20261025/balance_audit.json`.
+The values above are now the FORCE defaults; historical replay files retain
+their original profiles. FORCE training, scheduled manual
+replay and toy-standing replay now omit the limb-height cutoff while retaining
+their torso and QP guards.
 
 ### Train the PD baseline
 

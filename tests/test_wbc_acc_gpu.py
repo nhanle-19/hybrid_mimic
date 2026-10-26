@@ -360,7 +360,8 @@ def test_action_applies_bounded_fallback_and_logs_failure(action_modules, cfg):
     assert len(calls) == 2
 
 
-def test_reference_window_has_no_actual_state_inputs(monkeypatch):
+@pytest.fixture
+def observation_module(monkeypatch):
     import importlib.util
     from types import ModuleType
     managers = ModuleType('isaaclab.managers')
@@ -375,12 +376,18 @@ def test_reference_window_has_no_actual_state_inputs(monkeypatch):
     path = Path(__file__).resolve().parents[1]/'source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_wbc_acc/observations.py'
     spec = importlib.util.spec_from_file_location('wbc_acc_observation_test', path)
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module
+
+
+def test_reference_window_has_no_actual_state_inputs(observation_module):
+    module = observation_module
     motion = SimpleNamespace(time_step_total=12, joint_pos=torch.zeros((12, 23)), joint_vel=torch.zeros((12, 23)))
     for name, width in [('_body_pos_w', 3), ('_body_quat_w', 4), ('_body_lin_vel_w', 3), ('_body_ang_vel_w', 3)]:
         setattr(motion, name, torch.zeros((12, 24, width)))
     command = SimpleNamespace(motion=motion, time_steps=torch.tensor([0, 11]))
     env = SimpleNamespace(device='cpu', command_manager=SimpleNamespace(get_term=lambda _: command), robot_state=torch.zeros(10))
     before = module.reference_window(env)
+    assert before.shape == (2, 1432)  # Existing ACC/AUTHORITY layout.
     env.robot_state[:] = 100.
     torch.testing.assert_close(module.reference_window(env), before)
     motion.joint_pos[10] = 1.
@@ -388,6 +395,65 @@ def test_reference_window_has_no_actual_state_inputs(monkeypatch):
     assert not torch.equal(after[0], before[0])
     torch.testing.assert_close(after[1], before[1])  # End-of-clip lookahead clamps.
     assert module.WBCACCObservationsCfg.CriticCfg.actual_state
+
+
+@pytest.mark.parametrize('offsets', [(0, 1, 5, 10), (0, 1, 3, 5, 10), (0, 2)])
+def test_compact_reference_selects_root_preserves_layout_and_clamps(observation_module, offsets):
+    motion = SimpleNamespace(time_step_total=12)
+    motion.joint_pos = torch.arange(12*23).reshape(12, 23).float()
+    motion.joint_vel = motion.joint_pos+1000.
+    fields = [('_body_pos_w', 3), ('_body_quat_w', 4),
+              ('_body_lin_vel_w', 3), ('_body_ang_vel_w', 3)]
+    for index, (name, width) in enumerate(fields):
+        setattr(motion, name, torch.arange(12*24*width).reshape(12, 24, width).float()+2000.*(index+1))
+    # The full-array root index is deliberately neither zero nor the subset index.
+    command = SimpleNamespace(motion=motion, time_steps=torch.tensor([0, 10, 11]),
+                              robot_anchor_body_index=7, motion_anchor_body_index=0)
+    env = SimpleNamespace(device='cpu', command_manager=SimpleNamespace(get_term=lambda _: command))
+    actual = observation_module.reference_window(env, offsets=offsets, root_only=True)
+    assert actual.shape == (3, len(offsets)*59)
+    for row, start in enumerate((0, 10, 11)):
+        for column, offset in enumerate(offsets):
+            frame = min(start+offset, 11)
+            expected = torch.cat((motion.joint_pos[frame], motion.joint_vel[frame],
+                                  *(getattr(motion, name)[frame, 7] for name, _ in fields)))
+            torch.testing.assert_close(actual.reshape(3, len(offsets), 59)[row, column], expected)
+    # Derived link data and actual robot measurements cannot enter this input.
+    for name, _ in fields:
+        getattr(motion, name)[:, :7] = float('nan')
+        getattr(motion, name)[:, 8:] = float('nan')
+    env.robot_state = torch.full((3, 100), float('nan'))
+    torch.testing.assert_close(observation_module.reference_window(env, offsets=offsets, root_only=True), actual)
+
+
+def test_actual_state_uses_measurements_and_environment_local_root(observation_module):
+    data = SimpleNamespace(joint_pos=torch.arange(46).reshape(2, 23).float(),
+                           joint_vel=torch.arange(46).reshape(2, 23).float()+100.)
+    fields = [('body_link_pos_w', 3), ('body_link_quat_w', 4),
+              ('body_link_lin_vel_w', 3), ('body_link_ang_vel_w', 3)]
+    for index, (name, width) in enumerate(fields):
+        setattr(data, name, torch.arange(2*24*width).reshape(2, 24, width).float()+1000.*(index+1))
+    command = SimpleNamespace(robot=SimpleNamespace(data=data), robot_anchor_body_index=7)
+    origins = torch.tensor([[100., 200., 0.], [-50., 80., 2.]])
+    env = SimpleNamespace(command_manager=SimpleNamespace(get_term=lambda _: command),
+                          scene=SimpleNamespace(env_origins=origins))
+    actual = observation_module.actual_root_joint_state(env)
+    assert actual.shape == (2, 59)
+    torch.testing.assert_close(actual[:, :23], data.joint_pos)
+    torch.testing.assert_close(actual[:, 23:46], data.joint_vel)
+    torch.testing.assert_close(actual[:, 46:49], data.body_link_pos_w[:, 7]-origins)
+    torch.testing.assert_close(actual[:, 49:53], data.body_link_quat_w[:, 7])
+    torch.testing.assert_close(actual[:, 53:56], data.body_link_lin_vel_w[:, 7])
+    torch.testing.assert_close(actual[:, 56:59], data.body_link_ang_vel_w[:, 7])
+    # Moving an environment's world origin cannot change its physical input.
+    shift = torch.tensor([[17., -23., 5.], [100., 1., -8.]])
+    origins += shift
+    data.body_link_pos_w += shift[:, None]
+    torch.testing.assert_close(observation_module.actual_root_joint_state(env), actual)
+    data.joint_vel[1, 0] += 3.
+    changed = observation_module.actual_root_joint_state(env)
+    assert changed[1, 23] == actual[1, 23]+3.
+    torch.testing.assert_close(changed[0], actual[0])
 
 
 def test_measured_wrench_includes_normal_and_friction_moments(action_modules):

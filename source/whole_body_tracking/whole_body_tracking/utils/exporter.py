@@ -144,6 +144,9 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         })
     elif "wbc_force" in env.action_manager.active_terms:
         controller = env.action_manager.get_term("wbc_force").cfg.controller
+        reference_params = env.observation_manager.cfg.policy.reference.params
+        actual_history_length = env.observation_manager.cfg.policy.actual_state.history_length
+        reference_offsets = list(reference_params.get("offsets", (0, 1, 5, 10)))
         metadata.update({
             "action_type": "wbc_force_reference_force_limit_policy",
             "policy_action_dim": 2,
@@ -154,7 +157,14 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "normal_force_limit_units": "N",
             "normal_force_axis": "world_z",
             "foot_acceleration_objectives": False,
-            "actor_inputs": "reference_only:frames_0_1_5_10",
+            "actor_inputs": "reference_window,actual_state_history",
+            "actor_reference_body_selection": "anchor_only" if reference_params.get("root_only", False) else "all_bodies",
+            "actor_reference_frame_offsets": reference_offsets,
+            "actor_reference_layout": "frame_major:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w",
+            "actor_actual_state_frame_offsets": list(range(1-actual_history_length, 1)),
+            "actor_actual_state_layout": "frame_major:joint_pos,joint_vel,root_pos_w_minus_env_origin,root_quat_w_wxyz,root_lin_vel_w,root_ang_vel_w",
+            "actor_actual_state_history_reset": "repeat_first_state_of_new_episode",
+            "actor_state_sample_dt": float(env.step_dt),
         })
     elif "wbc_acc" in env.action_manager.active_terms:
         wbc_acc = env.action_manager.get_term("wbc_acc")

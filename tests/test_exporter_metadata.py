@@ -49,6 +49,13 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
             contact_weight_min=0., contact_weight_max=100., contact_force_max=(600.,600.),
             contact_authority_weights=(100.,)*3)))
         env.action_manager.active_terms = list(terms)
+        if hybrid == "wbc_force":
+            env.step_dt = .02
+            reference = NS(params={"root_only": True, "offsets": (0, 1, 3, 5, 10)}, history_length=0)
+            actual = NS(history_length=5)
+            env.observation_manager.active_terms['policy'] = ['reference', 'actual_state']
+            env.observation_manager.cfg.policy = NS(history_length=None, reference=reference,
+                actual_state=actual, to_dict=lambda: {'reference': vars(reference), 'actual_state': vars(actual)})
     elif hybrid:
         env.hybrid_controller = NS(action_dim=57, end_effector_names=["left_foot", "right_foot", "left_hand", "right_hand"],
             desired_linear_velocity_scale=.25, desired_angular_velocity_scale=.5, torque_action_scale=.1)
@@ -78,6 +85,14 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)"
         assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["normal_force_axis"] == "world_z"
+        assert metadata["actor_reference_body_selection"] == "anchor_only"
+        assert metadata["actor_inputs"] == "reference_window,actual_state_history"
+        assert [float(x) for x in metadata["actor_reference_frame_offsets"].split(",")] == [0, 1, 3, 5, 10]
+        assert metadata["actor_reference_layout"] == "frame_major:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w"
+        assert [float(x) for x in metadata["actor_actual_state_frame_offsets"].split(",")] == [-4, -3, -2, -1, 0]
+        assert [float(x) for x in metadata["observation_history_lengths"].split(",")] == [1, 5]
+        assert metadata["actor_actual_state_history_reset"] == "repeat_first_state_of_new_episode"
+        assert float(metadata["actor_state_sample_dt"]) == .02
         assert [float(x) for x in metadata["contact_force_max"].split(",")] == [600., 600.]
         assert "contact_weight_max" not in metadata
         assert "action_scale" not in metadata

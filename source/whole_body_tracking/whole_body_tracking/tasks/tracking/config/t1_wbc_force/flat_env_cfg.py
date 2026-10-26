@@ -1,8 +1,9 @@
 """Force-limit policy with motion progress, swing-cap, and action-change rewards."""
 from isaaclab.utils import configclass
-from isaaclab.managers import RewardTermCfg, TerminationTermCfg
+from isaaclab.managers import ObservationTermCfg, RewardTermCfg, TerminationTermCfg
 from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg
 from ..t1_wbc_acc.rewards import qp_failed
+from ..t1_wbc_acc.observations import actual_root_joint_state
 from .wbc_force_action import WBCForceActionCfg
 from .reward_terms import MotionCompletionReward, SwingForcePenalty, ForceActionChangePenalty, reference_motion_complete
 
@@ -26,7 +27,19 @@ def configure_wbc_force(cfg):
     cfg.actions = WBCForceActionsCfg()
     cfg.actions.wbc_force.record_diagnostics = previous.record_diagnostics
     cfg.actions.wbc_force.standing_only = previous.standing_only
+    # Link poses and velocities are derivable from the generalized reference.
+    # Both networks receive reference lookahead and five actual-state frames.
+    for group in (cfg.observations.policy, cfg.observations.critic):
+        # A group-level history would override the individual term lengths.
+        group.history_length = None
+        group.reference.params.update(root_only=True, offsets=(0, 1, 3, 5, 10))
+        group.reference.history_length = 0
+        group.actual_state = ObservationTermCfg(func=actual_root_joint_state,
+                                                history_length=5, flatten_history_dim=True)
     cfg.rewards = WBCForceRewardsCfg()
+    # Contact-cap learning prioritizes balance and feasible motion. Limb-height
+    # tracking error alone is not a failure; retain the coarse torso guards.
+    cfg.terminations.ee_body_pos = None
     cfg.terminations.qp_infeasible = TerminationTermCfg(func=qp_failed, params={'action_name': 'wbc_force'})
 
 
@@ -68,6 +81,6 @@ class T1WBCForceToyStandingEnvCfg(T1WBCForceStandingEnvCfg):
         # independent 1 mm ground-gap gate still applies to every vertex.
         self.actions.wbc_force.controller.contact_patch_height_tolerance = .0005
         self.terminations = TerminationsCfg()
-        self.terminations.ee_body_pos.params['body_names'] = list(self.commands.motion.eef_names)
+        self.terminations.ee_body_pos = None
         self.terminations.qp_infeasible = TerminationTermCfg(
             func=qp_failed, params={'action_name': 'wbc_force'})

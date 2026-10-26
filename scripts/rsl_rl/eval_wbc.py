@@ -169,7 +169,10 @@ def main(env_cfg, agent_cfg):
         env_cfg.episode_length_s = args.steps*env_cfg.sim.dt*env_cfg.decimation+1.
         # Evaluation defaults are permissive; this experiment must detect falls.
         env_cfg.terminations = TerminationsCfg()
-        env_cfg.terminations.ee_body_pos.params['body_names'] = list(env_cfg.commands.motion.eef_names)
+        if force_only:
+            env_cfg.terminations.ee_body_pos = None
+        else:
+            env_cfg.terminations.ee_body_pos.params['body_names'] = list(env_cfg.commands.motion.eef_names)
         env_cfg.terminations.qp_infeasible = TerminationTermCfg(func=qp_failed, params={'action_name': action_name})
         if args.manual_schedule:
             schedule = load_schedule(args.manual_schedule, schedule_controller, args.motion_file,

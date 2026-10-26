@@ -84,8 +84,11 @@ pose resets, external support, or altered collision restitution.
 Evidence and all three candidates are in `outputs/crawl_soft_landing_20261023/`.
 The preceding complete case is backed up in `before_tuning/case/`. The standard
 case contains the new actual video and a synchronized previous/tuned comparison.
-Old commands without a vertical-weight flag need `--vertical-momentum-weight 1`
-to reproduce the old profile; current default is 10.
+These comparisons used the archived crawl-specific gains. Current runtime
+defaults share all gains and weights with FORCE training; see
+[replay instructions](crawl_force_qp.md#replay-and-verification) for explicit
+flags that reproduce the archived profile. Its earlier bouncing variant uses
+`--vertical-momentum-weight 1` with those same archived gains.
 
 ## Earlier reference and manual-output tuning
 

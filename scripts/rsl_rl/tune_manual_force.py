@@ -1,7 +1,7 @@
 """Tune an open-loop FORCE action table using short first-failure physics trials.
 
 Only the two force-cap logits change. This does not train a neural network,
-change the controller, or relax physical/tracking constraints. Batched results
+change the controller, or relax force bounds and balance guards. Batched results
 must be replayed in a single environment before accepting a schedule.
 """
 import argparse
@@ -57,7 +57,7 @@ def main():
     cfg.commands.motion.motion_file = args.motion_file
     cfg.commands.motion.class_type = WBCACCSinglePassMotion
     cfg.terminations = TerminationsCfg()
-    cfg.terminations.ee_body_pos.params['body_names'] = list(cfg.commands.motion.eef_names)
+    cfg.terminations.ee_body_pos = None
     cfg.terminations.qp_infeasible = TerminationTermCfg(func=qp_failed, params={'action_name': 'wbc_force'})
     cfg.actions.wbc_force.record_diagnostics = False
     cfg.actions.wbc_force.allow_cpu_batched_evaluation = args.device == 'cpu'

@@ -1,5 +1,12 @@
 # Eight-channel crawl FORCE QP
 
+Runtime defaults now use the same gains and objective weights as two-foot
+FORCE training: posture 1600/40 with weight 0.1, CoM position gain 40, linear
+momentum gain 10, angular momentum gain 15, and momentum weights
+`[1, 1, 1, 10, 10, 10]`. See the shared-default validation in the
+[README](../README.md#shared-force-defaults-measured-scope).
+The archived case statistics below describe its original controller profile.
+
 The corrected manual-weight table completes all **599 frames / 19.992 seconds**
 on CPU, with **zero QP failures** and no positive output at an unavailable
 contact in the recorded rollout. It travels 1.204 m; peak root error is
@@ -151,7 +158,6 @@ Use the `hybridmimic` environment from the repository root:
 ```bash
 PYTHONNOUSERSITE=1 python scripts/rsl_rl/eval_crawl_force.py \
   --device cpu --headless --friction 0.2 --root-error-limit 0.5 \
-  --vertical-momentum-weight 10 --momentum-kv 25 \
   --record-contact-substeps \
   --manual-outputs eval_data/reference_crawl_forward/force/planned_labels.npz \
   --output outputs/crawl_force_replay \
@@ -161,9 +167,10 @@ MUJOCO_GL=osmesa MPLCONFIGDIR=/tmp/crawl_mpl \
 python scripts/render_crawl_force_rollout.py outputs/crawl_force_replay/diagnostics.npz
 ```
 
-Defaults match the selected profile: posture gains 1600/80, posture weight 3,
-CoM position gain 160, linear momentum gain 25 and vertical momentum weight 10.
-Use `--vertical-momentum-weight 1` to reproduce the previous bouncing profile. The full profile is saved.
+Gains and weights default to the shared FORCE configuration; no gain flags are
+needed. To reproduce the archived crawl-specific profile, explicitly add
+`--posture-kp 1600 --posture-kd 80 --posture-weight 3 --com-kp 160
+--momentum-kv 25 --vertical-momentum-weight 10`. The full applied profile is saved.
 The physics timestep is about 2.086 ms; the QP updates every four steps.
 The runtime scaled optimality tolerance is 1e-6 and the separate physical
 constraint tolerance is 2e-5. Only joint-effort commands are applied after

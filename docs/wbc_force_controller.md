@@ -86,9 +86,31 @@ not reverse the earlier result for the loaded, upright sliding fixture.
 
 ## Learning
 
-The actor receives only reference motion at offsets 0, 1, 5, and 10 frames;
-the critic receives privileged robot state and the previous action. The WBC
-supplies actual-state feedback. FORCE uses exactly three reward terms:
+The actor receives **590 values** in two blocks:
+
+- Reference frames at offsets `[0, 1, 3, 5, 10]`: 295 values.
+- Actual-state frames at offsets `[-4, -3, -2, -1, 0]`: 295 values, oldest first.
+
+For each frame in either block, the input order is joint positions (23), joint
+velocities (23), root world position (3), root WXYZ quaternion (4), root world
+linear velocity (3), and root world angular velocity (3). Frames are
+concatenated in offset order; reference lookahead beyond the clip repeats its
+last frame. The root is the configured anchor (`Trunk` for T1). Actual inputs
+come from simulated joint states and body-link states, with the environment
+origin subtracted from root position so actual and reference coordinates
+match. Measured contact forces and previous actions are not included in the
+actor. The robot model derives link kinematics, CoM and momentum for the QP.
+
+Isaac Lab's per-term history buffer samples actual state once per policy step
+(20 ms, not each 2 ms physics substep). Its five frames span 80 ms of history
+through the current state. Reset clears only the affected environment and
+fills missing history with its first new state. Recomputing observations for
+inspection does not advance history. Only the actual-state term has history;
+the reference lookahead window is not itself stacked across previous steps.
+
+The critic receives both windows plus its existing privileged robot state and
+previous action, for **861 inputs**. Actual-state feedback now enters both
+the policy and the WBC. FORCE uses exactly three reward terms:
 
 ```text
 r_t = (100 / N) * [alive_new_frame
@@ -121,12 +143,17 @@ incur no penalty. The starting weights are tunable with
 All three implementations account for RewardManager's multiplication by the
 control timestep, so the formula above is the final per-step reward.
 
-Training retains adaptive phase starts and tracking/QP failure terminations.
+Training prioritizes balanced, feasible motion. Limb tracking error is logged
+but does not terminate an episode. The existing coarse torso guards remain:
+reference-relative torso height error above 0.25 m, or a projected-gravity
+vertical-component difference above 0.8. QP failures also terminate. These
+guards are proxies for loss of balance, not a requirement for precise imitation.
+Adaptive phase starts remain enabled.
 Executing the last reference frame ends the training attempt as a timeout
 before the command can silently reset the robot for another clip. A sampled
 suffix therefore earns only its executed fraction; evaluate from frame zero
-to measure full-motion completion. Existing manual and standing evaluation
-tasks retain their playback termination behavior. These rewards do not use
+to measure full-motion completion. Scheduled manual and toy-standing FORCE
+replays use the same torso/QP guards without a limb-height cutoff. These rewards do not use
 the hand-designed action tables as training targets.
 
 Defaults: 1,024 environments, 500 Hz physics, 50 Hz policy/QP, and 30,000 PPO
@@ -135,6 +162,17 @@ terminate the affected episode and apply bounded damping until reset.
 
 The task has its own experiment folder, `logs/rsl_rl/t1_wbc_force/`.
 WBC-ACC checkpoints are incompatible with this two-output policy.
+This layout requires fresh FORCE training: earlier reference-only checkpoints
+with 236 or 1,432 actor inputs cannot be resumed into this layout.
+The ACC and AUTHORITY observation layouts retain their existing dimensions.
+
+The shared controller defaults are posture gains 1600/40 with weight 0.1,
+CoM position gain 40, linear/angular momentum gains 10/15, momentum weights
+`[1, 1, 1, 10, 10, 10]`, and pelvis gains 60/12 with weight 5. Two-foot training
+and eight-region crawl replay read the same FORCE configuration. Motion-specific
+gain overrides are unnecessary; contact geometry and physical limits are
+separate from these gains. See the
+[validation and training command](../README.md#shared-force-defaults-measured-scope).
 
 ## Commands
 
