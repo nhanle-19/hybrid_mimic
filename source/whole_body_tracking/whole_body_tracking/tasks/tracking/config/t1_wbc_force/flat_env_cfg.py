@@ -5,7 +5,11 @@ from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCA
 from ..t1_wbc_acc.rewards import qp_failed
 from ..t1_wbc_acc.observations import actual_root_joint_state
 from .wbc_force_action import WBCForceActionCfg
-from .reward_terms import MotionCompletionReward, SwingForcePenalty, ForceActionChangePenalty, reference_motion_complete
+from .motion import WBCForceTrainingMotion
+from .reward_terms import (
+    MotionCompletionReward, SwingForcePenalty,
+    ForceActionChangePenalty, reference_motion_complete,
+)
 
 
 @configclass
@@ -18,7 +22,7 @@ class WBCForceRewardsCfg:
     # All terms share 100 / reference_frame_count scaling per policy step.
     motion_completion = RewardTermCfg(func=MotionCompletionReward, weight=1.)
     swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.5,
-                               params={'clearance_start': .001, 'clearance_full': .005})
+                               params={'clearance_start': .001, 'clearance_full': .005, 'unload_lead_time': 0.})
     action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.05)
 
 
@@ -48,6 +52,10 @@ class T1WBCForceEnvCfg(T1WBCACCEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         configure_wbc_force(self)
+        # Keep whole-motion attempts represented when the adaptive sampler
+        # concentrates on short suffixes. Other tasks retain their sampler.
+        self.commands.motion.start_from_beginning_probability = .2
+        self.commands.motion.class_type = WBCForceTrainingMotion
         # End a training attempt before MotionCommand silently resamples the
         # robot at the clip boundary. Adaptive phase starts remain enabled.
         self.terminations.motion_complete = TerminationTermCfg(func=reference_motion_complete, time_out=True)

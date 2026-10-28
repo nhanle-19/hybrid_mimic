@@ -23,13 +23,17 @@ class WBCACCTrainingMotion(MotionCommand):
         # NPZ producers store fps as either a scalar or a one-element array.
         # item() accepts both without indexing a zero-dimensional array.
         fps = float(self.motion.fps.item())
-        values, self.reference_preparation = prepare_wbc_reference(
-            self.motion.joint_pos.cpu().numpy(), self.motion._body_pos_w[:, root].cpu().numpy(),
-            self.motion._body_quat_w[:, root].cpu().numpy(), self.robot.joint_names, self.robot.body_names,
-            self.robot.data.soft_joint_pos_limits[0].cpu().numpy(), fps, controller.ground_height)
-        for name, value in values.items():
-            target = getattr(self.motion, '_'+name if name.startswith('body_') else name)
-            target.copy_(torch.as_tensor(value, device=target.device, dtype=target.dtype))
+        reports = []
+        for start, end in self.motion.clip_slices:
+            values, report = prepare_wbc_reference(
+                self.motion.joint_pos[start:end].cpu().numpy(), self.motion._body_pos_w[start:end, root].cpu().numpy(),
+                self.motion._body_quat_w[start:end, root].cpu().numpy(), self.robot.joint_names, self.robot.body_names,
+                self.robot.data.soft_joint_pos_limits[0].cpu().numpy(), fps, controller.ground_height)
+            for name, value in values.items():
+                target = getattr(self.motion, '_'+name if name.startswith('body_') else name)
+                target[start:end].copy_(torch.as_tensor(value, device=target.device, dtype=target.dtype))
+            reports.append(report)
+        self.reference_preparation = reports[0] if len(reports) == 1 else dict(zip(self.motion.clip_names, reports))
         print(f'[INFO] WBC reference preparation: {self.reference_preparation}', flush=True)
 
 

@@ -21,7 +21,7 @@ def rewards(monkeypatch):
 
     managers.ManagerTermBase = ManagerTermBase
     monkeypatch.setitem(sys.modules, 'isaaclab.managers', managers)
-    for name in ('wbc_contact_mapping', 'wbc_acc_contact_policy', 'wbc_acc_torch_model'):
+    for name in ('wbc_contact_mapping', 'wbc_acc_contact_policy', 'wbc_acc_torch_model', 'wbc_force_learning'):
         module_name = 'whole_body_tracking.utils.'+name
         spec = importlib.util.spec_from_file_location(module_name, SOURCE/'utils'/f'{name}.py')
         module = importlib.util.module_from_spec(spec)
@@ -35,18 +35,24 @@ def rewards(monkeypatch):
 
 
 def make_env(frames=10, count=2, dt=.02):
+    reference_quat = torch.zeros(frames, 2, 4)
+    reference_quat[..., 0] = 1.
     command = NS(time_steps=torch.zeros(count, dtype=torch.long),
-                 motion=NS(time_step_total=frames))
+                 motion=NS(time_step_total=frames, _body_pos_w=torch.zeros(frames, 2, 3),
+                           _body_quat_w=reference_quat),
+                 robot=NS(body_names=['right_foot_link', 'left_foot_link']))
     return NS(num_envs=count, device='cpu', step_dt=dt, extras={},
+        scene=NS(),
         command_manager=NS(get_term=lambda _: command),
-        action_manager=NS(action=torch.zeros(count, 2)),
-        termination_manager=NS(terminated=torch.zeros(count, dtype=torch.bool)))
+        action_manager=NS(action=torch.zeros(count, 2),
+                          get_term=lambda _: NS(cfg=NS(controller=NS(ground_height=0.)))),
+        termination_manager=NS(terminated=torch.zeros(count, dtype=torch.bool), active_terms=[]))
 
 
 @pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
 def test_full_clip_earns_exactly_100_and_holding_end_adds_nothing(rewards, frames, dt):
     env = make_env(frames, dt=dt)
-    term = rewards.MotionCompletionReward(NS(params={}), env)
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
     total = torch.zeros(env.num_envs)
     for frame in range(frames):
         term.command.time_steps.fill_(frame)
@@ -56,12 +62,16 @@ def test_full_clip_earns_exactly_100_and_holding_end_adds_nothing(rewards, frame
     term.command.time_steps.fill_(0)  # Hidden reference wrap earns no extra progress.
     assert term(env).count_nonzero() == 0
     term.reset()
-    assert env.extras['log']['WBCForce/completed_motion_percent'] == 100.
+    logs = term.metrics.drain()
+    assert logs['WBCForce/FullMotion/completed_percent'] == 100.
+    assert logs['WBCForce/FullMotion/success_percent'] == 100.
+    assert logs['WBCForce/Sampling/start_count'] == 2
+    assert logs['WBCForce/Sampling/start_frame_zero_percent'] == 100.
 
 
 def test_failure_and_random_start_receive_only_executed_successful_frames(rewards):
     env = make_env(10)
-    term = rewards.MotionCompletionReward(NS(params={}), env)
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
     total = torch.zeros(2)
     for frame in (7, 8, 9):
         term.command.time_steps.fill_(frame)
@@ -71,7 +81,11 @@ def test_failure_and_random_start_receive_only_executed_successful_frames(reward
     # Final-frame completion can coincide with failure; failure gets no alive credit.
     assert rewards.reference_motion_complete(env).tolist() == [True, True]
     term.reset(torch.tensor([0]))
-    assert env.extras['log']['WBCForce/completed_motion_percent'] == 30.
+    logs = term.metrics.drain()
+    assert logs['WBCForce/Episode/executed_clip_percent'] == 30.
+    assert logs['WBCForce/Episode/suffix_completed_percent'] == 100.
+    assert logs['WBCForce/FullMotion/episode_count'] == 0.
+    assert 'WBCForce/FullMotion/success_percent' not in logs
     assert term.completed_frames.tolist() == [0, 2]
     term.command.time_steps[:] = torch.tensor([0, 9])
     torch.testing.assert_close(term(env)*env.step_dt, torch.tensor([10., 0.]))
@@ -79,7 +93,7 @@ def test_failure_and_random_start_receive_only_executed_successful_frames(reward
 
 def test_action_change_uses_decoded_caps_and_exempts_each_reset(rewards):
     env = make_env(100)
-    term = rewards.ForceActionChangePenalty(NS(params={}), env)
+    term = rewards.ForceActionChangePenalty(NS(params={}, weight=-.05), env)
     env.action_manager.action[:] = torch.tensor([[-3., 3.], [0., 0.]])
     assert term(env).count_nonzero() == 0  # First actions are not changes from a fictitious 0.5 cap.
     env.action_manager.action[:] = torch.tensor([[-30., 30.], [3., 0.]])
@@ -95,7 +109,6 @@ def geometry_env(rewards):
     env = make_env(3)
     command = env.command_manager.get_term('motion')
     # Reverse the body order to catch index assumptions.
-    command.robot = NS(body_names=['right_foot_link', 'left_foot_link'])
     motion = command.motion
     motion._body_pos_w = torch.zeros(3, 2, 3, dtype=torch.float64)
     motion._body_quat_w = torch.zeros(3, 2, 4, dtype=torch.float64)
@@ -112,7 +125,7 @@ def geometry_env(rewards):
 
 def test_swing_penalty_ramps_with_reference_clearance_and_ignores_actual_support(rewards):
     env = geometry_env(rewards)
-    term = rewards.SwingForcePenalty(NS(params={}), env)
+    term = rewards.SwingForcePenalty(NS(params={'unload_lead_time': 0.}, weight=-.5), env)
     torch.testing.assert_close(term.swing_weight[:, 0], torch.tensor([0., .5, 1.], dtype=torch.float64),
                                atol=1e-6, rtol=0)
     assert term.swing_weight[:, 1].count_nonzero() == 0
@@ -134,7 +147,7 @@ def test_grounded_toe_pivot_is_not_reference_swing(rewards):
     rotation = rewards.rotation_xyzw(motion._body_quat_w[:, 1][:, [1, 2, 3, 0]])
     vertices = rewards.sole_vertices(dtype=torch.float64)[0] @ rotation.transpose(-1, -2)
     motion._body_pos_w[:, 1, 2] = .2-vertices[..., 2].amin(-1)
-    term = rewards.SwingForcePenalty(NS(params={}), env)
+    term = rewards.SwingForcePenalty(NS(params={}, weight=-.5), env)
     assert term.swing_weight.count_nonzero() == 0
 
 
@@ -142,4 +155,94 @@ def test_grounded_toe_pivot_is_not_reference_swing(rewards):
                                   {'clearance_start': -.001}])
 def test_swing_rejects_invalid_thresholds(rewards, params):
     with pytest.raises(ValueError, match='thresholds'):
-        rewards.SwingForcePenalty(NS(params=params), geometry_env(rewards))
+        rewards.SwingForcePenalty(NS(params=params, weight=-.5), geometry_env(rewards))
+
+
+def test_episode_metrics_weight_episodes_not_reset_batches_and_ignore_initial_reset(rewards):
+    env = make_env(frames=10, count=4)
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
+    term.reset()
+    initial = term.metrics.drain()
+    assert initial['WBCForce/Episode/count'] == 0
+    assert 'WBCForce/Episode/suffix_success_percent' not in initial
+    term.command.time_steps[:] = torch.tensor([9, 9, 9, 0])
+    term(env)
+    term.reset(torch.tensor([0, 1, 2]))
+    # Draining rollout statistics must not reset the still-running episode.
+    first = term.metrics.drain()
+    assert first['WBCForce/Episode/count'] == 3
+    for frame in range(1, 10):
+        term.command.time_steps.fill_(frame)
+        term(env)
+    env.termination_manager.terminated[3] = True
+    term.reset(torch.tensor([3]))
+    last = term.metrics.drain()
+    assert last['WBCForce/FullMotion/episode_count'] == 1
+    assert last['WBCForce/FullMotion/success_percent'] == 0  # Failure wins over last frame.
+    assert last['WBCForce/FullMotion/completed_percent'] == 100
+    assert last['WBCForce/Episode/failure_percent'] == 100
+
+
+def test_conditional_contact_metrics_and_reset_action_changes(rewards):
+    env = geometry_env(rewards)
+    command = env.command_manager.get_term('motion')
+    command.time_steps.fill_(2)
+    command.motion._body_pos_w[2, 1, 2] += .01
+    env.action_manager.action[:] = torch.tensor([[-3., 3.], [3., 3.]])
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
+    term(env)
+    logs = term.metrics.drain()
+    assert logs['WBCForce/Contact/left_swing_zero_cap_percent'] == 50
+    assert logs['WBCForce/Contact/left_swing_cap_mean'] == .5
+    assert 'WBCForce/Contact/right_swing_zero_cap_percent' not in logs
+    assert 'WBCForce/Caps/left_absolute_change' not in logs
+
+
+def test_zero_hold_duration_survives_rollout_drains_and_flushes_on_reset(rewards):
+    env = geometry_env(rewards)
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
+    term.command.motion._body_pos_w[2, 1, 2] += .01
+    term.command.time_steps.fill_(2)
+    env.action_manager.action[:] = torch.tensor([[-3., 3.], [-3., 3.]])
+    term(env)
+    term.metrics.drain()
+    term(env)
+    term(env)
+    env.action_manager.action[0, 0] = 3.
+    term(env)  # First hold ends at 60 ms; second continues until reset at 80 ms.
+    term.reset(torch.tensor([1]))
+    logs = term.metrics.drain()
+    assert logs['WBCForce/Contact/left_zero_hold_ms'] == 70.
+    assert term.zero_swing_steps.count_nonzero() == 0
+
+
+def test_mixed_clips_normalize_independently_and_report_their_own_endpoints(rewards):
+    env = make_env(frames=15)
+    motion = env.command_manager.get_term('motion').motion
+    motion.frame_clip_ids = torch.tensor([0]*5+[1]*10)
+    motion.clip_names, motion.num_clips = ['walk', 'sway'], 2
+    motion.clip_bounds = lambda frame: (torch.where(frame < 5, 0, 5), torch.where(frame < 5, 5, 10))
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
+    total = torch.zeros(2)
+    for step in range(10):
+        term.command.time_steps[:] = torch.tensor([min(step, 4), 5+step])
+        total += term(env)*env.step_dt
+        if step == 4:
+            assert rewards.reference_motion_complete(env).tolist() == [True, False]
+    torch.testing.assert_close(total, torch.tensor([100., 100.]))
+    term.reset()
+    logs = term.metrics.drain()
+    assert logs['WBCForce/Motion/walk/full_success_percent'] == 100.
+    assert logs['WBCForce/Motion/sway/full_success_percent'] == 100.
+    assert logs['WBCForce/Sampling/start_frame_zero_percent'] == 100.
+
+
+def test_unloading_lead_does_not_cross_between_clips(rewards):
+    env = geometry_env(rewards)
+    motion = env.command_manager.get_term('motion').motion
+    motion.clip_slices = [(0, 2), (2, 3)]
+    motion._body_pos_w[:2, 1, 2] -= torch.tensor([.001, .003], dtype=torch.float64)
+    motion._body_pos_w[2, 1, 2] += .01
+    term = rewards.SwingForcePenalty(NS(params={'unload_lead_time': .04}, weight=-.5), env)
+    assert term.unloading_weight[:2].count_nonzero() == 0
+    assert term.unloading_weight[2, 0] == 1.

@@ -28,6 +28,35 @@ class MotionOnPolicyRunner(OnPolicyRunner):
         super().__init__(env, train_cfg, log_dir, device)
         self.registry_name = registry_name
 
+    def log(self, locs: dict, width: int = 80, pad: int = 35):
+        metrics = getattr(self.env.unwrapped, '_wbc_force_metrics', None)
+        if metrics is None:
+            return super().log(locs, width, pad)
+        values = metrics.drain()
+        policy = self.alg.policy
+        std = policy.std if hasattr(policy, 'std') else policy.log_std.exp()
+        for i, side in enumerate(('left', 'right')):
+            values[f'WBCForce/Policy/{side}_noise_std'] = float(std[i].detach())
+        for name, value in values.items():
+            self.writer.add_scalar(name, value, locs['it'])
+        # FORCE's old reset-time means and per-step termination counts are
+        # replaced by rollout totals with explicit, population-weighted units.
+        # Keep the standard PPO losses/reward/length curves and concise output.
+        forwarded = dict(locs, ep_infos=[])
+        super().log(forwarded, width, pad)
+
+        def number(name, suffix='', digits=1):
+            value = values.get('WBCForce/'+name)
+            return 'n/a' if value is None else f'{value:.{digits}f}{suffix}'
+
+        print('  FORCE: full-motion success '+number('FullMotion/success_percent', '%')
+              +' ('+number('FullMotion/episode_count', digits=0)+' episodes), suffix success '
+              +number('Episode/suffix_success_percent', '%')+', mean start '
+              +number('Episode/start_phase_percent', '%')+' into clip')
+        print('  Swing zero cap L/R: '+number('Contact/left_swing_zero_cap_percent', '%')+' / '
+              +number('Contact/right_swing_zero_cap_percent', '%')+'; swing mean cap L/R: '
+              +number('Contact/left_swing_cap_mean', digits=3)+' / '+number('Contact/right_swing_cap_mean', digits=3))
+
     def save(self, path: str, infos=None):
         """Save the model and training information."""
         super().save(path, infos)

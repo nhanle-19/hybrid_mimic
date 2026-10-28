@@ -26,7 +26,8 @@ parser.add_argument("--seed", type=int, default=None, help="Seed used for the en
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 motion_source = parser.add_mutually_exclusive_group(required=True)
 motion_source.add_argument("--registry_name", type=str, help="The name of the wand registry.")
-motion_source.add_argument("--motion_file", type=str, help="Path to a converted training motion NPZ file.")
+motion_source.add_argument("--motion_file", "--motion_dir", dest="motion_file", type=str,
+                           help="Training NPZ, or a folder of NPZ clips for WBC-FORCE training.")
 
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -97,8 +98,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     registry_name = args_cli.registry_name
     if args_cli.motion_file:
         motion_path = pathlib.Path(args_cli.motion_file).expanduser().resolve()
-        if not motion_path.is_file():
-            raise FileNotFoundError(f"Converted motion file not found: {motion_path}")
+        if not motion_path.exists():
+            raise FileNotFoundError(f"Converted motion source not found: {motion_path}")
     else:
         import wandb
 
@@ -107,6 +108,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         artifact = wandb.Api().artifact(registry_name)
         motion_path = pathlib.Path(artifact.download()) / "motion.npz"
     env_cfg.commands.motion.motion_file = str(motion_path)
+    if motion_path.is_dir() and not getattr(env_cfg.commands.motion.class_type, 'supports_motion_library', False):
+        raise ValueError('--motion_dir is supported by Tracking-WBC-FORCE-T1-v0')
 
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
@@ -160,7 +163,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     #dump_pickle(os.path.join(log_dir, "params", "agent.pkl"), agent_cfg)
 
     # run training
-    runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+    # FORCE randomizes motion phase directly. Randomizing an unrelated timeout
+    # counter would truncate some of the frame-zero monitoring episodes.
+    runner.learn(num_learning_iterations=agent_cfg.max_iterations,
+                 init_at_random_ep_len=not hasattr(env.unwrapped, '_wbc_force_metrics'))
 
     # close the simulator
     env.close()

@@ -1,0 +1,25 @@
+{
+  "motions": [
+    {
+      "file": "01_walk.npz",
+      "source": "retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz",
+      "sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79"
+    },
+    {
+      "file": "02_tilted_sway.npz",
+      "source": "eval_data/toy_standing_sway_wide02/reference.npz",
+      "sha256": "35cececc299976aced21b09a766242bfca8ceb1ba6883ae4deb7b1f727dddeea"
+    }
+  ],
+  "sampling": "equal probability per episode reset",
+  "sway": {
+    "tilted_side": "left",
+    "tilt_deg": 15.0,
+    "stance_widen_m": 0.02,
+    "com_sway_m": 0.02,
+    "torso_roll_deg": 2.4,
+    "period_s": 4.0,
+    "duration_s": 10.0
+  },
+  "note": "Reference motions only. Manual force schedules are not used as labels. Varying caps have not been proven necessary."
+}

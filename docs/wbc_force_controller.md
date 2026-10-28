@@ -78,8 +78,8 @@ force labels improved the independent replay to 0.416 mm XYZ RMS (from
 4.686 mm) and 39.59 mm travel. The fixture uses position gain 1600 and velocity
 gain 40, with posture weight still 0.1. All 500 steps completed without resets,
 solver failures, or torque saturation; the maximum sole-height error was
-0.021 mm. These gains are explicit evaluation overrides rather than new
-production defaults. The refined schedule metadata requires them; see
+0.021 mm. These gains are now the shared FORCE defaults and satisfy the
+refined schedule metadata without gain overrides; see
 `eval_data/left_foot_slide/force/force_refined_validation.json` and the
 README replay command. This improvement follows successful unloading; it does
 not reverse the earlier result for the loaded, upright sliding fixture.
@@ -124,9 +124,9 @@ percentage points for each newly executed frame without a failure. A full
 undiscounted clip earns 100 points before penalties. Starting at frame 200
 does not credit the skipped prefix. Repeated endpoint frames and internal
 reference wraps earn no extra progress. TensorBoard's
-`WBCForce/completed_motion_percent` reports the earned percentage on episode
-reset; the standard `Episode_Reward/*` values retain Isaac Lab's logging
-normalization by maximum episode duration. PPO still uses discounted returns.
+`WBCForce/Episode/executed_clip_percent` reports the earned percentage of the
+whole clip; `Episode/suffix_completed_percent` instead divides by the frames
+available at that episode's sampled start. PPO still uses discounted returns.
 
 Swing weights come from the prepared reference's lowest foot collision vertex
 above the ground: zero at or below 1 mm, a cubic smoothstep between 1 and 5 mm,
@@ -134,6 +134,25 @@ and one at or above 5 mm. A grounded toe or heel is not classified as airborne.
 The reward penalizes a positive cap even if actual geometry already removes
 that foot's support. It never replaces NN outputs or masks the QP with a
 reference contact label.
+
+The default timing and three reward weights are unchanged. Optional
+`env.rewards.swing_force.params.unload_lead_time` (seconds, default **0**) adds
+a linearly discounted lookahead to this same cap penalty, allowing an unloading
+lead-in before reference liftoff. It never shifts the end of swing later or
+wraps the end of a clip. For a lead of `K` policy steps, the weight is
+`max_{k=0..K}((1-k/(K+1))*swing_weight[min(t+k,N-1)])`.
+This is a contact-timing experiment, not an actual-foot tracking reward.
+The QP continues to handle tracking. No clearance, foot-position, or
+foot-velocity tracking reward is added.
+
+The existing contact cost is one-sided: it penalizes a positive cap in reference
+swing and has no direct preference for a positive cap in stance. Stance support
+is learned through survival and the controller. Because costs are normalized by
+the full clip, short swing intervals contribute only part of the total return.
+On the downloaded iteration-6999 walk policy, deterministic replay earned
+97.31/100 points: 100 progress points minus 2.13 swing-cap and 0.56 action-change
+points, despite imperfect zero-cap timing. A flat return alone therefore does
+not establish a good contact schedule.
 
 The change penalty uses consecutive decoded actions and skips the first action
 after each environment reset. It encourages smooth changes without imposing
@@ -143,18 +162,51 @@ incur no penalty. The starting weights are tunable with
 All three implementations account for RewardManager's multiplication by the
 control timestep, so the formula above is the final per-step reward.
 
-Training prioritizes balanced, feasible motion. Limb tracking error is logged
-but does not terminate an episode. The existing coarse torso guards remain:
+Training prioritizes balanced, feasible motion. Limb tracking error does not
+terminate an episode. The existing coarse torso guards remain:
 reference-relative torso height error above 0.25 m, or a projected-gravity
 vertical-component difference above 0.8. QP failures also terminate. These
 guards are proxies for loss of balance, not a requirement for precise imitation.
-Adaptive phase starts remain enabled.
+Adaptive phase starts remain enabled for 80% of resets; the remaining 20% start
+at frame zero (`env.commands.motion.start_from_beginning_probability=0.2`).
+The first sampled frame is executed after reset, including frame zero, rather
+than skipped by the command update. FORCE no longer randomizes the separate
+episode timeout counter at startup.
 Executing the last reference frame ends the training attempt as a timeout
 before the command can silently reset the robot for another clip. A sampled
 suffix therefore earns only its executed fraction; evaluate from frame zero
 to measure full-motion completion. Scheduled manual and toy-standing FORCE
 replays use the same torso/QP guards without a limb-height cutoff. These rewards do not use
 the hand-designed action tables as training targets.
+
+### Contact-learning logs
+
+The FORCE runner writes the following to TensorBoard/W&B once per PPO rollout.
+Rates use accumulated numerators and denominators, not averages of unequal reset
+batches. Conditional metrics are omitted when no eligible samples occur;
+terminal output shows `n/a`. Counts are provided alongside sparse metrics.
+Contact metrics use sampled training actions; deterministic policy behavior
+still requires a separate evaluation.
+
+| Metric prefix (under `WBCForce/`) | Meaning |
+| --- | --- |
+| `FullMotion/episode_count`, `success_percent`, `completed_percent` | Ended training episodes whose first executed frame was zero. Success means surviving to the last frame, not accurate motion tracking. These use sampled training actions, not deterministic evaluation. |
+| `Episode/count`, `suffix_success_percent`, `suffix_completed_percent`, `executed_clip_percent` | Separate successful short suffixes from the fraction of a whole clip actually executed. Failure wins over simultaneous clip completion. |
+| `Sampling/start_count`, `start_phase_percent`, `start_frame_zero_percent`, `start_final_sixth_percent` | Actual starts observed during this rollout, including ongoing episodes. |
+| `Contact/{left,right}_swing_samples`, `swing_zero_cap_percent`, `swing_cap_mean` | Exact-zero coverage and mean capacity where reference sole clearance is at least 5 mm. |
+| `Contact/{left,right}_liftoff_count`, `liftoff_zero_cap_percent` | Cap at the reference's first crossing above 1 mm; starts already inside swing are excluded. |
+| `Contact/{left,right}_zero_hold_ms` | Mean uninterrupted exact-zero duration within reference swing, reported when a run ends or its episode resets. |
+| `Contact/{left,right}_swing_measured_fz_N` | Actual PhysX vertical load during reference swing; a predicted zero cap does not guarantee zero measured force. |
+| `Caps/{left,right}_stance_zero_percent`, `absolute_change`, `mean`; `Caps/both_zero_percent` | Stance unloading, chattering, mean cap, and simultaneous zero caps. |
+| `Failure/{anchor_pos,anchor_ori,qp_infeasible}_percent` | Percent of ended episodes with each failure flag; overlapping flags are not mutually exclusive. |
+| `Reward/{completion,swing_cap,cap_change}_points_per_step` | Weighted reward contributions in actual PPO reward units per policy step, without maximum-episode-duration normalization. |
+| `Policy/{left,right}_noise_std` | Per-foot raw Gaussian exploration scale. |
+
+The terminal shows PPO losses plus full-motion/suffix success and contact
+coverage. The old FORCE reset-time averages and per-axis wrench console dump
+are replaced by these metrics. `Train/mean_episode_length` and `mean_reward`
+remain standard RSL-RL curves; inspect them together with start-phase and
+full-motion metrics. Physical wrench diagnostics remain available in evaluation.
 
 Defaults: 1,024 environments, 500 Hz physics, 50 Hz policy/QP, and 30,000 PPO
 iterations. Each QP torque is held for ten physics steps. Solver failures
@@ -176,14 +228,9 @@ separate from these gains. See the
 
 ## Commands
 
-Train:
-
-```bash
-python scripts/rsl_rl/train.py --task Tracking-WBC-FORCE-T1-v0 \
-  --motion_file retargeted_motion/b22_side_step_left_female1_t1_training.npz \
-  --num_envs 1024 --device cuda:0 --headless \
-  --logger tensorboard --run_name wbc_force_side_step
-```
+Train with the [default server command](../README.md#train-wbc-force), which
+sets W&B authentication and CUDA visibility and uses the configured controller
+and PPO defaults. Change `--motion_file` and `--run_name` for another motion.
 
 For a short training check, use `--num_envs 32 --max_iterations 2`.
 

@@ -7,6 +7,7 @@ import torch
 from collections.abc import Sequence
 from dataclasses import MISSING
 from typing import TYPE_CHECKING
+from whole_body_tracking.utils.motion_library import MotionLibrary
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import CommandTerm, CommandTermCfg
@@ -30,18 +31,10 @@ if TYPE_CHECKING:
 # CMU_41_02 0.04
 THRESH = 0.04
 
-class MotionLoader:
+class MotionLoader(MotionLibrary):
     def __init__(self, motion_file: str, body_indexes: Sequence[int],
                  eef_indexes: Sequence[int], device: str = "cpu"):
-        assert os.path.isfile(motion_file), f"Invalid file path: {motion_file}"
-        data = np.load(motion_file)
-        self.fps = data["fps"]
-        self.joint_pos = torch.tensor(data["joint_pos"], dtype=torch.float32, device=device)
-        self.joint_vel = torch.tensor(data["joint_vel"], dtype=torch.float32, device=device)
-        self._body_pos_w = torch.tensor(data["body_pos_w"], dtype=torch.float32, device=device)
-        self._body_quat_w = torch.tensor(data["body_quat_w"], dtype=torch.float32, device=device)
-        self._body_lin_vel_w = torch.tensor(data["body_lin_vel_w"], dtype=torch.float32, device=device)
-        self._body_ang_vel_w = torch.tensor(data["body_ang_vel_w"], dtype=torch.float32, device=device)
+        super().__init__(motion_file, device)
         self._body_indexes = body_indexes
         self._eef_indexes = eef_indexes
         self.time_step_total = self.joint_pos.shape[0]
@@ -87,6 +80,8 @@ class MotionCommand(CommandTerm):
         self.ankle_joint_ids = ankle_joint_ids
 
         self.motion = MotionLoader(self.cfg.motion_file, self.body_indexes, self.eef_indexes, device=self.device)
+        if self.motion.num_clips > 1 and not getattr(self, 'supports_motion_library', False):
+            raise ValueError('Multiple motions currently require the WBC-FORCE training command')
         self.time_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self.body_pos_relative_w = torch.zeros(self.num_envs, len(cfg.body_names), 3, device=self.device)
         self.body_quat_relative_w = torch.zeros(self.num_envs, len(cfg.body_names), 4, device=self.device)
@@ -231,6 +226,9 @@ class MotionCommand(CommandTerm):
         self.metrics["error_joint_vel"] = torch.norm(self.joint_vel - self.robot_joint_vel, dim=-1)
 
     def _adaptive_sampling(self, env_ids: Sequence[int]):
+        start_probability = self.cfg.start_from_beginning_probability
+        if not 0. <= start_probability <= 1.:
+            raise ValueError('start_from_beginning_probability must lie in [0, 1]')
         episode_failed = self._env.termination_manager.terminated[env_ids]
         if torch.any(episode_failed):
             current_bin_index = torch.clamp(
@@ -257,6 +255,13 @@ class MotionCommand(CommandTerm):
             / self.bin_count
             * (self.motion.time_step_total - 1)
         ).long()
+
+        if start_probability > 0.:
+            from_start = torch.rand(len(env_ids), device=self.device) < start_probability
+            self.time_steps[env_ids] = torch.where(from_start, 0, self.time_steps[env_ids])
+            # Bin metrics describe the complete mixture, including frame-zero starts.
+            sampling_probabilities = sampling_probabilities*(1.-start_probability)
+            sampling_probabilities[0] += start_probability
 
         # Metrics
         H = -(sampling_probabilities * (sampling_probabilities + 1e-12).log()).sum()
@@ -438,6 +443,7 @@ class MotionCommandCfg(CommandTermCfg):
     adaptive_lambda: float = 0.8
     adaptive_uniform_ratio: float = 0.1
     adaptive_alpha: float = 0.001
+    start_from_beginning_probability: float = 0.0
 
     anchor_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(prim_path="/Visuals/Command/pose")
     anchor_visualizer_cfg.markers["frame"].scale = (0.2, 0.2, 0.2)

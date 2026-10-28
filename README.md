@@ -113,8 +113,8 @@ python -c "import sys, site, rsl_rl; print(sys.executable); print('User packages
 User packages should be disabled (`False`), and RSL-RL should load from the
 `hybridmimic` environment rather than another project's editable checkout.
 
-Resolve reported dependency conflicts before training. The examples below pass
-the W&B API key to each command explicitly.
+Resolve reported dependency conflicts before training. The examples below show
+W&B authentication explicitly.
 
 Run all commands below from the repository root.
 
@@ -192,13 +192,59 @@ The NN outputs two raw force-cap actions, left then right. Decode each with
 support geometry, friction, dynamics, and torque limits still apply. Momentum,
 posture, and pelvis tracking remain; foot-acceleration objectives are absent.
 
+Start a fresh server training run from the repository root using the configured
+defaults. Replace the W&B API-key placeholder with your key and select the GPU
+with `CUDA_VISIBLE_DEVICES`:
+
+```bash
+conda activate hybridmimic
+
+export WANDB_API_KEY="PASTE_YOUR_WANDB_API_KEY_HERE"
+export CUDA_VISIBLE_DEVICES=0
+
+python scripts/rsl_rl/train.py \
+  --task Tracking-WBC-FORCE-T1-v0 \
+  --motion_file retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz \
+  --device cuda:0 \
+  --headless \
+  --logger wandb \
+  --log_project_name hybrid_mimic \
+  --run_name force_walk \
+  agent.resume=false
+```
+
+The task defaults to **1,024 environments and 30,000 iterations**, saving
+checkpoints every 500 iterations and at completion. Controller gains and
+weights come directly from `T1WBCForceControllerCfg`, including the fixed
+posture gains **Kp=1600, Kd=40**. Force limits and contact tolerances also use
+their configured defaults. To train another motion, change `--motion_file`
+and `--run_name`.
+
+To train walking together with the **left-foot-tilted sway** (15-degree foot
+pitch, heel contact, 2 cm wider stance), both references are bundled in
+`retargeted_motion/training_list/`. Use the folder in the same command:
+
 ```bash
 python scripts/rsl_rl/train.py \
   --task Tracking-WBC-FORCE-T1-v0 \
-  --motion_file retargeted_motion/b22_side_step_left_female1_t1_training.npz \
-  --device cuda:0 --num_envs 1024 --headless \
-  --logger tensorboard --run_name wbc_force_side_step
+  --motion_dir retargeted_motion/training_list \
+  --device cuda:0 --headless \
+  --logger wandb --log_project_name hybrid_mimic \
+  --run_name training_list \
+  agent.resume=false
 ```
+
+`--motion_file` also accepts this directory. Each reset selects a clip with
+equal probability, then samples its phase adaptively; 20% of starts are at that
+clip's frame zero. Each episode ends at its own clip boundary. Reference
+lookahead, derivative calculations, unloading lead-in and 100-point reward
+normalization remain within that clip. `WBCForce/Motion/01_walk/*` and
+`WBCForce/Motion/02_tilted_sway/*` report separate sampling, completion and cap
+statistics. Inputs remain 590/861 and the three contact rewards are unchanged.
+The sway reference does not enforce a positive action floor or prescribe cap
+variation; it supplies no manual action labels. ONNX exports include clip
+boundaries in `motion_clips_json`; their `time_step` input uses the global
+reference index. Evaluate a trained policy with one of the individual NPZs.
 
 This uses the same PPO settings as WBC-ACC, with **590 actor inputs**:
 five reference frames at offsets `[0, 1, 3, 5, 10]` (295 values), followed by
@@ -224,13 +270,10 @@ the two-output policy cannot load a fourteen-output WBC-ACC checkpoint.
 Earlier FORCE checkpoints with 236 or 1,432 actor inputs are also incompatible
 with this layout; keep `agent.resume=false` for a fresh run.
 
-The five-step walk uses the same `train.py` entry point, PPO algorithm, network,
-and three-term FORCE reward. Its setup differs only in the reference motion,
-contact settings, and run parameters. FORCE training and crawl replay now use
-the same controller gains and objective weights by default. The command below
-sets the walk force maxima and contact-patch tolerance using existing Hydra
-overrides; no gain or weight overrides are needed. Training starts from a random policy and
-requires no manual labels or files from `eval_data/`.
+The five-step walk uses the standard `train.py` entry point, PPO algorithm,
+network, and three-term FORCE reward. FORCE training and crawl replay read
+the same controller gains and objective weights. Training starts from a random
+policy and requires no manual labels or files from `eval_data/`.
 
 The reference-plus-history input and shared defaults were checked on an RTX
 4060 Laptop GPU on October 25, 2026. A 256-environment/two-iteration PPO run completed 12,288
@@ -246,30 +289,14 @@ match in all 19 gain, weight and damping fields:
 This verifies training execution; learned full-motion tracking still requires
 training and deterministic evaluation.
 
-Start a fresh walk training run from the repository root:
+For a short startup check, append `--num_envs 32 --max_iterations 2` to the
+server command above.
 
-```bash
-conda activate hybridmimic
-python scripts/rsl_rl/train.py \
-  --task Tracking-WBC-FORCE-T1-v0 \
-  --motion_file retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz \
-  --device cuda:0 --num_envs 256 --max_iterations 1000 --seed 42 --headless \
-  --logger tensorboard --run_name force_walk \
-  agent.resume=false agent.save_interval=100 \
-  'env.actions.wbc_force.controller.contact_force_max=[1000.0,1000.0]' \
-  env.actions.wbc_force.controller.contact_patch_height_tolerance=0.0001
-```
-
-For a short startup check, use the same command with `--num_envs 32` and
-`--max_iterations 2`. Keep float-valued overrides such as `1000.0` in
-decimal form: Isaac Lab checks their types. All remaining controller fields
-retain the task defaults, matching the tested walk setup.
-
-| Setting | Walk training value |
+| Setting | Default server training value |
 | --- | --- |
 | Reference | `retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz` (261 frames, 5.22 s) |
-| Environments / iterations | 256 / 1,000 |
-| Rollout / PPO minibatch | 24 steps per environment; 6,144 transitions per rollout; 1,536 per minibatch |
+| Environments / iterations | 1,024 / 30,000 |
+| Rollout / PPO minibatch | 24 steps per environment; 24,576 transitions per rollout; 6,144 per minibatch |
 | PPO epochs / minibatches | 5 / 4 |
 | Actor and critic hidden layers | 1,024 → 512 → 256 → 256, ELU; observation normalization enabled |
 | Actor / critic inputs | 590 / 861; five reference frames + five actual-state frames, plus privileged inputs for the critic |
@@ -278,13 +305,22 @@ retain the task defaults, matching the tested walk setup.
 | Entropy / value loss / gradient norm limit | 0.005 / 1.0 / 1.0 |
 | Initial action standard deviation | 1.0 |
 | Physics / policy and QP rate | 500 Hz / 50 Hz |
-| Per-foot force maximum / friction | 1,000 N / 0.6 |
+| Per-foot force maximum / friction | 600 N / 0.6 |
+| Contact patch height tolerance | 0.00001 m |
 | Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
 | Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
 | Reward weights: completion / swing cap / cap change | 1.0 / −0.5 / −0.05 |
-| Checkpoint interval / logging | Every 100 iterations and at completion / TensorBoard |
+| Checkpoint interval / logging | Every 500 iterations and at completion / W&B |
 
 Checkpoints and events are written under `logs/rsl_rl/t1_wbc_force/`.
+FORCE now reports `WBCForce/FullMotion/*` separately from sampled-suffix
+completion, with per-foot swing zero-cap coverage, hold duration, liftoff
+timing, measured swing load, and cap changes. Twenty percent of resets start
+at frame zero so short adaptive suffixes cannot be mistaken for full-motion
+performance. The three reward weights and default contact timing remain
+unchanged; tracking stays with the QP. See the
+[contact-learning metrics](docs/wbc_force_controller.md#contact-learning-logs)
+for units and the optional unloading lead-in.
 Evaluate deterministic outputs across the motion separately from exploration
 noise; completion alone does not establish that all five foot lifts were tracked.
 
@@ -650,7 +686,7 @@ feasibility checks at friction 0.6. The selected labels release the left normal
 force cap to zero over 0.28–0.48 s, keep the right cap at 800 N during motion,
 and restore the standing labels over 9.50–9.70 s.
 
-The initial replay with default posture gains achieved 36.93 mm travel and
+The initial replay with the former posture gains 40/8 achieved 36.93 mm travel and
 4.69 mm XYZ tracking RMS. Its metrics remain in `force_validation.json` for
 comparison; the superseded replay folder was removed. The final selected run
 is the refined FORCE replay below. It starts in the shifted pose; transfer
@@ -664,12 +700,11 @@ slide; the selected feedback tuning preserved 39.59 mm of the 40 mm target
 travel. A fresh 500-step replay reduced XYZ RMS from 4.686 mm to 0.416 mm
 (91.1%), with maximum error 0.700 mm, no resets, QP failures, or torque
 saturation. Direct replay measurements show maximum root error 0.243 mm and
-sole-height error 0.021 mm. These are slide-specific overrides; production
-controller defaults remain unchanged.
+sole-height error 0.021 mm. These gains are now the shared FORCE defaults.
 
 The refined schedule, `force_refined_validation.json`,
 `force_refined_comparison.png`, `diagnostics.npz`, and `video.mp4` are in the same
-`eval_data/left_foot_slide/force/` folder. Replay with both required gains:
+`eval_data/left_foot_slide/force/` folder. Replay using the shared FORCE gains:
 
 ```bash
 python scripts/rsl_rl/eval_wbc.py --task Toy-Standing-WBC-FORCE-T1-v0 \
@@ -678,9 +713,7 @@ python scripts/rsl_rl/eval_wbc.py --task Toy-Standing-WBC-FORCE-T1-v0 \
   --manual_schedule eval_data/left_foot_slide/force/force_refined_schedule.npz \
   --force_max 1000 1000 --device cuda:0 --headless --video \
   --output eval_data/left_foot_slide/force/diagnostics.npz \
-  --video_dir eval_data/left_foot_slide/force \
-  env.actions.wbc_force.controller.posture_position_gain=1600.0 \
-  env.actions.wbc_force.controller.posture_velocity_gain=40.0
+  --video_dir eval_data/left_foot_slide/force
 ```
 
 AUTH also tracked this support-shifted reference when given an **additional
@@ -740,8 +773,9 @@ The accepted 500-step physics runs both completed without resets, QP failures,
 or torque saturation. FORCE reached −14.89° / +14.87°, with 0.134° yaw RMS error
 and 0.514 mm maximum sole-centre drift. AUTH reached −14.97° / +14.99°, with
 0.067° yaw RMS error and 0.817 mm maximum drift. Maximum sole-height errors were
-0.022 mm and 0.062 mm, respectively. Both use native posture gains 1600 / 40
-with posture weight 0.1; these are case-specific overrides.
+0.022 mm and 0.062 mm, respectively. Both use posture gains 1600 / 40 with
+posture weight 0.1. These are the shared FORCE defaults; AUTH requires the
+explicit gain overrides shown below.
 
 FORCE releases the left cap to zero before turning and keeps the right cap at
 800 N during motion. AUTH uses the same six cost-label channels as before,
@@ -757,9 +791,7 @@ python scripts/rsl_rl/eval_wbc.py --task Toy-Standing-WBC-FORCE-T1-v0 \
   --manual_schedule eval_data/left_foot_rotation/force/labels.npz \
   --force_max 1000 1000 --device cuda:0 --headless --video \
   --output eval_data/left_foot_rotation/force/diagnostics.npz \
-  --video_dir eval_data/left_foot_rotation/force \
-  env.actions.wbc_force.controller.posture_position_gain=1600.0 \
-  env.actions.wbc_force.controller.posture_velocity_gain=40.0
+  --video_dir eval_data/left_foot_rotation/force
 python scripts/rsl_rl/eval_wbc.py --task Toy-Standing-WBC-AUTHORITY-T1-v0 \
   --qp_only --track_motion --num_envs 1 --steps 500 --fail_on_reset \
   --motion_file eval_data/left_foot_rotation/reference.npz \

@@ -84,7 +84,7 @@ def test_standing_initialization_accepts_both_npz_fps_formats(monkeypatch, tmp_p
     spec = importlib.util.spec_from_file_location('standing_fps_test', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    motion = SimpleNamespace(fps=loaded_fps,
+    motion = SimpleNamespace(fps=loaded_fps, clip_slices=[(0, 2)], clip_names=['reference'],
         joint_pos=torch.ones(2, 1), joint_vel=torch.ones(2, 1),
         _body_pos_w=torch.zeros(2, 1, 3), _body_quat_w=torch.zeros(2, 1, 4),
         _body_lin_vel_w=torch.ones(2, 1, 3), _body_ang_vel_w=torch.ones(2, 1, 3))

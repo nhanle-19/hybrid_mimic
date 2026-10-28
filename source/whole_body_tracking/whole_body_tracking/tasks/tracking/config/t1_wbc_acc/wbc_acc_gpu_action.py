@@ -94,7 +94,9 @@ class WBCACCGPUAction(WBCACCAction):
         self.references['frames'] = {name: {k: torch.cat([c['frames'][name][k] for c in chunks])
                                              for k in ('position', 'rotation', 'velocity')} for name in ('Trunk', *FEET)}
         for frame in self.references['frames'].values():
-            frame['acceleration'] = finite_difference(frame['velocity'], 1./float(motion.fps))
+            # Never differentiate across unrelated clips in a training library.
+            frame['acceleration'] = torch.cat([finite_difference(frame['velocity'][start:end], 1./float(motion.fps))
+                for start, end in motion.clip_slices])
         self.planned_contacts = torch.zeros((len(q), 2), dtype=torch.bool, device=q.device)
 
     def _states(self):

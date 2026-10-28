@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import os
+import json
 import torch
 
 import onnx
@@ -126,6 +127,12 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         "anchor_body_name": env.command_manager.get_term("motion").cfg.anchor_body_name,
         "body_names": env.command_manager.get_term("motion").cfg.body_names,
     }
+    motion = env.command_manager.get_term('motion').motion
+    if getattr(motion, 'num_clips', 1) > 1:
+        metadata['motion_clips_json'] = json.dumps([
+            dict(name=name, start_frame=start, end_frame_exclusive=end)
+            for name, (start, end) in zip(motion.clip_names, motion.clip_slices)])
+        metadata['motion_time_step_convention'] = 'global frame index; select one clip and clamp at its endpoint'
 
     if "wbc_authority" in env.action_manager.active_terms:
         controller = env.action_manager.get_term("wbc_authority").cfg.controller
