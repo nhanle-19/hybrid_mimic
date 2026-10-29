@@ -188,9 +188,21 @@ tracking limitations and evaluation commands.
 
 The NN outputs two raw force-cap actions, left then right. Decode each with
 `c_i = clip((sigmoid(action_i)-0.1)/0.8, 0, 1)`; the QP enforces
-`0 <= Fz_i <= 600 * c_i` N for each foot. Actual
-support geometry, friction, dynamics, and torque limits still apply. Momentum,
-posture, and pelvis tracking remain; foot-acceleration objectives are absent.
+`0 <= Fz_i <= 600 * c_i` N for each foot. All four modeled corners of each foot
+remain available: two-foot FORCE uses no actual- or reference-geometry contact
+mask in training or evaluation. The learned caps control loading, with the
+non-contact penalty teaching unloading during reference swing. The controller
+uses robot-model kinematics for force moment arms and Jacobians, without a
+floor-height contact test. Friction, dynamics, and torque limits still apply.
+Momentum, posture, and pelvis tracking remain; foot-acceleration objectives
+are absent. ACC, AUTHORITY, and the separate manual crawl controller retain
+their existing contact handling.
+
+Recorded two-foot FORCE training and replay results below used the former
+geometry gate. They are historical evidence and do not validate the current
+ungated controller. Evaluate existing checkpoints again and train a fresh
+policy to assess the intended learned-cap behavior. Historical artifacts remain
+available; the separate crawl results are unaffected by this change.
 
 Start a fresh server training run from the repository root using the configured
 defaults. Replace the W&B API-key placeholder with your key and select the GPU
@@ -216,9 +228,9 @@ python scripts/rsl_rl/train.py \
 The task defaults to **1,024 environments and 30,000 iterations**, saving
 checkpoints every 500 iterations and at completion. Controller gains and
 weights come directly from `T1WBCForceControllerCfg`, including the fixed
-posture gains **Kp=1600, Kd=40**. Force limits and contact tolerances also use
-their configured defaults. To train another motion, change `--motion_file`
-and `--run_name`.
+posture gains **Kp=1600, Kd=40**. Force limits use their configured defaults;
+contact-height tolerances do not gate two-foot FORCE. To train another motion,
+change `--motion_file` and `--run_name`.
 
 To train walking together with the **left-foot-tilted sway** (15-degree foot
 pitch, heel contact, 2 cm wider stance), both references are bundled in
@@ -246,6 +258,48 @@ variation; it supplies no manual action labels. ONNX exports include clip
 boundaries in `motion_clips_json`; their `time_step` input uses the global
 reference index. Evaluate a trained policy with one of the individual NPZs.
 
+The consolidated labeled-motion collection is in
+`retargeted_motion/labeled_force/`:
+
+```text
+motions/       Nine two-foot reference NPZs used by training
+labels/        Original manual labels and normalized annotations, archived only
+separate/      Crawl assets and the G18 reference with missing labels
+manifest.json  Source paths, hashes, frame counts, and historical validation notes
+```
+
+The nine clips are walking, wide tilted sway, standing, narrow sway, sliding,
+sole rotation, toe rotation, turning, and the G3 front kick: **4,037 frames at
+50 Hz**. Keep the current height-based non-contact penalty; this run does not
+read manual labels as actor inputs, QP masks, action targets, or reward weights.
+The labels are preserved for inspection. Historical labeled trials used
+different controller settings and do not establish current performance; the
+G3 label table includes an unvalidated tail after its 52-step executed prefix.
+Crawl stays separate because it uses an eight-region controller. G18 stays
+outside the training collection because its original label tables were deleted.
+
+With the `hybridmimic` environment active, launch a fresh run with local
+TensorBoard logging:
+
+```bash
+bash scripts/train_labeled_force.sh
+```
+
+This launcher sets **1,024 environments, 7,000 PPO updates**, checkpoint saving
+every 500 updates, local TensorBoard logging, run name
+`force_labeled_caps_only`, and `agent.resume=false`. Its 15-second episode timeout
+allows the 13.22-second turn to reach its clip boundary. It uses the current
+two-foot FORCE controller without a geometry gate. Trailing arguments can
+override launcher settings. Copy the assembled collection to the training
+machine, or recreate it where all original local source files are available:
+
+```bash
+python scripts/assemble_labeled_force_library.py
+```
+
+The assembler checks source hashes and motion/label alignment and refuses to
+overwrite differing existing files. Training reads only the `motions/` folder.
+
 This uses the same PPO settings as WBC-ACC, with **590 actor inputs**:
 five reference frames at offsets `[0, 1, 3, 5, 10]` (295 values), followed by
 five actual-state frames at offsets `[-4, -3, -2, -1, 0]` (295 values).
@@ -261,8 +315,10 @@ both windows plus its existing privileged inputs, for **861 total values**.
 FORCE rewards executed motion completion (100 points for a full clip),
 minus a nonzero-cap penalty during reference swing and a decoded-action change
 penalty. Initial penalty weights are 0.5 and 0.05, with all three terms normalized
-by clip length. Training ends at the final reference frame; random phase starts
-receive no credit for the skipped prefix. See the [reward definition](docs/wbc_force_controller.md#learning).
+by clip length. Reference contact geometry supplies reward supervision only;
+it does not constrain the runtime QP. Training ends at the final reference
+frame; random phase starts receive no credit for the skipped prefix. See the
+[reward definition](docs/wbc_force_controller.md#learning).
 AUTHORITY retains its alive-only reward. FORCE keeps coarse torso-height,
 torso-tilt and QP-failure guards; hand/foot tracking error alone no longer ends
 an episode. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
@@ -306,7 +362,7 @@ server command above.
 | Initial action standard deviation | 1.0 |
 | Physics / policy and QP rate | 500 Hz / 50 Hz |
 | Per-foot force maximum / friction | 600 N / 0.6 |
-| Contact patch height tolerance | 0.00001 m |
+| Contact patch height tolerance | Unused for two-foot FORCE force availability |
 | Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
 | Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
 | Reward weights: completion / swing cap / cap change | 1.0 / −0.5 / −0.05 |
@@ -343,8 +399,10 @@ The source is `T1WBCForceControllerCfg`, including its inherited common fields;
 the crawl runner reads that same configuration instead of overriding balance
 gains. Physical contact layouts, force ceilings and friction remain explicit.
 
-A bounded comparison covered the nine retained manual FORCE cases. Initial
-GPU comparisons on sway, sliding and walking tested each motion's original
+A historical comparison covered the nine retained manual FORCE cases, with
+geometry gating in the two-foot controller. Its completion and tracking metrics
+require new ungated replays before being attributed to current two-foot FORCE.
+Initial GPU comparisons on sway, sliding and walking tested each motion's original
 settings, 200/28.28/3, 400/40/1, and 1600/40/0.1; targeted follow-ups checked
 momentum weights and Kd 80 on walking and turning. A follow-up crawl replay
 also replaced its former CoM gains 160/25 and vertical momentum weight 10 with
@@ -549,8 +607,9 @@ training run instead of resuming a checkpoint trained on the unprepared clip.
 The batched QP uses a `1e-6` scaled optimality tolerance, while the separate
 physical feasibility tolerance remains `2e-5`. AUTHORITY values affect only
 translational contact costs; zero authority does not remove support forces.
-`--force_full_contact --qp_only` is an evaluation diagnostic that bypasses actual
-contact geometry; it is not a training fix or a physical contact model.
+For ACC/AUTHORITY, `--force_full_contact --qp_only` is an evaluation diagnostic
+that bypasses actual contact geometry. Two-foot FORCE already uses caps without
+a geometry gate, so this flag does not change its controller.
 
 Evaluate a saved policy with controller diagnostics:
 
@@ -839,8 +898,9 @@ toe vertices and all four right sole vertices.
 Both use native posture gains 1600 / 40 and weight 0.1. FORCE phases its caps to
 0 / 800 N during turning. AUTH uses active left `(0, 0, 1)` and right `(0, 0, 0)`
 cost labels, with the additional **fixed 0.01 / 600 N force maxima** carried over
-from flat rotation. This toe case validates that combined configuration; it
-does not test whether the six AUTH cost labels alone can unload the left foot.
+from flat rotation. This historical toe case validates that combined
+configuration; it does not test whether the six AUTH cost labels alone can
+unload the left foot.
 These are case-specific settings; global controller defaults are unchanged.
 
 Follow the moving reference with the manual-output WBC toy task:
@@ -943,13 +1003,18 @@ Two dedicated tasks hold frame zero of the toes-up reference with zero reference
 velocities: `Toy-Standing-WBC-FORCE-T1-v0` and
 `Toy-Standing-WBC-AUTHORITY-T1-v0`. They use the existing WBC solvers and
 direct-torque actuation, with deterministic initialization, no observation noise,
-and no learned policy. Actual foot geometry determines the available support.
+and no learned policy. FORCE leaves all modeled sole corners available, using
+the manual caps alone to control predicted loading. AUTHORITY uses actual foot
+geometry to determine available support.
 Both stop evaluation at the first fall/tracking termination or QP failure and
 save available diagnostics. The episode timeout extends past the requested run.
-The toy tasks use a 0.5 mm contact-patch height tolerance to avoid switching a
-nearly level foot between sole, edge, and corner support due to GPU PhysX jitter.
-Every vertex must still pass the 1 mm ground-gap check; the raised left toes
-remain excluded. Solver tolerances and manual force limits are unchanged.
+The AUTHORITY toy task retains a 0.5 mm contact-patch height tolerance,
+avoiding support changes due to GPU PhysX jitter on a nearly
+level foot; its vertices must still pass the 1 mm ground-gap check, so raised
+toes remain excluded. Neither threshold affects FORCE force availability now
+that its geometry gate is removed. Solver tolerances and manual force limits
+are unchanged. Earlier FORCE toy measurements used the gate and require new
+ungated evaluation.
 
 Manual NN outputs belong in `configs/toy_wbc_inputs.json`. Force is configured
 with raw outputs `[-1.045969, 0.322773]`: 20% left and 60% right, giving normal-force

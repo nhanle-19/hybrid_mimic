@@ -1,0 +1,453 @@
+{
+  "alternate_schedules": [
+    {
+      "motion_name": "05_slide",
+      "note": "Unvalidated initial schedule; same reference as selected refined schedule.",
+      "sha256": "b275a493b0772776adc74080721e14e2a1a232502f180164ae5f0387ef310a00",
+      "source": "eval_data/toy_left_foot_slide/force/force_reference_schedule.npz"
+    },
+    {
+      "motion_name": "05_slide",
+      "note": "Earlier successful schedule; selected refined replay supersedes it.",
+      "sha256": "e6620499484f3c2a4ec28a8456958ea8feecf5807ef6250a661779fcb686520d",
+      "source": "eval_data/toy_left_foot_slide/force/force_slide_schedule.npz"
+    },
+    {
+      "motion_name": "08_turn_right",
+      "note": "Planned input for the selected executed labels; same motion, not an additional training clip.",
+      "sha256": "87c1072bfc2c05dcfab0332583b81dc27efee2ced460c6d0853a76a199cff39b",
+      "source": "eval_data/reference_e1_turn_right/short_reanchor/force/planned_labels.npz"
+    },
+    {
+      "motion_name": "09_front_kick",
+      "note": "Alternate same-motion schedule; historical 29-step trial.",
+      "sha256": "6dd7a823aae49a78c5e479972e560a7827b936b17d3113aa3ff5c84a5222c6e0",
+      "source": "eval_data/g3_manual_20261016/force_replay/force_prestep_replay.npz"
+    },
+    {
+      "motion_name": "09_front_kick",
+      "note": "Alternate same-motion schedule; historical 32-step trial.",
+      "sha256": "53025b3e6a20446decad4eede0d2b702a9fa5b3a9e8b8a5a922b6391bfe57f32",
+      "source": "eval_data/g3_manual_20261016/force_debug/force_left_step_first.npz"
+    },
+    {
+      "motion_name": "09_front_kick",
+      "note": "Frozen replay of the alternate left-step-first schedule; historical 32-step trial.",
+      "sha256": "0e7e820ee62a9f45dacb93971703ea495def84a714c2db5bc4ac5370242c577f",
+      "source": "eval_data/g3_manual_20261016/force_debug/replay/force_left_step_first_replay.npz"
+    }
+  ],
+  "historical_validation": "Recorded manual trials used differing gains, force maxima, friction, and historical contact geometry gates. They do not establish performance of the current ungated controller.",
+  "label_use": {
+    "active_training_reward": "unchanged height-based non-contact penalty",
+    "actor_input": false,
+    "cap_imitation_target_enabled_by_collection": false,
+    "caution": "Manual zero caps can denote unloading during grounded sliding or rotation, not literal geometric separation. Positive caps are not target physical forces.",
+    "manual_annotations_consumed_by_active_training": false,
+    "manual_noncontact_weight": "float32 1 where the selected manual cap fraction is exactly zero, otherwise 0",
+    "qp_contact_mask": false,
+    "scope": "Archival and inspection annotations only. The user selected the existing height-based penalty for this training run; manual zero-cap weights are not consumed by the reward."
+  },
+  "motion_directory": "motions",
+  "motions": [
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/01_walk/annotations.npz",
+        "sha256": "3226f95a94a2eb5289378964d80e87434561f1b8bf28dfa17c850c848a06857f"
+      },
+      "destination": "motions/01_walk.npz",
+      "fps": 50.0,
+      "frames": 261,
+      "historical_label_status": "complete_frozen_single_environment_CPU_replay",
+      "historical_note": "Historical CPU replay completed all frames with a geometry-gated controller.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        43,
+        95
+      ],
+      "name": "01_walk",
+      "original_labels": [
+        {
+          "destination": "labels/01_walk/walk_force_labels.npz",
+          "sha256": "3cbcb383b26914003710959d3c2a741628fc80e75a69198ea2a212e2f34ca891",
+          "source": "eval_data/force/walk_in_place/walk_force_labels.npz"
+        },
+        {
+          "destination": "labels/01_walk/walk_force_labels.csv",
+          "sha256": "afe72bde21574ee9fdb11ef3c2ff180783e217274b561328238dab55581061a7",
+          "source": "eval_data/force/walk_in_place/walk_force_labels.csv"
+        }
+      ],
+      "sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79",
+      "source": "retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/02_tilted_sway/annotations.npz",
+        "sha256": "019144a2a5ac87bf20aeb2b666b3e59e852fca243922faec39a1e674deb8b22a"
+      },
+      "destination": "motions/02_tilted_sway.npz",
+      "fps": 50.0,
+      "frames": 500,
+      "historical_label_status": "completed_two_gpu_physics_trials",
+      "historical_note": "Historical manual schedule completed two GPU trials with a geometry-gated controller.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        0,
+        0
+      ],
+      "name": "02_tilted_sway",
+      "original_labels": [
+        {
+          "destination": "labels/02_tilted_sway/force_reference_schedule.npz",
+          "sha256": "a92ffcb3582bc8ec752da831de2951afe6cb4cb2fb891ab20c02ef23426e5c2e",
+          "source": "eval_data/toy_standing_sway_wide02/force_reference_schedule.npz"
+        },
+        {
+          "destination": "labels/02_tilted_sway/force_reference_schedule.csv",
+          "sha256": "eb26a7586f759435c45343d5820f03d2e8e9da5b172a4891256efad7e4fb6f1b",
+          "source": "eval_data/toy_standing_sway_wide02/force_reference_schedule.csv"
+        }
+      ],
+      "sha256": "35cececc299976aced21b09a766242bfca8ceb1ba6883ae4deb7b1f727dddeea",
+      "source": "eval_data/toy_standing_sway_wide02/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/03_standing/annotations.npz",
+        "sha256": "164609153914d1a4b685439c501565a9c9e1e9fbe271fbbe5359c8d6d2f022fa"
+      },
+      "destination": "motions/03_standing.npz",
+      "fps": 50.0,
+      "frames": 500,
+      "historical_label_status": "constant_manual_inputs",
+      "historical_note": "Constant fractions 0.2/0.6. Historical completed replay used plain-sigmoid logits; current JSON preserves those fractions under the dead-zone mapping.",
+      "manual_force_max_n": [
+        600.0,
+        600.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        0,
+        0
+      ],
+      "name": "03_standing",
+      "original_labels": [
+        {
+          "destination": "labels/03_standing/toy_wbc_inputs.json",
+          "sha256": "e8beb1106e69626bc530313a13c3d690178b387bbf5ab1dd0597cf257490db2e",
+          "source": "configs/toy_wbc_inputs.json"
+        }
+      ],
+      "sha256": "738a0330786ccc38162d16ac0543c060ece49e792af3988d511cb62ecbbd85b2",
+      "source": "eval_data/toy_standing/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/04_narrow_sway/annotations.npz",
+        "sha256": "6c6d09613f2f95f04cb64ed5a84bfdebc2f3f0507080344da03deabe6993dd53"
+      },
+      "destination": "motions/04_narrow_sway.npz",
+      "fps": 50.0,
+      "frames": 500,
+      "historical_label_status": "constant_manual_inputs",
+      "historical_note": "Constant fractions 0.12/0.8. Historical geometry-gated FORCE replay completed 500 frames.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        0,
+        0
+      ],
+      "name": "04_narrow_sway",
+      "original_labels": [
+        {
+          "destination": "labels/04_narrow_sway/toy_sway_wbc_inputs.json",
+          "sha256": "0ce16adf7c4b888b10eac7d7074e886c301956d48164ba54ca1242f9c23b9947",
+          "source": "configs/toy_sway_wbc_inputs.json"
+        }
+      ],
+      "sha256": "62c763c8495e67b4ec8dc9251b2b246e9843ce71c7726e171aed858615b91f19",
+      "source": "eval_data/toy_standing_sway/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/05_slide/annotations.npz",
+        "sha256": "bd7cec2a0410f1110f72a73d4648e611df9ccc0c12d44d148b7314918f594984"
+      },
+      "destination": "motions/05_slide.npz",
+      "fps": 50.0,
+      "frames": 500,
+      "historical_label_status": "independent_physics_replay_passed_refined_slide_tracking",
+      "historical_note": "Historical refined GPU replay completed; starts in shifted support pose, without testing the transfer from centered standing.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        452,
+        0
+      ],
+      "name": "05_slide",
+      "original_labels": [
+        {
+          "destination": "labels/05_slide/force_refined_schedule.npz",
+          "sha256": "4d229b56083c0cb486eba188fe7f526c1b65d46d7b69ea3ff4e3666fc6319d85",
+          "source": "eval_data/toy_left_foot_slide/force/force_refined_schedule.npz"
+        },
+        {
+          "destination": "labels/05_slide/force_refined_schedule.csv",
+          "sha256": "247155eb94be105dc020c84ff494336f324c6f80db5a09db5fdb6294d0835371",
+          "source": "eval_data/toy_left_foot_slide/force/force_refined_schedule.csv"
+        }
+      ],
+      "sha256": "ef53d4b3569419d76bad77c8f221d15b7e5a11bec40d64ad839ea830abeaf177",
+      "source": "eval_data/toy_left_foot_slide/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/06_sole_rotation/annotations.npz",
+        "sha256": "ecdc9bb4136a49f7dee50e09a10fe64cdfd3aaa295a77750b53d1c5334acc224"
+      },
+      "destination": "motions/06_sole_rotation.npz",
+      "fps": 50.0,
+      "frames": 500,
+      "historical_label_status": "independent_physics_replay_passed",
+      "historical_note": "Historical GPU replay completed; supported initial pose and fixed sole-center pivot.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        452,
+        0
+      ],
+      "name": "06_sole_rotation",
+      "original_labels": [
+        {
+          "destination": "labels/06_sole_rotation/labels.npz",
+          "sha256": "33fcddc1fc387128261c074adb32dc9052950d0f1e5004d71fb1836a2af9ae3b",
+          "source": "eval_data/toy_left_foot_rotation/force/labels.npz"
+        },
+        {
+          "destination": "labels/06_sole_rotation/labels.csv",
+          "sha256": "f90b9fe8569de97b133a0052c65df80d1178647d087b92872be4503dae9611dc",
+          "source": "eval_data/toy_left_foot_rotation/force/labels.csv"
+        }
+      ],
+      "sha256": "d6cd5b0985ec6543680bab5f29a12ee82369d4a2e54c64065056aa6786580812",
+      "source": "eval_data/toy_left_foot_rotation/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/07_toe_rotation/annotations.npz",
+        "sha256": "6a7ac95189cb6f5e57a2d8e714c815c7104aab284a354288174d7476e6d6d934"
+      },
+      "destination": "motions/07_toe_rotation.npz",
+      "fps": 50.0,
+      "frames": 500,
+      "historical_label_status": "independent_physics_replay_passed",
+      "historical_note": "Historical GPU replay completed; begins with raised heel and fixed toe-edge pivot, without testing initial heel lift.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        452,
+        0
+      ],
+      "name": "07_toe_rotation",
+      "original_labels": [
+        {
+          "destination": "labels/07_toe_rotation/labels.npz",
+          "sha256": "9d2a9a2d443bbecfc7e2990ccb0013b5ba563b1a2a26da603936f16a28414c8e",
+          "source": "eval_data/toy_left_foot_toe_rotation/force/labels.npz"
+        },
+        {
+          "destination": "labels/07_toe_rotation/labels.csv",
+          "sha256": "b26416bea5880e0b753a0e9daffea0e767208ea22a3b7b8c4cc2fbfa007ac3f6",
+          "source": "eval_data/toy_left_foot_toe_rotation/force/labels.csv"
+        }
+      ],
+      "sha256": "c7c5055bfecfafdca0c0bacc9fef831ccc40a800eb3aefc3399aca5c3fac7e80",
+      "source": "eval_data/toy_left_foot_toe_rotation/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/08_turn_right/annotations.npz",
+        "sha256": "7eda9642518e9eb77fa24587f9869f9658528aaa0d382792594bc1d39a61ecf0"
+      },
+      "destination": "motions/08_turn_right.npz",
+      "fps": 50.0,
+      "frames": 661,
+      "historical_label_status": "full_cpu_replay_verified",
+      "historical_note": "Historical CPU replay completed and settled but failed stricter tracking criteria; touchdown was delayed 0.82 s. Historical friction 0.3 and controller gains differ from current FORCE defaults.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        122,
+        86
+      ],
+      "name": "08_turn_right",
+      "original_labels": [
+        {
+          "destination": "labels/08_turn_right/labels.npz",
+          "sha256": "c7af2ab274fea0e89a8d2a9beae5e54388d7957618369f133ea0c79db8145dc2",
+          "source": "eval_data/reference_e1_turn_right/short_reanchor/force/labels.npz"
+        },
+        {
+          "destination": "labels/08_turn_right/labels.csv",
+          "sha256": "504c9d2d87252aef0b3298f61496dd5acc56eb3aa4624522accd90f5be133954",
+          "source": "eval_data/reference_e1_turn_right/short_reanchor/force/labels.csv"
+        }
+      ],
+      "sha256": "b03922821a748e16bb6bdc4546c9dd5047b2f4d8ed4e5248cf2ab1da66c13a3d",
+      "source": "eval_data/reference_e1_turn_right/short_reanchor/reference.npz"
+    },
+    {
+      "action_dim": 2,
+      "annotations": {
+        "destination": "labels/09_front_kick/annotations.npz",
+        "sha256": "811bdf9884372826c6eadb19dabb39b5a6dc60de57de6ea3a498291220cd1787"
+      },
+      "destination": "motions/09_front_kick.npz",
+      "fps": 50.0,
+      "frames": 115,
+      "historical_executed_prefix_frames": 52,
+      "historical_label_status": "incomplete_trial",
+      "historical_note": "Complete 115-row label table. Historical replay terminated after 52 steps; rows 52:115 are a reference-derived unvalidated tail, not a demonstrated solution.",
+      "manual_force_max_n": [
+        1000.0,
+        1000.0
+      ],
+      "manual_noncontact_frames_left_right": [
+        25,
+        72
+      ],
+      "name": "09_front_kick",
+      "original_labels": [
+        {
+          "destination": "labels/09_front_kick/force_best_replay.npz",
+          "sha256": "d3cb48ac10bb2aeb77496f6c9fc26be2f0bbc71856cb04da406f57c94632f01e",
+          "source": "eval_data/g3_manual_20261016/force_replay/force_best_replay.npz"
+        },
+        {
+          "destination": "labels/09_front_kick/force_best_replay.csv",
+          "sha256": "dddae49167a22bf2333f8da66e9afdfd62f9bcfeeb141fd1a24712d729b63d31",
+          "source": "eval_data/g3_manual_20261016/force_replay/force_best_replay.csv"
+        }
+      ],
+      "sha256": "71149b98123642cfe54dd05ac539de70e744302e7d4e931fad381d2ee141d489",
+      "source": "eval_data/reference_planted_kick_20261016/g3_front_kick_t1_training.npz",
+      "unvalidated_label_tail_frames_half_open": [
+        52,
+        115
+      ]
+    }
+  ],
+  "purpose": "Nine existing labeled two-foot FORCE references, with original annotations preserved separately.",
+  "sampling": "One distinct clip per entry; the controller's motion sampler determines reset probabilities.",
+  "schema_version": 1,
+  "separate": [
+    {
+      "action_dim": 8,
+      "artifacts": [
+        {
+          "destination": "separate/crawl/reference.npz",
+          "sha256": "75c771fc977ad586d8d519ca36cbc90446810872227ffc1d389043c1bc417c81",
+          "source": "eval_data/reference_crawl_forward/reference.npz"
+        },
+        {
+          "destination": "separate/crawl/labels.npz",
+          "sha256": "fd4de283f627bf11eafdf6f714164cfa5dd68d46fd258490d38c96ba5b2113d5",
+          "source": "eval_data/reference_crawl_forward/force/labels.npz"
+        },
+        {
+          "destination": "separate/crawl/planned_labels.npz",
+          "sha256": "43dd2601ceb66a4b557ec970f54e51b76f5a98d8d3f86d0c56abc254d8f9d0ee",
+          "source": "eval_data/reference_crawl_forward/force/planned_labels.npz"
+        },
+        {
+          "destination": "separate/crawl/configs/crawl_force_schedule.json",
+          "sha256": "c2c4d1bc4f643cd540932ed83da7a7adddb48494cb7e62480f81606e8f65fcf3",
+          "source": "configs/crawl_force_schedule.json"
+        },
+        {
+          "destination": "separate/crawl/configs/crawl_manual_nn_outputs.json",
+          "sha256": "63a6dadacdbab12fee1d5ca0d44881334856243ab511b9e547d6f27a9b7aee18",
+          "source": "configs/crawl_manual_nn_outputs.json"
+        },
+        {
+          "destination": "separate/crawl/configs/crawl_contact_surfaces.json",
+          "sha256": "29ee5323d1f33f1c525f2e7ce8166c8e6a351a0b20c0633bdd676e06a38e74bd",
+          "source": "configs/crawl_contact_surfaces.json"
+        }
+      ],
+      "included_in_two_foot_training": false,
+      "label_samples": 2396,
+      "name": "crawl",
+      "reason": "Separate eight-region controller, contact model and collision asset; raw reference schema differs.",
+      "reference_fps": 29.96248436848687,
+      "reference_frames": 599,
+      "related_source_paths": [
+        "eval_data/reference_crawl_forward/contact_geometry.npz",
+        "eval_data/reference_crawl_forward/contact_labels.csv",
+        "eval_data/reference_crawl_forward/physics_asset/t1_crawl.usda",
+        "eval_data/reference_crawl_forward/physics_asset/collision_manifest.json",
+        "eval_data/reference_crawl_forward/force/controller_profile.json",
+        "eval_data/reference_crawl_forward/force/validation.json",
+        "eval_data/reference_crawl_forward/force/replay_command.json"
+      ]
+    },
+    {
+      "artifacts": [
+        {
+          "destination": "separate/g18_missing_labels/reference.npz",
+          "sha256": "7861c80b432e950a2a9736bb8aa852482cf8308280ee1de71482320c24828e85",
+          "source": "retargeted_motion/g18_push_kick_right_t1_training.npz"
+        },
+        {
+          "destination": "separate/g18_missing_labels/original_summary.txt",
+          "sha256": "2e69786b1a9a66dc3456169cea09e01e05ce5c41ea01e507858b3a3a097936d5",
+          "source": "eval_data/g18_kick_summary/README.txt"
+        },
+        {
+          "destination": "separate/g18_missing_labels/verified_results.json",
+          "sha256": "b027c329537d73b17c67f8f00490414523a2827be458af9fdd9a89ab505264c8",
+          "source": "eval_data/g18_kick_summary/verified_results.json"
+        }
+      ],
+      "fps": 50.0,
+      "included_in_two_foot_training": false,
+      "name": "g18_kick",
+      "reason": "Manual NPZ/CSV labels were deleted at the user's request. Retained summaries are not runnable label tables.",
+      "reference_frames": 142
+    }
+  ],
+  "validation": {
+    "body_count": 24,
+    "duration_s": 80.74,
+    "finite_arrays_and_identical_joint_body_order": true,
+    "fps": 50.0,
+    "joint_count": 23,
+    "loader": "MotionLibrary",
+    "num_clips": 9,
+    "total_frames": 4037
+  }
+}

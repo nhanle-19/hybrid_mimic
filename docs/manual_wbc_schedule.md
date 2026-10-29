@@ -24,8 +24,9 @@ the NN outputs. Previously saved schedules are unchanged.
 Scheduled playback through `scripts/rsl_rl/eval_wbc.py` preserves the supplied
 output table exactly. OFF intervals and their smooth transitions belong in
 the decoded input weights. There is no runtime manual-output replacement.
-The QP still checks actual contact geometry. FORCE zero removes modeled
-forces; AUTH zero removes only its contact-cost weights.
+Two-foot FORCE playback uses the caps alone to determine modeled support,
+without an actual or reference contact mask. FORCE zero removes modeled forces;
+AUTH retains its geometry gate, and AUTH zero removes only its contact-cost weights.
 
 Mapping validation passed 61 targeted tests (three CUDA tests skipped), plus
 the 273-case AUTH QP audit on CPU and OSQP. A five-step FORCE CPU playback used
@@ -103,8 +104,9 @@ Schedule generation uses the same prepared reference that the controller uses:
 joint limits, ground-penetration correction, and reconstructed kinematics are
 applied first. Foot sole clearance comes from the collision vertices. A smooth
 near-ground confidence fades between 3 and 43 mm; this is a planning heuristic,
-not an assertion of physical contact. The actual QP still uses its normal
-geometry gates. `reference_contact_available` separately records reference
+not an assertion of physical contact. For two-foot FORCE this geometry assists
+offline labeling only; it does not mask the runtime QP. AUTH retains its geometry
+gate. `reference_contact_available` separately records reference
 geometric availability; the retargeted right foot can remain slightly elevated
 even during the apparent recovery phase.
 

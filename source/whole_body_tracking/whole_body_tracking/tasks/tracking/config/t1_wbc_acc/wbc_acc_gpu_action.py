@@ -13,6 +13,7 @@ class WBCACCGPUAction(WBCACCAction):
     solver_type = WBCACCGPUQP
     action_name = 'wbc_acc'
     log_prefix = 'WBCACC'
+    contact_gating = 'geometry'
 
     def __init__(self, cfg, env):
         ActionTerm.__init__(self, cfg, env)
@@ -180,6 +181,17 @@ class WBCACCGPUAction(WBCACCAction):
             raise RuntimeError('Non-finite foot-ground contact forces')
         return result
 
+    def _contact_measurements(self):
+        return self._gpu_ground_forces()
+
+    def _contact_masks(self, state):
+        masks = available_vertices(state, self.cfg.controller, self._env.scene.env_origins.double())
+        if getattr(self.cfg, 'force_full_contact', False):
+            masks = torch.ones_like(masks)
+        if self.contact_override is not None:
+            masks &= self.contact_override[:, :, None]
+        return masks
+
     def apply_actions(self):
         # Pair diagnostics with the first physics sample after the solve,
         # including when the next QP update is still nine substeps away.
@@ -195,13 +207,10 @@ class WBCACCGPUAction(WBCACCAction):
             self._validate_simulator_model(self._cpu_states(state))
         times = self._env.command_manager.get_term('motion').time_steps
         ref = select_state(self.references, times)
-        ground = self._gpu_ground_forces()
-        self.estimated_contacts[:] = ground[..., 2] > 1.
-        masks = available_vertices(state, self.cfg.controller, self._env.scene.env_origins.double())
-        if getattr(self.cfg, 'force_full_contact', False):
-            masks = torch.ones_like(masks)
-        if self.contact_override is not None:
-            masks &= self.contact_override[:, :, None]  # May remove support, never create it.
+        ground = self._contact_measurements()
+        if ground is not None:
+            self.estimated_contacts[:] = ground[..., 2] > 1.
+        masks = self._contact_masks(state)
         result = self.solver.solve(state, ref, self._raw.double(), masks, self.limits,
                                     self.external if self.has_external else None)
         failed = result['failed']
@@ -224,8 +233,9 @@ class WBCACCGPUAction(WBCACCAction):
         logs[f'{self.log_prefix}/joint_tracking_rmse'] = tracking_error.mean()
         logs[f'{self.log_prefix}/torque_saturation_fraction'] = saturation.mean()
         logs[f'{self.log_prefix}/predicted_normal_force'] = result['wrenches'][..., 2].mean()
-        logs[f'{self.log_prefix}/measured_normal_force'] = ground[..., 2].mean()
-        if self.previous_wrench is not None and self._clock % self._env.cfg.decimation == 0:
+        if ground is not None:
+            logs[f'{self.log_prefix}/measured_normal_force'] = ground[..., 2].mean()
+        if ground is not None and self.previous_wrench is not None and self._clock % self._env.cfg.decimation == 0:
             measured = self._actual_wrenches()
             for foot in range(2):
                 for axis, label in enumerate(('fx', 'fy', 'fz', 'mx', 'my', 'mz')):
@@ -270,6 +280,7 @@ class WBCACCGPUAction(WBCACCAction):
             controller_config_json=np.asarray(json.dumps(self.cfg.controller.to_dict())),
             policy_type=np.asarray(self.action_name), policy_action_dim=self.action_dim,
             wrench_measurement_version=2,
+            contact_gating=self.contact_gating,
             force_full_contact=getattr(self.cfg, 'force_full_contact', False),
             evaluation_completed=completed, failure_reason=np.asarray(failure_reason))
 

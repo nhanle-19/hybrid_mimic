@@ -25,7 +25,7 @@ parser.add_argument('--record_motion_states', action='store_true',
 parser.add_argument('--video_dir', help='Defaults to <checkpoint run>/videos/play; QP-only uses eval_data/<controller>/videos.')
 parser.add_argument('--output', help='Defaults to <checkpoint run>/diagnostics.npz; QP-only uses eval_data/<controller>/diagnostics.npz.')
 parser.add_argument('--manual_support', type=float, nargs=2, default=(1., 1.), metavar=('LEFT', 'RIGHT'),
-                    help='Manual per-foot fractions: AUTH xyz cost authority, otherwise force limits; geometry gates support.')
+                    help='Manual per-foot fractions: AUTH xyz cost authority, otherwise force limits; FORCE support is controlled by caps.')
 parser.add_argument('--manual_authority', type=float, nargs=6, metavar='C',
                     help='QP-only WBC-AUTHORITY fractions: left xyz, then right xyz (cost only).')
 parser.add_argument('--manual_inputs', type=Path,
@@ -38,7 +38,7 @@ parser.add_argument('--manual_weight', type=float, default=50., help='All six ma
 parser.add_argument('--qp_only', '--zero_policy', dest='zero_policy', action='store_true',
                     help='Simulate reference tracking with manual support activations and motion weights.')
 parser.add_argument('--force_full_contact', action='store_true',
-                    help='QP-only diagnostic: allow all vertices on both feet regardless of actual contact geometry.')
+                    help='ACC/AUTH QP-only diagnostic: allow all vertices. FORCE already uses caps without geometry gating.')
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args, hydra = parser.parse_known_args()
@@ -194,8 +194,9 @@ def main(env_cfg, agent_cfg):
     print(f'[INFO] Evaluation diagnostics: {output}', flush=True)
     if not (force_only or authority_policy) and not controller.contact_weight_min < args.manual_weight < controller.contact_weight_max:
         raise ValueError('Manual weight must be strictly between configured bounds')
-    contact_description = ('diagnostic override enables all contact vertices on both feet'
-                           if args.force_full_contact else 'actual geometry gates support')
+    contact_description = ('learned force caps control support; no geometry contact gate' if force_only else
+                           'diagnostic override enables all contact vertices on both feet' if args.force_full_contact else
+                           'actual geometry gates support')
     print(f'[INFO] {action_name}: {contact_description}.'
           + (' Cost-only translational contact authority; fixed normal-force caps.' if authority_policy else
              ' No foot-acceleration objectives.' if force_only else ' Soft foot-acceleration objectives.'), flush=True)

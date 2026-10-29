@@ -1,0 +1,50 @@
+{
+  "action_dim": 8,
+  "artifacts": [
+    {
+      "destination": "separate/crawl/reference.npz",
+      "sha256": "75c771fc977ad586d8d519ca36cbc90446810872227ffc1d389043c1bc417c81",
+      "source": "eval_data/reference_crawl_forward/reference.npz"
+    },
+    {
+      "destination": "separate/crawl/labels.npz",
+      "sha256": "fd4de283f627bf11eafdf6f714164cfa5dd68d46fd258490d38c96ba5b2113d5",
+      "source": "eval_data/reference_crawl_forward/force/labels.npz"
+    },
+    {
+      "destination": "separate/crawl/planned_labels.npz",
+      "sha256": "43dd2601ceb66a4b557ec970f54e51b76f5a98d8d3f86d0c56abc254d8f9d0ee",
+      "source": "eval_data/reference_crawl_forward/force/planned_labels.npz"
+    },
+    {
+      "destination": "separate/crawl/configs/crawl_force_schedule.json",
+      "sha256": "c2c4d1bc4f643cd540932ed83da7a7adddb48494cb7e62480f81606e8f65fcf3",
+      "source": "configs/crawl_force_schedule.json"
+    },
+    {
+      "destination": "separate/crawl/configs/crawl_manual_nn_outputs.json",
+      "sha256": "63a6dadacdbab12fee1d5ca0d44881334856243ab511b9e547d6f27a9b7aee18",
+      "source": "configs/crawl_manual_nn_outputs.json"
+    },
+    {
+      "destination": "separate/crawl/configs/crawl_contact_surfaces.json",
+      "sha256": "29ee5323d1f33f1c525f2e7ce8166c8e6a351a0b20c0633bdd676e06a38e74bd",
+      "source": "configs/crawl_contact_surfaces.json"
+    }
+  ],
+  "included_in_two_foot_training": false,
+  "label_samples": 2396,
+  "name": "crawl",
+  "reason": "Separate eight-region controller, contact model and collision asset; raw reference schema differs.",
+  "reference_fps": 29.96248436848687,
+  "reference_frames": 599,
+  "related_source_paths": [
+    "eval_data/reference_crawl_forward/contact_geometry.npz",
+    "eval_data/reference_crawl_forward/contact_labels.csv",
+    "eval_data/reference_crawl_forward/physics_asset/t1_crawl.usda",
+    "eval_data/reference_crawl_forward/physics_asset/collision_manifest.json",
+    "eval_data/reference_crawl_forward/force/controller_profile.json",
+    "eval_data/reference_crawl_forward/force/validation.json",
+    "eval_data/reference_crawl_forward/force/replay_command.json"
+  ]
+}

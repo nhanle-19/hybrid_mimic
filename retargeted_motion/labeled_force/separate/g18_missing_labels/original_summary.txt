@@ -1,0 +1,18 @@
+G18 kick: retained results from the retired tuning session (2026-10-16).
+
+Original motion files remain in retargeted_motion/g18_push_kick_right_t1*.npz.
+Original reference video remains at eval_data/g18_reference.mp4.
+
+Retained here: final FORCE/AUTHORITY videos, diagnostic plots, and result summaries.
+Best FORCE attempt: 59 control steps / 1.18 s; latest lift attempt: 42 / 0.84 s;
+AUTHORITY: 37 / 0.74 s. None completed the 142-frame reference.
+1000 N validation: old labels 15 steps, demand labels 30, contact correction 23.
+These trials had no QP failures; tracking terminated at the hand-height limit.
+They do not establish a formulation defect or global motion infeasibility.
+
+Old manual label NPZ/CSV files, intermediate rollouts, snapshots, trial scripts,
+and debug logs were removed at the user's request. Historical paths inside the
+JSON summaries refer to removed diagnostics. These summaries are result records,
+not runnable schedules. Plot tracking errors are sampled before control;
+termination checks occur after physics. Video files show slowed playback.
+Reusable source tools and regression tests remain unchanged.

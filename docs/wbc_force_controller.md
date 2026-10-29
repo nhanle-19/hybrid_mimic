@@ -1,7 +1,7 @@
 # WBC-FORCE: learned normal-force inequalities
 
 WBC-FORCE is a separate task derived from [WBC-ACC](wbc_acc_controller.md).
-It shares the robot dynamics, support geometry, physics, observations and PPO
+It shares the robot dynamics, foot model, physics, observations and PPO
 configuration, with its own three-term reward and clip-completion boundary. The existing WBC-ACC
 policy retains its fourteen-output interface and acceleration objectives.
 
@@ -31,7 +31,7 @@ must be migrated or rebuilt; see [the schedule guide](manual_wbc_schedule.md).
 
 `contact_force_max` defaults to `(600, 600)` N. Normal force is world-Z force
 on the robot from the horizontal ground. The NN selects upper bounds; the QP
-chooses the actual force within those bounds. These are hard inequalities in
+chooses the predicted force within those bounds. These are hard inequalities in
 the QP, not force-target penalties or desired force commands.
 
 The foot-acceleration tracking objectives are omitted entirely. No stationary
@@ -40,12 +40,30 @@ orientation, and force/acceleration regularization remain. The separate swing
 task must have zero weight. The inherited contact-motion weight/gain config
 fields are unused by WBC-FORCE.
 
-Friction-cone approximation, nonnegative point forces, actual collider support
-geometry, floating-base dynamics, and joint torque bounds remain active.
-A zero force cap or unavailable support geometry gives exactly zero predicted
-foot wrench. The NN cannot create support for an airborne foot. The QP force
-limit constrains the prediction; PhysX may produce different measured forces,
-especially at impacts. Diagnostics record both plus the learned upper bounds.
+Friction-cone approximation, nonnegative point forces, floating-base dynamics,
+and joint torque bounds remain active. Two-foot FORCE keeps all four modeled
+corners of each foot available to the QP during training and evaluation.
+There is no actual- or reference-geometry contact mask: the two learned caps
+alone control whether a foot may supply predicted force. A zero cap gives
+exactly zero predicted foot wrench. A positive cap can permit predicted force
+even for an airborne foot; learning to unload it is the policy's responsibility.
+
+The controller still uses forward kinematics and the stored sole corners to
+compute force moment arms and Jacobians. These robot-model calculations do not
+classify contact or compare corners with a floor. Ground-gap and contact-patch
+height tolerances therefore do not affect two-foot FORCE force availability.
+ACC and AUTHORITY retain their geometry gates; the separate manual eight-region
+crawl controller retains its existing contact handling.
+
+The QP force limit constrains the prediction; PhysX determines the physical
+contact response to the applied motor torques and may produce different measured
+forces. Diagnostics record both plus the learned upper bounds.
+
+The replay and training measurements recorded below predate removal of the
+two-foot FORCE geometry gate. They remain evidence about that historical
+controller, not validation of the current ungated controller. Existing gated
+checkpoints require new evaluation; train a fresh policy to assess learning
+without the gate. The recorded results and artifacts are preserved.
 
 The flat-foot slide diagnostic also tested whether the remaining costs were
 too weak. With 800 N caps on both feet and friction 0.6, eight 500-step physics
@@ -58,8 +76,8 @@ missing coupling between contact motion and sticking/sliding friction, rather
 than insufficient tracking weight alone. A force inside the friction pyramid
 does not by itself describe the friction reaction during sliding. Only motor
 torques are applied to PhysX, which determines the actual contact response.
-These diagnostic trial files were removed during the evaluation cleanup;
-production defaults and the FORCE definition above remain unchanged.
+These diagnostic trial files were removed during the evaluation cleanup.
+They used the historical geometry-gated controller described above.
 
 A subsequent reference shifted the root 8 cm right, lowered it 2 cm, and added
 a 5-degree rightward roll while retaining the same flat-foot slide path.
@@ -131,9 +149,10 @@ available at that episode's sampled start. PPO still uses discounted returns.
 Swing weights come from the prepared reference's lowest foot collision vertex
 above the ground: zero at or below 1 mm, a cubic smoothstep between 1 and 5 mm,
 and one at or above 5 mm. A grounded toe or heel is not classified as airborne.
-The reward penalizes a positive cap even if actual geometry already removes
-that foot's support. It never replaces NN outputs or masks the QP with a
-reference contact label.
+This non-contact penalty teaches the policy to remove force capacity during
+swing. Reference geometry is training supervision only: it never replaces NN
+outputs or masks the QP with a contact label. Actual geometry also does not
+remove support from the two-foot FORCE QP.
 
 The default timing and three reward weights are unchanged. Optional
 `env.rewards.swing_force.params.unload_lead_time` (seconds, default **0**) adds
@@ -149,8 +168,9 @@ The existing contact cost is one-sided: it penalizes a positive cap in reference
 swing and has no direct preference for a positive cap in stance. Stance support
 is learned through survival and the controller. Because costs are normalized by
 the full clip, short swing intervals contribute only part of the total return.
-On the downloaded iteration-6999 walk policy, deterministic replay earned
-97.31/100 points: 100 progress points minus 2.13 swing-cap and 0.56 action-change
+On the downloaded iteration-6999 walk policy with the historical geometry gate,
+deterministic replay earned 97.31/100 points: 100 progress points minus
+2.13 swing-cap and 0.56 action-change
 points, despite imperfect zero-cap timing. A flat return alone therefore does
 not establish a good contact schedule.
 
@@ -222,8 +242,8 @@ The shared controller defaults are posture gains 1600/40 with weight 0.1,
 CoM position gain 40, linear/angular momentum gains 10/15, momentum weights
 `[1, 1, 1, 10, 10, 10]`, and pelvis gains 60/12 with weight 5. Two-foot training
 and eight-region crawl replay read the same FORCE configuration. Motion-specific
-gain overrides are unnecessary; contact geometry and physical limits are
-separate from these gains. See the
+gain overrides are unnecessary; their different contact handling and physical
+limits are separate from these gains. See the
 [validation and training command](../README.md#shared-force-defaults-measured-scope).
 
 ## Commands
@@ -259,7 +279,7 @@ folder and diagnostics to its `diagnostics.npz`, matching the playback layout.
 QP-only evaluation uses `eval_data/wbc_force/` because it has no checkpoint.
 Use `--video_dir` or `--output` to choose a different destination explicitly.
 
-Numerical tests cover learned-cap enforcement, zero/unavailable support,
+Numerical tests cover learned-cap enforcement, zero-cap support removal,
 friction and torque bounds, inverse dynamics, CPU solver agreement, absence
 of foot-reference objectives, the action interface, and exported policy metadata:
 

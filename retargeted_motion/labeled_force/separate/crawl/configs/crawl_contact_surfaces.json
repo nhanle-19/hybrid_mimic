@@ -1,0 +1,419 @@
+{
+  "source": "T1 USD collision geometry",
+  "source_layers_sha256": {
+    "t1.usd": "37870732d9077f3a88442538656c3c3a079b882ae3ccff83e2785fc6dad25d4a",
+    "t1_base.usd": "327c093eb73eaf9513bf32778e7206262f95473543965dd0b606996de0de2f76",
+    "t1_sensor.usd": "be57eba5ce779d5ccda0d3f3825a6fd94d734859f9349138aeacfc16b37a002e",
+    "t1_physics.usd": "416605f3fb0d77b8be93eda1a27aa5eb40312d61f7d2f86fab92e7f88264c8a0"
+  },
+  "ground_height_m": 0.0,
+  "contact_tolerance_m": 0.001,
+  "patch_tolerance_m": 0.0005,
+  "surfaces": [
+    {
+      "name": "torso",
+      "body": "Trunk",
+      "collider_path": "/T1/Trunk/collisions/mesh_0/box",
+      "shape": "Cube",
+      "transform_to_body": [
+        [
+          0.15000000596046448,
+          0.0,
+          0.0,
+          0.05999999865889549
+        ],
+        [
+          0.0,
+          0.20000000298023224,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.30000001192092896,
+          0.11999999731779099
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "half_size": 0.5
+    },
+    {
+      "name": "head",
+      "body": "H2",
+      "collider_path": "/T1/H2/collisions/mesh_0/sphere",
+      "shape": "Sphere",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.009999999776482582
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.10999999940395355
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.07999999821186066
+    },
+    {
+      "name": "left_upper_arm",
+      "body": "AL3",
+      "collider_path": "/T1/AL3/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          4.1359030627651384e-25,
+          0.0
+        ],
+        [
+          0.0,
+          -3.5745606228321236e-06,
+          -0.9999999999936114,
+          0.05000000074505806
+        ],
+        [
+          0.0,
+          0.9999999999936114,
+          -3.574560622832124e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.029999999329447746,
+      "height": 0.15000000596046448
+    },
+    {
+      "name": "left_forearm_hand",
+      "body": "left_hand_link",
+      "collider_path": "/T1/left_hand_link/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          4.1359030627651384e-25,
+          0.0
+        ],
+        [
+          0.0,
+          -3.5745606228321236e-06,
+          -0.9999999999936114,
+          0.12999999523162842
+        ],
+        [
+          0.0,
+          0.9999999999936114,
+          -3.574560622832124e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.029999999329447746,
+      "height": 0.17499999701976776
+    },
+    {
+      "name": "right_upper_arm",
+      "body": "AR3",
+      "collider_path": "/T1/AR3/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          4.1359030627651384e-25,
+          0.0
+        ],
+        [
+          0.0,
+          -3.5745606228321236e-06,
+          -0.9999999999936114,
+          -0.05000000074505806
+        ],
+        [
+          0.0,
+          0.9999999999936114,
+          -3.574560622832124e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.029999999329447746,
+      "height": 0.15000000596046448
+    },
+    {
+      "name": "right_forearm_hand",
+      "body": "right_hand_link",
+      "collider_path": "/T1/right_hand_link/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          4.1359030627651384e-25,
+          0.0
+        ],
+        [
+          0.0,
+          -3.5745606228321236e-06,
+          -0.9999999999936114,
+          -0.12999999523162842
+        ],
+        [
+          0.0,
+          0.9999999999936114,
+          -3.574560622832124e-06,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.029999999329447746,
+      "height": 0.17499999701976776
+    },
+    {
+      "name": "left_thigh",
+      "body": "Hip_Yaw_Left",
+      "collider_path": "/T1/Hip_Yaw_Left/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.05000000074505806,
+      "height": 0.1599999964237213
+    },
+    {
+      "name": "left_shin",
+      "body": "Shank_Left",
+      "collider_path": "/T1/Shank_Left/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.11999999731779099
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.05000000074505806,
+      "height": 0.15000000596046448
+    },
+    {
+      "name": "left_foot",
+      "body": "left_foot_link",
+      "collider_path": "/T1/left_foot_link/collisions/mesh_0/box",
+      "shape": "Cube",
+      "transform_to_body": [
+        [
+          0.22300000488758087,
+          0.0,
+          0.0,
+          0.009999999776482582
+        ],
+        [
+          0.0,
+          0.10000000149011612,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.029999999329447746,
+          -0.014999999664723873
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "half_size": 0.5
+    },
+    {
+      "name": "right_thigh",
+      "body": "Hip_Yaw_Right",
+      "collider_path": "/T1/Hip_Yaw_Right/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.05000000074505806,
+      "height": 0.1599999964237213
+    },
+    {
+      "name": "right_shin",
+      "body": "Shank_Right",
+      "collider_path": "/T1/Shank_Right/collisions/mesh_0/cylinder",
+      "shape": "Cylinder",
+      "transform_to_body": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          -0.11999999731779099
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "radius": 0.05000000074505806,
+      "height": 0.15000000596046448
+    },
+    {
+      "name": "right_foot",
+      "body": "right_foot_link",
+      "collider_path": "/T1/right_foot_link/collisions/mesh_0/box",
+      "shape": "Cube",
+      "transform_to_body": [
+        [
+          0.22300000488758087,
+          0.0,
+          0.0,
+          0.009999999776482582
+        ],
+        [
+          0.0,
+          0.10000000149011612,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.029999999329447746,
+          -0.014999999664723873
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "half_size": 0.5
+    }
+  ],
+  "source_file": "outputs/crawl_feasibility_20261022/contact_work/contact_sites.json"
+}

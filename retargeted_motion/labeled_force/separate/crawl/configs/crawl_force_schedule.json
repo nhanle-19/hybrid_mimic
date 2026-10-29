@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "motion": "eval_data/reference_crawl_forward/reference.npz",
+  "motion_sha256": "75c771fc977ad586d8d519ca36cbc90446810872227ffc1d389043c1bc417c81",
+  "geometry": "eval_data/reference_crawl_forward/contact_geometry.npz",
+  "geometry_sha256": "7b7c66a7488808105d6995ec1a9803b1887e1b7917a62042ce10f08175156be6",
+  "frame_count": 599,
+  "region_order": [
+    "left_hand",
+    "right_hand",
+    "left_knee",
+    "right_knee",
+    "left_forearm",
+    "right_forearm",
+    "right_foot",
+    "left_upper_arm"
+  ],
+  "normal_world": [
+    0.0,
+    0.0,
+    1.0
+  ],
+  "force_max_n": [
+    600.0,
+    600.0,
+    600.0,
+    600.0,
+    600.0,
+    600.0,
+    600.0,
+    600.0
+  ],
+  "contact_gap_tolerance_m": 0.001,
+  "contact_patch_height_tolerance_m": 0.0005,
+  "max_contact_penetration_m": 0.001,
+  "interval_convention": "Inclusive, zero-based reference frame endpoints. All unspecified frames are zero.",
+  "contact_intervals": {
+    "left_hand": [
+      [
+        0,
+        598
+      ]
+    ],
+    "right_hand": [
+      [
+        0,
+        598
+      ]
+    ],
+    "left_knee": [
+      [
+        0,
+        598
+      ]
+    ],
+    "right_knee": [
+      [
+        0,
+        598
+      ]
+    ],
+    "left_forearm": [
+      [
+        68,
+        72
+      ],
+      [
+        511,
+        516
+      ]
+    ],
+    "right_forearm": [],
+    "right_foot": [
+      [
+        496,
+        500
+      ],
+      [
+        542,
+        552
+      ]
+    ],
+    "left_upper_arm": []
+  },
+  "review": {
+    "basis": "Smoothed reference, independently checked at all 599 frames for floor clearance, full-mesh contact partitions, joint bounds and self collisions. Annotations do not gate NN outputs.",
+    "parent": "configs/crawl_force_schedule.json",
+    "images": []
+  }
+}

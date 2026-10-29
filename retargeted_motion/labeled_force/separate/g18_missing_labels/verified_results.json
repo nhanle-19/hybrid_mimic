@@ -1,0 +1,93 @@
+{
+  "force_longest": {
+    "control_steps_including_failed_final_step": 59,
+    "passed_control_steps": 58,
+    "duration_seconds": 1.18,
+    "reference_frames": 142,
+    "complete_motion": false,
+    "qp_failures": 0,
+    "unavailable_foot_nonzero_value_count": 0,
+    "max_left_sole_gap_first_0_3s_mm": 2.9148644619265625,
+    "termination": {
+      "reference_frame": 58,
+      "threshold_m": 0.25,
+      "body_names": [
+        "left_hand_link",
+        "right_hand_link",
+        "left_foot_link",
+        "right_foot_link"
+      ],
+      "height_errors_m": [
+        0.2672586143016815,
+        0.25096720457077026,
+        0.07649722695350647,
+        0.10998605936765671
+      ],
+      "failed_body_names": [
+        "left_hand_link",
+        "right_hand_link"
+      ],
+      "anchor_height_error_m": 0.235716313123703
+    }
+  },
+  "force_latest_lift": {
+    "control_steps_including_failed_final_step": 42,
+    "passed_control_steps": 41,
+    "duration_seconds": 0.84,
+    "reference_frames": 142,
+    "complete_motion": false,
+    "qp_failures": 0,
+    "unavailable_foot_nonzero_value_count": 0,
+    "max_left_sole_gap_first_0_3s_mm": 5.874503378285052,
+    "termination": {
+      "reference_frame": 41,
+      "threshold_m": 0.25,
+      "body_names": [
+        "left_hand_link",
+        "right_hand_link",
+        "left_foot_link",
+        "right_foot_link"
+      ],
+      "height_errors_m": [
+        0.2528117001056671,
+        0.08854031562805176,
+        0.013012312352657318,
+        0.19923317432403564
+      ],
+      "failed_body_names": [
+        "left_hand_link"
+      ],
+      "anchor_height_error_m": 0.16986727714538574
+    }
+  },
+  "authority_latest": {
+    "control_steps_including_failed_final_step": 37,
+    "passed_control_steps": 36,
+    "duration_seconds": 0.74,
+    "reference_frames": 142,
+    "complete_motion": false,
+    "qp_failures": 0,
+    "unavailable_foot_nonzero_value_count": 0,
+    "max_left_sole_gap_first_0_3s_mm": 0.04179110579626,
+    "termination": {
+      "reference_frame": 36,
+      "threshold_m": 0.25,
+      "body_names": [
+        "left_hand_link",
+        "right_hand_link",
+        "left_foot_link",
+        "right_foot_link"
+      ],
+      "height_errors_m": [
+        0.26865649223327637,
+        0.21624845266342163,
+        0.06196479871869087,
+        0.184503436088562
+      ],
+      "failed_body_names": [
+        "left_hand_link"
+      ],
+      "anchor_height_error_m": 0.22742700576782227
+    }
+  }
+}

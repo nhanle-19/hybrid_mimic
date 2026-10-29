@@ -164,6 +164,8 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "normal_force_limit_units": "N",
             "normal_force_axis": "world_z",
             "foot_acceleration_objectives": False,
+            "contact_gating": "learned_force_caps",
+            "contact_measurements_required": False,
             "actor_inputs": "reference_window,actual_state_history",
             "actor_reference_body_selection": "anchor_only" if reference_params.get("root_only", False) else "all_bodies",
             "actor_reference_frame_offsets": reference_offsets,

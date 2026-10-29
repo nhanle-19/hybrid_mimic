@@ -1,0 +1,24 @@
+{
+  "artifacts": [
+    {
+      "destination": "separate/g18_missing_labels/reference.npz",
+      "sha256": "7861c80b432e950a2a9736bb8aa852482cf8308280ee1de71482320c24828e85",
+      "source": "retargeted_motion/g18_push_kick_right_t1_training.npz"
+    },
+    {
+      "destination": "separate/g18_missing_labels/original_summary.txt",
+      "sha256": "2e69786b1a9a66dc3456169cea09e01e05ce5c41ea01e507858b3a3a097936d5",
+      "source": "eval_data/g18_kick_summary/README.txt"
+    },
+    {
+      "destination": "separate/g18_missing_labels/verified_results.json",
+      "sha256": "b027c329537d73b17c67f8f00490414523a2827be458af9fdd9a89ab505264c8",
+      "source": "eval_data/g18_kick_summary/verified_results.json"
+    }
+  ],
+  "fps": 50.0,
+  "included_in_two_foot_training": false,
+  "name": "g18_kick",
+  "reason": "Manual NPZ/CSV labels were deleted at the user's request. Retained summaries are not runnable label tables.",
+  "reference_frames": 142
+}

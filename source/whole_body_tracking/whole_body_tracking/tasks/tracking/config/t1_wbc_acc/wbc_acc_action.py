@@ -303,4 +303,4 @@ class WBCACCActionCfg(ActionTermCfg):
     residual_tolerance: float = 2e-5
     record_diagnostics: bool = False
     standing_only: bool = False
-    force_full_contact: bool = False  # Diagnostic override; normal contact geometry remains the default.
+    force_full_contact: bool = False  # ACC/AUTH diagnostic override; FORCE always uses caps without geometry gating.

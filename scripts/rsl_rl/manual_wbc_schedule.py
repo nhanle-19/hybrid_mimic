@@ -111,7 +111,9 @@ def build_schedule(controller, fps, positions, rotations, velocities, com, mass,
                    else 'reference_geometry_and_load_share_v2'),
         'status': 'hand_designed_unvalidated',
         'phase_definition': 'Soft near-ground support confidence, not a physical contact assertion; see reference_contact_available.',
-        'notes': 'Raw logits; one row per reference frame; actual geometry gates support. No feedback in schedule.',
+        'notes': ('Raw logits; one row per reference frame; FORCE caps control support without a runtime geometry gate. No feedback in schedule.'
+                  if controller == 'force' else
+                  'Raw logits; one row per reference frame; actual geometry gates support. No feedback in schedule.'),
     }
     if controller == 'authority':
         metadata['authority_load_scaling'] = 'Multiply speed/contact authority by sqrt(0.5 + estimated support load share), then smooth and clip.'

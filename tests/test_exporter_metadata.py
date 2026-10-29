@@ -37,7 +37,8 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
     if nominal:
         data.default_joint_pos_nominal = torch.full((23,), 2.)
     terms = {"joint_pos": NS(_scale=torch.full((2, 23), .25))}
-    motion = NS(seq_len=1, cfg=NS(anchor_body_name="pelvis", body_names=["pelvis"]))
+    motion = NS(seq_len=1, cfg=NS(anchor_body_name="pelvis", body_names=["pelvis"]),
+                motion=NS(num_clips=1))
     env = NS(scene={"robot": NS(data=data)},
              action_manager=NS(active_terms=list(terms), get_term=terms.__getitem__),
              command_manager=NS(active_terms=["motion"], get_term=lambda _: motion),
@@ -85,6 +86,8 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)"
         assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["normal_force_axis"] == "world_z"
+        assert metadata["contact_gating"] == "learned_force_caps"
+        assert metadata["contact_measurements_required"] == "False"
         assert metadata["actor_reference_body_selection"] == "anchor_only"
         assert metadata["actor_inputs"] == "reference_window,actual_state_history"
         assert [float(x) for x in metadata["actor_reference_frame_offsets"].split(",")] == [0, 1, 3, 5, 10]
