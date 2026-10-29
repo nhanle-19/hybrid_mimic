@@ -229,40 +229,49 @@ The task defaults to **1,024 environments and 30,000 iterations**, saving
 checkpoints every 500 iterations and at completion. Controller gains and
 weights come directly from `T1WBCForceControllerCfg`, including the fixed
 posture gains **Kp=1600, Kd=40**. Force limits use their configured defaults;
-contact-height tolerances do not gate two-foot FORCE. To train another motion,
-change `--motion_file` and `--run_name`.
+contact-height tolerances do not gate two-foot FORCE. To change the training
+selection, update `retargeted_motion/training_list/` as described below and set
+`--run_name` for the new run.
 
-To train walking together with the **left-foot-tilted sway** (15-degree foot
-pitch, heel contact, 2 cm wider stance), both references are bundled in
-`retargeted_motion/training_list/`. Use the folder in the same command:
+**Training selection convention:** put every motion the user wants to train
+directly in `retargeted_motion/training_list/` and keep using that path in
+training commands. When the requested selection changes, update the NPZ files
+in this folder and its `manifest.json`; do not redirect training to a different
+collection directory. The loader reads all `.npz` files directly in this folder.
+Copy the updated folder to the training machine before starting a remote run.
+
+The current selection contains all nine motions: walking, wide tilted sway,
+standing, narrow sway, sliding, sole rotation, toe rotation, turning, and the G3
+front kick. Use:
 
 ```bash
 python scripts/rsl_rl/train.py \
   --task Tracking-WBC-FORCE-T1-v0 \
-  --motion_dir retargeted_motion/training_list \
+  --motion_file retargeted_motion/training_list \
   --device cuda:0 --headless \
   --logger wandb --log_project_name hybrid_mimic \
   --run_name training_list \
+  env.episode_length_s=15.0 \
   agent.resume=false
 ```
 
-`--motion_file` also accepts this directory. Each reset selects a clip with
+`--motion_dir` is an alias for `--motion_file`. Each reset selects a clip with
 equal probability, then samples its phase adaptively; 20% of starts are at that
 clip's frame zero. Each episode ends at its own clip boundary. Reference
 lookahead, derivative calculations, unloading lead-in and 100-point reward
-normalization remain within that clip. `WBCForce/Motion/01_walk/*` and
-`WBCForce/Motion/02_tilted_sway/*` report separate sampling, completion and cap
-statistics. Inputs remain 590/861 and the three contact rewards are unchanged.
+normalization remain within that clip. `WBCForce/Motion/<clip_name>/*` reports
+separate sampling, completion and cap statistics. Inputs remain 590/861 and the
+three contact rewards are unchanged.
 The sway reference does not enforce a positive action floor or prescribe cap
 variation; it supplies no manual action labels. ONNX exports include clip
 boundaries in `motion_clips_json`; their `time_step` input uses the global
 reference index. Evaluate a trained policy with one of the individual NPZs.
 
-The consolidated labeled-motion collection is in
+The source references and archived labels are preserved in
 `retargeted_motion/labeled_force/`:
 
 ```text
-motions/       Nine two-foot reference NPZs used by training
+motions/       Source copies of the nine two-foot reference NPZs
 labels/        Original manual labels and normalized annotations, archived only
 separate/      Crawl assets and the G18 reference with missing labels
 manifest.json  Source paths, hashes, frame counts, and historical validation notes
@@ -285,20 +294,22 @@ TensorBoard logging:
 bash scripts/train_labeled_force.sh
 ```
 
-This launcher sets **1,024 environments, 7,000 PPO updates**, checkpoint saving
+This launcher reads `retargeted_motion/training_list/` and sets
+**1,024 environments, 7,000 PPO updates**, checkpoint saving
 every 500 updates, local TensorBoard logging, run name
 `force_labeled_caps_only`, and `agent.resume=false`. Its 15-second episode timeout
 allows the 13.22-second turn to reach its clip boundary. It uses the current
 two-foot FORCE controller without a geometry gate. Trailing arguments can
-override launcher settings. Copy the assembled collection to the training
-machine, or recreate it where all original local source files are available:
+override launcher settings. The source archive can be recreated where all
+original local source files are available:
 
 ```bash
 python scripts/assemble_labeled_force_library.py
 ```
 
 The assembler checks source hashes and motion/label alignment and refuses to
-overwrite differing existing files. Training reads only the `motions/` folder.
+overwrite differing existing files. It rebuilds the source archive; the active
+training selection remains the NPZ files in `retargeted_motion/training_list/`.
 
 This uses the same PPO settings as WBC-ACC, with **590 actor inputs**:
 five reference frames at offsets `[0, 1, 3, 5, 10]` (295 values), followed by

@@ -7,7 +7,7 @@ cd -- "$FORCE_REPO_ROOT"
 
 exec "${FORCE_PYTHON:-python}" scripts/rsl_rl/train.py \
   --task Tracking-WBC-FORCE-T1-v0 \
-  --motion_dir retargeted_motion/labeled_force/motions \
+  --motion_file retargeted_motion/training_list \
   --num_envs 1024 \
   --max_iterations 7000 \
   --device cuda:0 --headless \

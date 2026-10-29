@@ -3,12 +3,74 @@
     {
       "file": "01_walk.npz",
       "source": "retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz",
-      "sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79"
+      "collection_source": "retargeted_motion/labeled_force/motions/01_walk.npz",
+      "sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79",
+      "frames": 261,
+      "fps": 50.0
     },
     {
       "file": "02_tilted_sway.npz",
       "source": "eval_data/toy_standing_sway_wide02/reference.npz",
-      "sha256": "35cececc299976aced21b09a766242bfca8ceb1ba6883ae4deb7b1f727dddeea"
+      "collection_source": "retargeted_motion/labeled_force/motions/02_tilted_sway.npz",
+      "sha256": "35cececc299976aced21b09a766242bfca8ceb1ba6883ae4deb7b1f727dddeea",
+      "frames": 500,
+      "fps": 50.0
+    },
+    {
+      "file": "03_standing.npz",
+      "source": "eval_data/toy_standing/reference.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/03_standing.npz",
+      "sha256": "738a0330786ccc38162d16ac0543c060ece49e792af3988d511cb62ecbbd85b2",
+      "frames": 500,
+      "fps": 50.0
+    },
+    {
+      "file": "04_narrow_sway.npz",
+      "source": "eval_data/toy_standing_sway/reference.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/04_narrow_sway.npz",
+      "sha256": "62c763c8495e67b4ec8dc9251b2b246e9843ce71c7726e171aed858615b91f19",
+      "frames": 500,
+      "fps": 50.0
+    },
+    {
+      "file": "05_slide.npz",
+      "source": "eval_data/toy_left_foot_slide/reference.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/05_slide.npz",
+      "sha256": "ef53d4b3569419d76bad77c8f221d15b7e5a11bec40d64ad839ea830abeaf177",
+      "frames": 500,
+      "fps": 50.0
+    },
+    {
+      "file": "06_sole_rotation.npz",
+      "source": "eval_data/toy_left_foot_rotation/reference.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/06_sole_rotation.npz",
+      "sha256": "d6cd5b0985ec6543680bab5f29a12ee82369d4a2e54c64065056aa6786580812",
+      "frames": 500,
+      "fps": 50.0
+    },
+    {
+      "file": "07_toe_rotation.npz",
+      "source": "eval_data/toy_left_foot_toe_rotation/reference.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/07_toe_rotation.npz",
+      "sha256": "c7c5055bfecfafdca0c0bacc9fef831ccc40a800eb3aefc3399aca5c3fac7e80",
+      "frames": 500,
+      "fps": 50.0
+    },
+    {
+      "file": "08_turn_right.npz",
+      "source": "eval_data/reference_e1_turn_right/short_reanchor/reference.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/08_turn_right.npz",
+      "sha256": "b03922821a748e16bb6bdc4546c9dd5047b2f4d8ed4e5248cf2ab1da66c13a3d",
+      "frames": 661,
+      "fps": 50.0
+    },
+    {
+      "file": "09_front_kick.npz",
+      "source": "eval_data/reference_planted_kick_20261016/g3_front_kick_t1_training.npz",
+      "collection_source": "retargeted_motion/labeled_force/motions/09_front_kick.npz",
+      "sha256": "71149b98123642cfe54dd05ac539de70e744302e7d4e931fad381d2ee141d489",
+      "frames": 115,
+      "fps": 50.0
     }
   ],
   "sampling": "equal probability per episode reset",
@@ -21,5 +83,7 @@
     "period_s": 4.0,
     "duration_s": 10.0
   },
-  "note": "Reference motions only. Manual force schedules are not used as labels. Varying caps have not been proven necessary."
+  "note": "Reference motions only. Manual force schedules are not used as labels. Update this directory and manifest when the requested training selection changes; synchronize it to the training machine before starting a run.",
+  "purpose": "Active user-selected training motions. Keep all requested training references directly in this directory and keep training commands pointed here.",
+  "total_frames": 4037
 }
