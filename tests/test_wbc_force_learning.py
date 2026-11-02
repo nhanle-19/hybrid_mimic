@@ -15,6 +15,28 @@ learning = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(learning)
 
 
+@pytest.mark.parametrize('axis', [0, 1, 2], ids=['roll', 'pitch', 'yaw'])
+def test_orientation_error_uses_full_rotation_and_ignores_quaternion_sign(axis):
+    angles = torch.tensor([0., .001, math.pi/12, math.pi], dtype=torch.float64)
+    actual = torch.zeros(4, 4, dtype=torch.float64)
+    actual[:, 0] = (angles/2).cos()
+    actual[:, 1+axis] = (angles/2).sin()
+    reference = torch.zeros_like(actual)
+    reference[:, 0] = 1.
+    torch.testing.assert_close(learning.orientation_error_radians(actual, reference), angles)
+    torch.testing.assert_close(learning.orientation_error_radians(-actual, reference), angles)
+    torch.testing.assert_close(learning.orientation_error_radians(actual, -reference), angles)
+    assert learning.orientation_error_radians(actual, actual).count_nonzero() == 0
+    # Positive quaternion scaling cancels in atan2.
+    torch.testing.assert_close(learning.orientation_error_radians(2.*actual, 3.*reference), angles)
+
+
+def test_orientation_error_takes_short_path_across_yaw_wrap():
+    angles = torch.deg2rad(torch.tensor([179., -179.], dtype=torch.float64))/2
+    q = torch.stack((angles.cos(), torch.zeros(2), torch.zeros(2), angles.sin()), -1)
+    assert learning.orientation_error_radians(q[:1], q[1:]).rad2deg().item() == pytest.approx(2.)
+
+
 def test_unloading_anticipates_liftoff_without_delaying_touchdown_or_wrapping():
     swing = torch.tensor([[0.], [0.], [0.], [1.], [1.], [0.], [0.]])
     actual = learning.unloading_weights(swing, .04, .02)

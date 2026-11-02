@@ -1,5 +1,6 @@
 """FORCE percentage rewards, reference swing geometry, and reset boundaries."""
 import importlib.util
+import math
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace as NS
@@ -123,6 +124,63 @@ def geometry_env(rewards):
     return env
 
 
+@pytest.mark.parametrize('frames,dt', [(10, .02), (261, .02), (100, .01)])
+def test_contact_orientation_is_clip_scaled_and_penalizes_a_static_wrong_pose(rewards, frames, dt):
+    env = make_env(frames, count=3, dt=dt)
+    command = env.command_manager.get_term('motion')
+    # Grounded reference feet with a held 15-degree pitch. Actual feet are flat.
+    angle = math.radians(15.)/2
+    command.motion._body_quat_w[:] = torch.tensor([math.cos(angle), 0., math.sin(angle), 0.])
+    command.robot.data = NS(body_link_quat_w=torch.zeros(3, 2, 4))
+    command.robot.data.body_link_quat_w[..., 0] = 1.
+    # First environment misses both feet; second misses just the left.
+    command.robot.data.body_link_quat_w[1, 0] = command.motion._body_quat_w[0, 0]
+    command.robot.data.body_link_quat_w[2] = -command.motion._body_quat_w[0]
+    env.termination_manager.terminated[0] = True  # A failing step still incurs cost.
+    term = rewards.ContactOrientationPenalty(NS(params={}, weight=-.2), env)
+    assert term.contact_weight.min() == 1.
+    total = torch.zeros(3, dtype=torch.float64)
+    for frame in range(frames):
+        command.time_steps.fill_(frame)
+        total += term(env)*dt*term.cfg.weight
+    torch.testing.assert_close(total, torch.tensor([-10., -5., 0.], dtype=torch.float64), atol=4.e-6, rtol=0)
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/ContactOrientation/left_error_deg'] == pytest.approx(10., abs=1.e-5)
+    assert logs['WBCForce/ContactOrientation/right_error_deg'] == pytest.approx(5., abs=1.e-5)
+    assert logs['WBCForce/Reward/contact_orientation_points_per_step'] == pytest.approx(-5./frames)
+
+
+def test_contact_orientation_uses_reference_contact_and_not_caps_or_actual_height(rewards):
+    env = geometry_env(rewards)
+    command = env.command_manager.get_term('motion')
+    command.motion._body_pos_w[2, 1, 2] += .001  # Clearly above the 5 mm threshold.
+    angle = math.radians(15.)/2
+    command.robot.data = NS(body_link_quat_w=command.motion._body_quat_w[:2].clone())
+    command.robot.data.body_link_quat_w[:, 1] = torch.tensor([math.cos(angle), 0., 0., math.sin(angle)])
+    # No actual positions, forces, or height detector are available to the term.
+    env.action_manager.action.fill_(-3.)
+    term = rewards.ContactOrientationPenalty(NS(params={}, weight=-.2), env)
+    torch.testing.assert_close(term.contact_weight[:, 0], torch.tensor([1., .5, 0.], dtype=torch.float64),
+                               atol=1.e-6, rtol=0)
+    command.time_steps[:] = torch.tensor([0, 1])
+    weighted = term(env)*env.step_dt*term.cfg.weight
+    torch.testing.assert_close(weighted, torch.tensor([-5./3, -2.5/3], dtype=torch.float64), atol=1.e-6, rtol=0)
+    env.action_manager.action.fill_(3.)
+    torch.testing.assert_close(term(env)*env.step_dt*term.cfg.weight, weighted)
+    command.time_steps.fill_(2)
+    assert term(env).count_nonzero() == 0  # Reference swing is excluded.
+
+
+@pytest.mark.parametrize('params', [
+    {'orientation_scale_deg': 0.}, {'orientation_scale_deg': -1.},
+    {'orientation_scale_deg': float('nan')}, {'orientation_scale_deg': float('inf')},
+    {'clearance_start': .005, 'clearance_full': .001}, {'clearance_start': -.001},
+])
+def test_contact_orientation_rejects_invalid_parameters(rewards, params):
+    with pytest.raises(ValueError):
+        rewards.ContactOrientationPenalty(NS(params=params, weight=-.2), geometry_env(rewards))
+
+
 def test_swing_penalty_ramps_with_reference_clearance_and_ignores_actual_support(rewards):
     env = geometry_env(rewards)
     term = rewards.SwingForcePenalty(NS(params={'unload_lead_time': 0.}, weight=-.5), env)
@@ -149,6 +207,57 @@ def test_grounded_toe_pivot_is_not_reference_swing(rewards):
     motion._body_pos_w[:, 1, 2] = .2-vertices[..., 2].amin(-1)
     term = rewards.SwingForcePenalty(NS(params={}, weight=-.5), env)
     assert term.swing_weight.count_nonzero() == 0
+
+
+@pytest.mark.parametrize('side', [0, 1], ids=['left', 'right'])
+@pytest.mark.parametrize('roll,pitch,grounded_corners', [
+    (0., .35, 2), (0., -.35, 2), (.30, 0., 2), (-.30, 0., 2), (.30, .35, 1),
+], ids=['toe', 'heel', 'edge_positive_roll', 'edge_negative_roll', 'single_corner'])
+def test_partial_contact_uses_minimum_height_and_only_penalizes_full_liftoff(
+        rewards, side, roll, pitch, grounded_corners):
+    env = geometry_env(rewards)
+    motion = env.command_manager.get_term('motion').motion
+    points = rewards.sole_vertices(dtype=torch.float64)
+    # Both feet start planted; geometry_env deliberately reverses body ordering.
+    for foot, body in enumerate((1, 0)):
+        motion._body_pos_w[:, body, 2] = .2-points[foot, :, 2].min()
+    roll, pitch = torch.tensor([roll, pitch], dtype=torch.float64)/2
+    cr, sr, cp, sp = roll.cos(), roll.sin(), pitch.cos(), pitch.sin()
+    body = (1, 0)[side]
+    motion._body_quat_w[:, body] = torch.stack((cr*cp, sr*cp, cr*sp, -sr*sp))
+    rotation = rewards.rotation_xyzw(motion._body_quat_w[:, body][:, [1, 2, 3, 0]])
+    vertices = points[side] @ rotation.transpose(-1, -2)
+    clearance = torch.tensor([0., .0005, .006], dtype=torch.float64)
+    motion._body_pos_w[:, body, 2] = .2-vertices[..., 2].amin(-1)+clearance
+    world_heights = vertices[..., 2]+motion._body_pos_w[:, body, None, 2]-.2
+    # An average would wrongly apply the full swing penalty to these contacts.
+    assert (world_heights.mean(-1) > .005).all()
+    assert int((world_heights[0].abs() < 1e-10).sum()) == grounded_corners
+    actual_clearance = rewards._reference_clearance(env)[0]
+    torch.testing.assert_close(actual_clearance[:, side], clearance, atol=1e-10, rtol=0)
+    term = rewards.SwingForcePenalty(NS(params={'unload_lead_time': 0.}, weight=-.5), env)
+    torch.testing.assert_close(term.swing_weight[:, side], torch.tensor([0., 0., 1.], dtype=torch.float64))
+    assert term.swing_weight[:, 1-side].count_nonzero() == 0
+    env.action_manager.action.fill_(3.)  # Positive capacity on both feet.
+    term.command.time_steps[:] = torch.tensor([0, 1])
+    assert term(env).count_nonzero() == 0
+    term.command.time_steps.fill_(2)
+    assert (term(env) > 0).all()
+
+    # The same partial-contact labels must supervise orientation. Flattening
+    # the tilted foot is penalized even with a zero force cap; matching is free.
+    command = env.command_manager.get_term('motion')
+    command.robot.data = NS(body_link_quat_w=torch.zeros(2, 2, 4, dtype=torch.float64))
+    command.robot.data.body_link_quat_w[..., 0] = 1.
+    orientation = rewards.ContactOrientationPenalty(NS(params={}, weight=-.2), env)
+    env.action_manager.action.fill_(-3.)
+    command.time_steps[:] = torch.tensor([0, 1])
+    assert (orientation(env) > 0).all()
+    command.time_steps.fill_(2)
+    assert orientation(env).count_nonzero() == 0
+    command.time_steps[:] = torch.tensor([0, 1])
+    command.robot.data.body_link_quat_w[:] = motion._body_quat_w[command.time_steps]
+    torch.testing.assert_close(orientation(env), torch.zeros(2, dtype=torch.float64), atol=1.e-20, rtol=0)
 
 
 @pytest.mark.parametrize('params', [{'clearance_start': .005, 'clearance_full': .001},

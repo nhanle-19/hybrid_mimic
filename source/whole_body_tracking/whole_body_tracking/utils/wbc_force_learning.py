@@ -3,6 +3,16 @@ import math
 import torch
 
 
+def orientation_error_radians(actual, reference):
+    """Shortest full 3D rotation angle between WXYZ quaternions, in [0, pi]."""
+    # conjugate(reference) * actual. atan2 is stable near zero and pi, and
+    # abs(w) makes opposite quaternion signs represent the same orientation.
+    scalar = (reference*actual).sum(-1).abs()
+    vector = (reference[..., :1]*actual[..., 1:]-actual[..., :1]*reference[..., 1:]
+              -torch.cross(reference[..., 1:], actual[..., 1:], dim=-1))
+    return 2.*torch.atan2(vector.norm(dim=-1), scalar)
+
+
 def swing_weights(clearance, low=.001, high=.005):
     if not 0 <= low < high:
         raise ValueError('Invalid swing clearance thresholds')

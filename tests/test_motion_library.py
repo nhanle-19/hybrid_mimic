@@ -97,10 +97,10 @@ def test_bundled_motions_have_expected_identity_and_order():
     motion = library.MotionLibrary(ROOT/'retargeted_motion/training_list')
     assert motion.clip_names == [
         '01_walk', '02_tilted_sway', '03_standing', '04_narrow_sway',
-        '05_slide', '06_sole_rotation', '07_toe_rotation', '08_turn_right', '09_front_kick',
+        '05_slide', '06_sole_rotation', '07_toe_rotation', '09_front_kick',
     ]
-    assert motion.clip_lengths.tolist() == [261, 500, 500, 500, 500, 500, 500, 661, 115]
-    assert motion.time_step_total == 4037
+    assert motion.clip_lengths.tolist() == [261, 500, 500, 500, 500, 500, 500, 115]
+    assert motion.time_step_total == 3376
     with np.load(motion.clip_paths[1]) as sway:
         assert sway['tilted_side'].item() == 'left'
         assert sway['tilt_deg'].item() == 15.

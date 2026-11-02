@@ -57,14 +57,6 @@
       "fps": 50.0
     },
     {
-      "file": "08_turn_right.npz",
-      "source": "eval_data/reference_e1_turn_right/short_reanchor/reference.npz",
-      "collection_source": "retargeted_motion/labeled_force/motions/08_turn_right.npz",
-      "sha256": "b03922821a748e16bb6bdc4546c9dd5047b2f4d8ed4e5248cf2ab1da66c13a3d",
-      "frames": 661,
-      "fps": 50.0
-    },
-    {
       "file": "09_front_kick.npz",
       "source": "eval_data/reference_planted_kick_20261016/g3_front_kick_t1_training.npz",
       "collection_source": "retargeted_motion/labeled_force/motions/09_front_kick.npz",
@@ -85,5 +77,5 @@
   },
   "note": "Reference motions only. Manual force schedules are not used as labels. Update this directory and manifest when the requested training selection changes; synchronize it to the training machine before starting a run.",
   "purpose": "Active user-selected training motions. Keep all requested training references directly in this directory and keep training commands pointed here.",
-  "total_frames": 4037
+  "total_frames": 3376
 }

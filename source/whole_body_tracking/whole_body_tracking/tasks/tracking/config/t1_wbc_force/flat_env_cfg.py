@@ -1,4 +1,4 @@
-"""Force-limit policy with motion progress, swing-cap, and action-change rewards."""
+"""Force-limit policy with motion progress and contact-orientation rewards."""
 from isaaclab.utils import configclass
 from isaaclab.managers import ObservationTermCfg, RewardTermCfg, TerminationTermCfg
 from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg
@@ -8,7 +8,7 @@ from .wbc_force_action import WBCForceActionCfg
 from .motion import WBCForceTrainingMotion
 from .reward_terms import (
     MotionCompletionReward, SwingForcePenalty,
-    ForceActionChangePenalty, reference_motion_complete,
+    ForceActionChangePenalty, ContactOrientationPenalty, reference_motion_complete,
 )
 
 
@@ -24,6 +24,8 @@ class WBCForceRewardsCfg:
     swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.5,
                                params={'clearance_start': .001, 'clearance_full': .005, 'unload_lead_time': 0.})
     action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.05)
+    contact_orientation = RewardTermCfg(func=ContactOrientationPenalty, weight=-.2,
+        params={'orientation_scale_deg': 15., 'clearance_start': .001, 'clearance_full': .005})
 
 
 def configure_wbc_force(cfg):

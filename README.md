@@ -240,9 +240,10 @@ in this folder and its `manifest.json`; do not redirect training to a different
 collection directory. The loader reads all `.npz` files directly in this folder.
 Copy the updated folder to the training machine before starting a remote run.
 
-The current selection contains all nine motions: walking, wide tilted sway,
-standing, narrow sway, sliding, sole rotation, toe rotation, turning, and the G3
-front kick. Use:
+The current selection contains eight motions: walking, wide tilted sway,
+standing, narrow sway, sliding, sole rotation, toe rotation, and the G3 front
+kick, totaling **3,376 frames at 50 Hz**. Turn-right is excluded from training.
+Use:
 
 ```bash
 python scripts/rsl_rl/train.py \
@@ -261,7 +262,7 @@ clip's frame zero. Each episode ends at its own clip boundary. Reference
 lookahead, derivative calculations, unloading lead-in and 100-point reward
 normalization remain within that clip. `WBCForce/Motion/<clip_name>/*` reports
 separate sampling, completion and cap statistics. Inputs remain 590/861 and the
-three contact rewards are unchanged.
+four FORCE reward terms are shared across clips.
 The sway reference does not enforce a positive action floor or prescribe cap
 variation; it supplies no manual action labels. ONNX exports include clip
 boundaries in `motion_clips_json`; their `time_step` input uses the global
@@ -277,7 +278,7 @@ separate/      Crawl assets and the G18 reference with missing labels
 manifest.json  Source paths, hashes, frame counts, and historical validation notes
 ```
 
-The nine clips are walking, wide tilted sway, standing, narrow sway, sliding,
+The nine archived clips are walking, wide tilted sway, standing, narrow sway, sliding,
 sole rotation, toe rotation, turning, and the G3 front kick: **4,037 frames at
 50 Hz**. Keep the current height-based non-contact penalty; this run does not
 read manual labels as actor inputs, QP masks, action targets, or reward weights.
@@ -298,7 +299,7 @@ This launcher reads `retargeted_motion/training_list/` and sets
 **1,024 environments, 7,000 PPO updates**, checkpoint saving
 every 500 updates, local TensorBoard logging, run name
 `force_labeled_caps_only`, and `agent.resume=false`. Its 15-second episode timeout
-allows the 13.22-second turn to reach its clip boundary. It uses the current
+allows every selected motion to reach its clip boundary. It uses the current
 two-foot FORCE controller without a geometry gate. Trailing arguments can
 override launcher settings. The source archive can be recreated where all
 original local source files are available:
@@ -324,9 +325,14 @@ the reference coordinates. On reset, missing history repeats the first state
 of the new episode, independently for each environment. The critic receives
 both windows plus its existing privileged inputs, for **861 total values**.
 FORCE rewards executed motion completion (100 points for a full clip),
-minus a nonzero-cap penalty during reference swing and a decoded-action change
-penalty. Initial penalty weights are 0.5 and 0.05, with all three terms normalized
-by clip length. Reference contact geometry supplies reward supervision only;
+minus penalties for nonzero caps during reference swing, decoded-action changes,
+and foot-orientation mismatch during reference contact. Initial penalty
+weights are 0.5, 0.05, and 0.2, with all four terms normalized by clip length.
+Orientation matching uses the full 3D rotation error, a 15-degree error scale,
+and a bounded cost of at most 20 points per clip. Reference contact is determined
+by the lowest sole corner, preserving toe, heel, and partial-foot contact.
+The target follows intended reference rotation; actual unloading or lifting
+cannot switch off its contact weight. Reference geometry supplies reward supervision only;
 it does not constrain the runtime QP. Training ends at the final reference
 frame; random phase starts receive no credit for the skipped prefix. See the
 [reward definition](docs/wbc_force_controller.md#learning).
@@ -338,7 +344,7 @@ Earlier FORCE checkpoints with 236 or 1,432 actor inputs are also incompatible
 with this layout; keep `agent.resume=false` for a fresh run.
 
 The five-step walk uses the standard `train.py` entry point, PPO algorithm,
-network, and three-term FORCE reward. FORCE training and crawl replay read
+network, and four-term FORCE reward. FORCE training and crawl replay read
 the same controller gains and objective weights. Training starts from a random
 policy and requires no manual labels or files from `eval_data/`.
 
@@ -376,7 +382,8 @@ server command above.
 | Contact patch height tolerance | Unused for two-foot FORCE force availability |
 | Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
 | Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
-| Reward weights: completion / swing cap / cap change | 1.0 / −0.5 / −0.05 |
+| Reward weights: completion / swing cap / cap change / contact orientation | 1.0 / −0.5 / −0.05 / −0.2 |
+| Contact-orientation error scale / maximum full-clip cost | 15 degrees / 20 points |
 | Checkpoint interval / logging | Every 500 iterations and at completion / W&B |
 
 Checkpoints and events are written under `logs/rsl_rl/t1_wbc_force/`.
@@ -384,8 +391,9 @@ FORCE now reports `WBCForce/FullMotion/*` separately from sampled-suffix
 completion, with per-foot swing zero-cap coverage, hold duration, liftoff
 timing, measured swing load, and cap changes. Twenty percent of resets start
 at frame zero so short adaptive suffixes cannot be mistaken for full-motion
-performance. The three reward weights and default contact timing remain
-unchanged; tracking stays with the QP. See the
+performance. The original three reward weights and default contact timing remain
+unchanged; the additional orientation term compares feet that are contacting in
+the reference. Tracking commands still come from the QP. See the
 [contact-learning metrics](docs/wbc_force_controller.md#contact-learning-logs)
 for units and the optional unloading lead-in.
 Evaluate deterministic outputs across the motion separately from exploration
@@ -651,6 +659,39 @@ selected replay artifacts remain in place. `eval_data/cleanup_20261020.json`
 records the removed folders and hashes of retained results. Historical reports
 may name removed trials; the final slide replay commands below use retained files.
 Explicit `--video_dir` and `--output` options override these defaults.
+
+For a contact-focused evaluation of the newest FORCE checkpoint across every
+motion in the active training manifest, run:
+
+```bash
+python scripts/eval_force_motion_suite.py --output outputs/force_contact_evaluation
+```
+
+The suite selects the highest checkpoint iteration in the newest run, verifies
+the reference hashes and saved controller settings, and executes each clip once
+from frame zero with the training torso/QP guards. It stops at the first failure
+and saves per-motion diagnostics, contact plots, a CSV, and `report.html`.
+Use `--checkpoint PATH` to select a specific model and `--skip_existing` to reuse
+matching results. Support load, swing unloading, foot pose, unintended lifts,
+and geometric contact-patch overlap are reported separately from completion;
+intended sliding and rotation are compared with their reference motion.
+Contact metrics for failed clips cover the executed prefix, with full-clip
+coverage also included. Optional comparison videos can be generated from the
+recorded poses using `scripts/render_force_contact_eval.py OUTPUT_DIRECTORY`
+in an environment with MuJoCo, Pillow, and imageio-ffmpeg; rerun
+`scripts/analyze_force_contacts.py OUTPUT_DIRECTORY` to embed them in the report.
+
+For one sequential video with the existing translucent orange reference overlay:
+
+```bash
+MUJOCO_GL=egl python scripts/render_force_suite_overlay.py outputs/force_contact_evaluation \
+  --output outputs/force_contact_evaluation/overlay
+```
+
+This renders every saved task at normal speed in the original shared world frame,
+with the learned robot in solid slate. The export includes task chapters and an
+explicit stop notice for incomplete rollouts, plus a playback page with chapter
+buttons. Use `--preview-only` to inspect the camera and overlay before encoding.
 
 ### Manual actions over a complete motion
 

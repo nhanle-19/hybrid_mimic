@@ -3,6 +3,7 @@
 RewardManager multiplies terms by step_dt. Return rates here so each executed
 reference frame contributes 100 / frame_count before the configured weight.
 """
+import math
 import torch
 from isaaclab.managers import ManagerTermBase
 
@@ -10,7 +11,7 @@ from whole_body_tracking.utils.wbc_contact_mapping import decode_contact_values
 from whole_body_tracking.utils.wbc_acc_contact_policy import FEET, sole_vertices
 from whole_body_tracking.utils.wbc_acc_torch_model import rotation_xyzw
 from whole_body_tracking.utils.wbc_force_learning import (
-    ForceMetrics, swing_weights, unloading_weights,
+    ForceMetrics, orientation_error_radians, swing_weights, unloading_weights,
 )
 
 
@@ -201,6 +202,44 @@ class SwingForcePenalty(_MotionScaledTerm):
         caps = decode_contact_values(env.action_manager.action)
         value = (self.unloading_weight[self.command.time_steps]*caps.square()).mean(-1)*self.scale
         _metrics(env).mean('Reward/swing_cap_points_per_step', value*env.step_dt*self.cfg.weight)
+        return value
+
+
+class ContactOrientationPenalty(_MotionScaledTerm):
+    """Track each foot's orientation whenever reference geometry has contact."""
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        angle_scale = cfg.params.get('orientation_scale_deg', 15.)
+        if not math.isfinite(angle_scale) or angle_scale <= 0:
+            raise ValueError('Contact orientation scale must be finite and positive')
+        clearance, self.body_ids, _ = _reference_clearance(env)
+        self.contact_weight = 1.-swing_weights(clearance,
+            cfg.params.get('clearance_start', .001), cfg.params.get('clearance_full', .005))
+        self.reference_quaternion = self.command.motion._body_quat_w[:, self.body_ids]
+
+    def __call__(self, env, command_name='motion', orientation_scale_deg=15.,
+                 clearance_start=.001, clearance_full=.005):
+        frame = self.command.time_steps
+        # World-frame foot link orientation includes roll, pitch, and yaw.
+        # Actual height, force and learned caps cannot disable this reward.
+        actual = self.command.robot.data.body_link_quat_w[:, self.body_ids]
+        angle = orientation_error_radians(actual, self.reference_quaternion[frame])
+        weight = self.contact_weight[frame]
+        squared_error = (angle/math.radians(orientation_scale_deg)).square()
+        cost = (weight*squared_error/(1.+squared_error)).mean(-1)
+        value = cost*self.scale
+        metrics = _metrics(env)
+        for i, side in enumerate(('left', 'right')):
+            metrics.mean(f'ContactOrientation/{side}_error_deg', angle[:, i].rad2deg(), weight[:, i] > 0)
+            metrics.mean(f'ContactOrientation/{side}_reference_weight', weight[:, i])
+        metrics.mean('ContactOrientation/bounded_cost', cost)
+        metrics.mean('Reward/contact_orientation_points_per_step', value*env.step_dt*self.cfg.weight)
+        motion = self.command.motion
+        if getattr(motion, 'num_clips', 1) > 1:
+            clips = motion.frame_clip_ids[frame]
+            for clip, name in enumerate(motion.clip_names):
+                metrics.mean(f'Motion/{name}/contact_orientation_error_deg', angle.rad2deg(),
+                             (clips == clip)[:, None] & (weight > 0))
         return value
 
 
