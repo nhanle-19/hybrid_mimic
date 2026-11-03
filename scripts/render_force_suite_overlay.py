@@ -267,7 +267,7 @@ def main():
         '<p>Reference: translucent orange. Learned policy: solid slate. Playback at 1x speed.</p>'
         '<video controls preload="metadata" poster="preview.png" src="all_tasks_overlay.mp4"></video><p>'+links+'</p>'
         f'<p>{stopped} {sum(c["metadata"]["completed"] for c in clips)}/{len(clips)} clips complete. Each task is an independent rollout from frame zero.</p>'
-        '<p>These recordings use the existing checkpoint, trained before the new force-mismatch penalty.</p>'
+        f'<p>Checkpoint: {html.escape(clips[0]["metadata"]["checkpoint"])}</p>'
         '<p><a href="all_tasks_overlay.mp4">Download video</a> &middot; <a href="video_manifest.json">Recording details</a></p>\n')
     print(f'Verified {decoded} frames, {frames/fps:.2f} s: {video}', flush=True)
 

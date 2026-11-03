@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from test_wbc_acc_gpu import cfg, threads, standing_state, action_modules, DEVICES
+from test_wbc_force_rewards import rewards
 from wbc_acc_torch_model import WBCACCTorchModel, mv
 from wbc_force_gpu_control import WBCForceGPUQP, decode_force_actions, encode_force_capacities
 
@@ -139,7 +140,7 @@ def test_force_action_initialization_and_reset(force_modules):
 
 @pytest.mark.parametrize('record_diagnostics', [False, True])
 @pytest.mark.parametrize('backend', ['batched', 'osqp'])
-def test_force_action_uses_caps_without_geometry_gate(force_modules, action_modules, monkeypatch,
+def test_force_action_uses_caps_without_geometry_gate(force_modules, action_modules, rewards, monkeypatch,
                                                      record_diagnostics, backend):
     """Training/evaluation action routing needs neither floor tests nor a contact override."""
     _, gpu = action_modules
@@ -160,9 +161,10 @@ def test_force_action_uses_caps_without_geometry_gate(force_modules, action_modu
                              joint_stiffness=torch.zeros((2, 23)), joint_damping=torch.zeros((2, 23))),
         set_joint_effort_target=lambda torque: applied.append(torque.clone()))
     # No terrain/floor origin is supplied to the action's contact-selection path.
-    env = SimpleNamespace(device='cpu', num_envs=2, scene={'robot': asset}, physics_dt=.002,
+    env = SimpleNamespace(device='cpu', num_envs=2, scene={'robot': asset}, physics_dt=.002, step_dt=.02,
         cfg=SimpleNamespace(decimation=10), extras={},
-        command_manager=SimpleNamespace(get_term=lambda _: SimpleNamespace(time_steps=torch.arange(2))))
+        command_manager=SimpleNamespace(get_term=lambda _: SimpleNamespace(
+            time_steps=torch.arange(2), motion=SimpleNamespace(time_step_total=2))))
     term = config.class_type(config, env)
     term.references = state
     term._states = lambda: state
@@ -185,6 +187,11 @@ def test_force_action_uses_caps_without_geometry_gate(force_modules, action_modu
     expected = term.solver.solve(state, state, encode_force_capacities(caps),
         torch.ones((2, 2, 4), dtype=torch.bool), term.limits)
     torch.testing.assert_close(applied[0].double(), expected['torque'], atol=2e-5, rtol=0)
+    # The reward must consume the executed QP solution with diagnostics on or off.
+    env.action_manager = SimpleNamespace(action=term.raw_actions, get_term=lambda _: term)
+    gap = rewards.ForceCapGapPenalty(SimpleNamespace(params={}, weight=-.1), env)
+    expected_gap = (caps-expected['wrenches'][..., 2]/600.).clamp_min(0.).square().mean(-1)*50.
+    torch.testing.assert_close((gap(env)*env.step_dt).double(), expected_gap, atol=1e-5, rtol=0)
     if record_diagnostics:
         assert term.last_prediction['available_vertices'].all()
     else:

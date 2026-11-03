@@ -326,13 +326,13 @@ of the new episode, independently for each environment. The critic receives
 both windows plus its existing privileged inputs, for **861 total values**.
 FORCE rewards executed motion completion (100 points for a full clip),
 minus penalties for nonzero caps during reference swing, decoded-action changes,
-and foot-orientation mismatch during reference contact. Initial penalty
-weights are 0.5, 0.05, and 0.2, with all four terms normalized by clip length.
-Orientation matching uses the full 3D rotation error, a 15-degree error scale,
-and a bounded cost of at most 20 points per clip. Reference contact is determined
-by the lowest sole corner, preserving toe, heel, and partial-foot contact.
-The target follows intended reference rotation; actual unloading or lifting
-cannot switch off its contact weight. Reference geometry supplies reward supervision only;
+exact-zero caps during reference contact, and unused force capacity. Initial
+penalty weights are 0.5, 0.05, 0.5, and 0.1, with all five terms normalized by
+clip length. The false-zero penalty uses reference contact determined by the
+lowest sole corner, preserving toe, heel, and partial-foot contact. The cap-gap
+penalty squares the positive difference between cap and QP-used normal force,
+normalized by each foot's configured force maximum. Contact-orientation rewards
+are removed. Reference geometry supplies reward supervision only;
 it does not constrain the runtime QP. Training ends at the final reference
 frame; random phase starts receive no credit for the skipped prefix. See the
 [reward definition](docs/wbc_force_controller.md#learning).
@@ -344,7 +344,7 @@ Earlier FORCE checkpoints with 236 or 1,432 actor inputs are also incompatible
 with this layout; keep `agent.resume=false` for a fresh run.
 
 The five-step walk uses the standard `train.py` entry point, PPO algorithm,
-network, and four-term FORCE reward. FORCE training and crawl replay read
+network, and five-term FORCE reward. FORCE training and crawl replay read
 the same controller gains and objective weights. Training starts from a random
 policy and requires no manual labels or files from `eval_data/`.
 
@@ -382,8 +382,8 @@ server command above.
 | Contact patch height tolerance | Unused for two-foot FORCE force availability |
 | Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
 | Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
-| Reward weights: completion / swing cap / cap change / contact orientation | 1.0 / −0.5 / −0.05 / −0.2 |
-| Contact-orientation error scale / maximum full-clip cost | 15 degrees / 20 points |
+| Reward weights: completion / swing cap / cap change / false zero / force cap gap | 1.0 / −0.5 / −0.05 / −0.5 / −0.1 |
+| Maximum full-clip false-zero / force-cap-gap cost | 50 / 10 points |
 | Checkpoint interval / logging | Every 500 iterations and at completion / W&B |
 
 Checkpoints and events are written under `logs/rsl_rl/t1_wbc_force/`.
@@ -391,9 +391,9 @@ FORCE now reports `WBCForce/FullMotion/*` separately from sampled-suffix
 completion, with per-foot swing zero-cap coverage, hold duration, liftoff
 timing, measured swing load, and cap changes. Twenty percent of resets start
 at frame zero so short adaptive suffixes cannot be mistaken for full-motion
-performance. The original three reward weights and default contact timing remain
-unchanged; the additional orientation term compares feet that are contacting in
-the reference. Tracking commands still come from the QP. See the
+performance. Tune the new penalties with `env.rewards.false_zero.weight` and
+`env.rewards.force_cap_gap.weight`; their initial values have not been tuned
+through training. Tracking commands still come from the QP. See the
 [contact-learning metrics](docs/wbc_force_controller.md#contact-learning-logs)
 for units and the optional unloading lead-in.
 Evaluate deterministic outputs across the motion separately from exploration

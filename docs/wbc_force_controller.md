@@ -128,14 +128,14 @@ the reference lookahead window is not itself stacked across previous steps.
 
 The critic receives both windows plus its existing privileged robot state and
 previous action, for **861 inputs**. Actual-state feedback now enters both
-the policy and the WBC. FORCE uses four reward terms:
+the policy and the WBC. FORCE uses five reward terms:
 
 ```text
 r_t = (100 / N) * [alive_new_frame
                   - 0.5 * mean_i(swing_weight[t,i] * c[t,i]^2)
                   - 0.05 * mean_i((c[t,i] - c[t-1,i])^2)
-                  - 0.2 * mean_i(contact_weight[t,i] * e[t,i]^2 / (1 + e[t,i]^2))]
-e[t,i] = angle(R_actual[t,i], R_reference[t,i]) / 15 degrees
+                  - 0.5 * mean_i(contact_weight[t,i] * indicator(c[t,i] == 0))
+                  - 0.1 * mean_i(max(c[t,i] - F_used[t,i] / F_max[i], 0)^2)]
 contact_weight[t,i] = 1 - swing_weight[t,i]
 ```
 
@@ -157,7 +157,7 @@ swing. Reference geometry is training supervision only: it never replaces NN
 outputs or masks the QP with a contact label. Actual geometry also does not
 remove support from the two-foot FORCE QP.
 
-The original three terms retain their weights and contact timing. Optional
+Completion, swing-cap, and action-change terms retain their weights and contact timing. Optional
 `env.rewards.swing_force.params.unload_lead_time` (seconds, default **0**) adds
 a linearly discounted lookahead to this same cap penalty, allowing an unloading
 lead-in before reference liftoff. It never shifts the end of swing later or
@@ -167,56 +167,50 @@ This is a contact-timing experiment, not an actual-foot tracking reward.
 The QP continues to handle tracking. No clearance, foot-position, or
 foot-velocity tracking reward is added.
 
-The existing contact cost is one-sided: it penalizes a positive cap in reference
-swing and has no direct preference for a positive cap in stance. Stance support
-is learned through survival, contact-orientation tracking, and the controller. Because costs are normalized by
-the full clip, short swing intervals contribute only part of the total return.
-On the downloaded iteration-6999 walk policy with the historical geometry gate,
-deterministic replay earned 97.31/100 points: 100 progress points minus
-2.13 swing-cap and 0.56 action-change
-points, despite imperfect zero-cap timing. A flat return alone therefore does
-not establish a good contact schedule.
+The false-zero penalty complements the swing-cap penalty: a zero decoded cap
+costs reference contact weight, with starting weight **-0.5**. Reference contact
+weight is one at or below 1 mm sole clearance, decreases smoothly to zero at
+5 mm, and uses the lowest sole corner. A grounded toe, heel, edge, or single
+corner therefore still supervises a positive cap. Actual foot height, load,
+and orientation do not change this weight. This term uses current reference
+contact with no unloading lead-in.
+
+False-zero means an **exact zero after decoding**. A raw action of zero decodes
+to 0.5 and is free; any positive decoded cap is also free. This term encourages
+available support without prescribing a minimum stance load. A zero cap on one
+fully contacting foot throughout a clip costs 25 points; on both feet it costs
+50 points. Tune `env.rewards.false_zero.weight` and its `clearance_start` /
+`clearance_full` parameters in metres. Because costs are normalized by the full
+clip, short contact or swing intervals contribute only part of the total return.
 
 The change penalty uses consecutive decoded actions and skips the first action
 after each environment reset. It encourages smooth changes without imposing
 a hard slew limit. Changes between two raw values in the same saturated region
 incur no penalty. The starting weights are tunable with
 `env.rewards.swing_force.weight` and `env.rewards.action_change.weight`.
-All four implementations account for RewardManager's multiplication by the
+All five implementations account for RewardManager's multiplication by the
 control timestep, so the formula above is the final per-step reward.
 
-The contact-orientation penalty compares each actual foot link with its
-prepared reference orientation at the executed frame. It uses the shortest
-full 3D rotation angle in world coordinates, covering roll, pitch, and yaw.
-Opposite quaternion signs describe the same orientation and incur zero error.
-The target follows the motion frame by frame, including intended toe and sole
-rotation; it does not freeze the orientation at initial contact.
+The cap-gap penalty charges unused normal-force capacity on both feet in all
+reference phases. `F_used` is the current policy step's QP-selected vertical
+force, available even when diagnostic recording is disabled. Each foot's
+positive gap is divided by its own configured `contact_force_max`, squared,
+and averaged across feet. Thus a 300 N gap with a 600 N maximum has cost 0.25.
+The starting weight is **-0.1**, tunable with
+`env.rewards.force_cap_gap.weight`. Persistent half-maximum gaps on both feet
+cost 2.5 points per full clip; the maximum cost is 10 points. Using the entire
+cap incurs no gap penalty, and zero capacity has no gap cost.
 
-Contact weighting uses the same **minimum of the four reference sole-corner
-heights** as the swing term: full weight at or below 1 mm, a smooth decrease
-between 1 and 5 mm, and zero at or above 5 mm. A grounded toe, heel, edge, or
-single corner therefore receives orientation supervision. The orientation
-weight has no unloading lead-in. Actual contact, measured load, and decoded
-force caps cannot disable it. A foot that should be contacting remains subject
-to orientation error even if the actual foot lifts or its force cap is zero.
+Negative force roundoff is clamped to zero, and force above the cap incurs
+zero gap cost. A missing or failed QP solve counts its capacity as unused;
+nonfinite force candidates also count as zero used force. QP failure still
+terminates the episode. PhysX-measured loads remain separate diagnostics.
 
-The starting weight is **-0.2**, with a **15-degree error scale**. Each foot's
-cost is `(angle/scale)^2 / (1 + (angle/scale)^2)`, multiplied by its reference
-contact weight, then averaged over both feet. A persistent 15-degree error on
-one contacting foot costs 5 points per complete clip; on both feet it costs
-10 points. The total cost stays below 20 points per complete clip. A held wrong
-tilt is penalized even when all joint accelerations are zero. Matching the
-reference orientation is free, including a correctly tilted contact.
-
-Tune `env.rewards.contact_orientation.weight` and
-`env.rewards.contact_orientation.params.orientation_scale_deg`. Its clearance
-thresholds are `clearance_start` and `clearance_full`, in metres. Rewards use
-post-physics foot orientation before reset and reference advance; failing steps
-still incur the penalty. No velocity history or contact diagnostic recording
-is required. The joint-acceleration and force-mismatch rewards are removed.
-Orientation matching alone does not directly enforce foot height or load.
-Actor/critic inputs are unchanged; existing checkpoints acquire this objective
-only through further training.
+The contact-orientation reward is removed. Both new terms still charge failing
+steps and use the current clip's frame count in mixed-motion batches.
+Actor/critic inputs are unchanged; existing checkpoints acquire these objectives
+only through further training. The initial weights have not been tuned through
+a training run.
 
 Training prioritizes balanced, feasible motion. Limb tracking error does not
 terminate an episode. The existing coarse torso guards remain:
@@ -255,8 +249,8 @@ still requires a separate evaluation.
 | `Contact/{left,right}_swing_measured_fz_N` | Actual PhysX vertical load during reference swing; a predicted zero cap does not guarantee zero measured force. |
 | `Caps/{left,right}_stance_zero_percent`, `absolute_change`, `mean`; `Caps/both_zero_percent` | Stance unloading, chattering, mean cap, and simultaneous zero caps. |
 | `Failure/{anchor_pos,anchor_ori,qp_infeasible}_percent` | Percent of ended episodes with each failure flag; overlapping flags are not mutually exclusive. |
-| `ContactOrientation/{left,right}_error_deg`, `{left,right}_reference_weight`, `bounded_cost` | Foot orientation error where reference contact weight is positive, the reference geometry weights, and the weighted bounded cost averaged over both feet. Per-motion error is also logged under `Motion/<clip>/contact_orientation_error_deg`. |
-| `Reward/{completion,swing_cap,cap_change,contact_orientation}_points_per_step` | Weighted reward contributions in actual PPO reward units per policy step, without maximum-episode-duration normalization. |
+| `Caps/{left,right}_unused_force_N` | Mean positive difference between decoded cap and current QP-used normal force, in newtons. Failed solves count their capacity as unused. |
+| `Reward/{completion,swing_cap,cap_change,false_zero,force_cap_gap}_points_per_step` | Weighted reward contributions in actual PPO reward units per policy step, without maximum-episode-duration normalization. |
 | `Policy/{left,right}_noise_std` | Per-foot raw Gaussian exploration scale. |
 
 The terminal shows PPO losses plus full-motion/suffix success and contact

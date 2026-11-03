@@ -3,7 +3,6 @@
 RewardManager multiplies terms by step_dt. Return rates here so each executed
 reference frame contributes 100 / frame_count before the configured weight.
 """
-import math
 import torch
 from isaaclab.managers import ManagerTermBase
 
@@ -11,7 +10,7 @@ from whole_body_tracking.utils.wbc_contact_mapping import decode_contact_values
 from whole_body_tracking.utils.wbc_acc_contact_policy import FEET, sole_vertices
 from whole_body_tracking.utils.wbc_acc_torch_model import rotation_xyzw
 from whole_body_tracking.utils.wbc_force_learning import (
-    ForceMetrics, orientation_error_radians, swing_weights, unloading_weights,
+    ForceMetrics, swing_weights, unloading_weights,
 )
 
 
@@ -205,41 +204,47 @@ class SwingForcePenalty(_MotionScaledTerm):
         return value
 
 
-class ContactOrientationPenalty(_MotionScaledTerm):
-    """Track each foot's orientation whenever reference geometry has contact."""
+class FalseZeroPenalty(_MotionScaledTerm):
+    """Penalize an exact-zero decoded cap where reference geometry has contact."""
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        angle_scale = cfg.params.get('orientation_scale_deg', 15.)
-        if not math.isfinite(angle_scale) or angle_scale <= 0:
-            raise ValueError('Contact orientation scale must be finite and positive')
-        clearance, self.body_ids, _ = _reference_clearance(env)
-        self.contact_weight = 1.-swing_weights(clearance,
+        self.contact_weight = 1.-swing_weights(_reference_clearance(env)[0],
             cfg.params.get('clearance_start', .001), cfg.params.get('clearance_full', .005))
-        self.reference_quaternion = self.command.motion._body_quat_w[:, self.body_ids]
 
-    def __call__(self, env, command_name='motion', orientation_scale_deg=15.,
-                 clearance_start=.001, clearance_full=.005):
-        frame = self.command.time_steps
-        # World-frame foot link orientation includes roll, pitch, and yaw.
-        # Actual height, force and learned caps cannot disable this reward.
-        actual = self.command.robot.data.body_link_quat_w[:, self.body_ids]
-        angle = orientation_error_radians(actual, self.reference_quaternion[frame])
-        weight = self.contact_weight[frame]
-        squared_error = (angle/math.radians(orientation_scale_deg)).square()
-        cost = (weight*squared_error/(1.+squared_error)).mean(-1)
+    def __call__(self, env, command_name='motion', clearance_start=.001, clearance_full=.005):
+        caps = decode_contact_values(env.action_manager.action)
+        cost = (self.contact_weight[self.command.time_steps]*(caps == 0)).mean(-1)
         value = cost*self.scale
+        _metrics(env).mean('Reward/false_zero_points_per_step', value*env.step_dt*self.cfg.weight)
+        return value
+
+
+class ForceCapGapPenalty(_MotionScaledTerm):
+    """Squared unused normal-force capacity, normalized by each foot's maximum."""
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self.action = env.action_manager.get_term('wbc_force')
+        self.force_max = env.action_manager.action.new_tensor(self.action.cfg.controller.contact_force_max)
+        if (self.force_max.shape != (2,) or
+                not bool(torch.isfinite(self.force_max).all() & (self.force_max > 0).all())):
+            raise ValueError('Force cap gap requires two finite positive contact_force_max values')
+
+    def __call__(self, env, command_name='motion'):
+        caps = decode_contact_values(env.action_manager.action)
+        # Despite its name, previous_wrench holds the current policy step's QP
+        # solution by reward time, including when diagnostic recording is off.
+        wrench = self.action.previous_wrench
+        used = torch.zeros_like(caps) if wrench is None else wrench[..., 2].to(caps)
+        # A failed solve applies damping, not its candidate wrench. Count its
+        # capacity as unused and keep nonfinite solver candidates out of rewards.
+        valid = ~self.action.qp_failed[:, None] & torch.isfinite(used)
+        used = torch.where(valid, used.clamp_min(0.), 0.)
+        gap = (caps-used/self.force_max).clamp_min(0.)
+        value = gap.square().mean(-1)*self.scale
         metrics = _metrics(env)
         for i, side in enumerate(('left', 'right')):
-            metrics.mean(f'ContactOrientation/{side}_error_deg', angle[:, i].rad2deg(), weight[:, i] > 0)
-            metrics.mean(f'ContactOrientation/{side}_reference_weight', weight[:, i])
-        metrics.mean('ContactOrientation/bounded_cost', cost)
-        metrics.mean('Reward/contact_orientation_points_per_step', value*env.step_dt*self.cfg.weight)
-        motion = self.command.motion
-        if getattr(motion, 'num_clips', 1) > 1:
-            clips = motion.frame_clip_ids[frame]
-            for clip, name in enumerate(motion.clip_names):
-                metrics.mean(f'Motion/{name}/contact_orientation_error_deg', angle.rad2deg(),
-                             (clips == clip)[:, None] & (weight > 0))
+            metrics.mean(f'Caps/{side}_unused_force_N', gap[:, i]*self.force_max[i])
+        metrics.mean('Reward/force_cap_gap_points_per_step', value*env.step_dt*self.cfg.weight)
         return value
 
 

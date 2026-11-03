@@ -1,6 +1,6 @@
-"""FORCE percentage rewards, reference swing geometry, and reset boundaries."""
+"""FORCE percentage rewards, reference contact geometry, and reset boundaries."""
+import ast
 import importlib.util
-import math
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace as NS
@@ -42,12 +42,27 @@ def make_env(frames=10, count=2, dt=.02):
                  motion=NS(time_step_total=frames, _body_pos_w=torch.zeros(frames, 2, 3),
                            _body_quat_w=reference_quat),
                  robot=NS(body_names=['right_foot_link', 'left_foot_link']))
+    action = NS(cfg=NS(controller=NS(ground_height=0., contact_force_max=(600., 600.))),
+                previous_wrench=None, qp_failed=torch.zeros(count, dtype=torch.bool))
     return NS(num_envs=count, device='cpu', step_dt=dt, extras={},
         scene=NS(),
         command_manager=NS(get_term=lambda _: command),
         action_manager=NS(action=torch.zeros(count, 2),
-                          get_term=lambda _: NS(cfg=NS(controller=NS(ground_height=0.)))),
+                          get_term=lambda _: action),
         termination_manager=NS(terminated=torch.zeros(count, dtype=torch.bool), active_terms=[]))
+
+
+def test_active_reward_configuration_replaces_contact_orientation(rewards):
+    tree = ast.parse((SOURCE/'tasks/tracking/config/t1_wbc_force/flat_env_cfg.py').read_text())
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'WBCForceRewardsCfg')
+    namespace = dict(vars(rewards), configclass=lambda cls: cls, RewardTermCfg=NS)
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), '<force_rewards_cfg>', 'exec'), namespace)
+    config = namespace['WBCForceRewardsCfg']()
+    assert not hasattr(config, 'contact_orientation')
+    assert config.false_zero.func is rewards.FalseZeroPenalty and config.false_zero.weight < 0
+    assert config.force_cap_gap.func is rewards.ForceCapGapPenalty and config.force_cap_gap.weight < 0
+    assert config.motion_completion.weight == 1.
+    assert config.swing_force.weight == -.5 and config.action_change.weight == -.05
 
 
 @pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
@@ -120,65 +135,98 @@ def geometry_env(rewards):
         motion._body_pos_w[:, body, 2] = floor-points[side, :, 2].min()
     # Left-foot clearance is 1, 3 and 5 mm. Right foot stays planted.
     motion._body_pos_w[:, 1, 2] += torch.tensor([.001, .003, .005])
-    env.action_manager.get_term = lambda _: NS(cfg=NS(controller=NS(ground_height=floor)))
+    env.action_manager.get_term('wbc_force').cfg.controller.ground_height = floor
     return env
 
 
-@pytest.mark.parametrize('frames,dt', [(10, .02), (261, .02), (100, .01)])
-def test_contact_orientation_is_clip_scaled_and_penalizes_a_static_wrong_pose(rewards, frames, dt):
+@pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
+def test_false_zero_is_clip_scaled_and_uses_decoded_caps(rewards, frames, dt):
     env = make_env(frames, count=3, dt=dt)
     command = env.command_manager.get_term('motion')
-    # Grounded reference feet with a held 15-degree pitch. Actual feet are flat.
-    angle = math.radians(15.)/2
-    command.motion._body_quat_w[:] = torch.tensor([math.cos(angle), 0., math.sin(angle), 0.])
-    command.robot.data = NS(body_link_quat_w=torch.zeros(3, 2, 4))
-    command.robot.data.body_link_quat_w[..., 0] = 1.
-    # First environment misses both feet; second misses just the left.
-    command.robot.data.body_link_quat_w[1, 0] = command.motion._body_quat_w[0, 0]
-    command.robot.data.body_link_quat_w[2] = -command.motion._body_quat_w[0]
+    # Both caps zero, left cap zero, then raw zeros (decoded caps are 0.5).
+    env.action_manager.action[:] = torch.tensor([[-3., -30.], [-3., 3.], [0., 0.]])
     env.termination_manager.terminated[0] = True  # A failing step still incurs cost.
-    term = rewards.ContactOrientationPenalty(NS(params={}, weight=-.2), env)
+    term = rewards.FalseZeroPenalty(NS(params={}, weight=-.5), env)
     assert term.contact_weight.min() == 1.
     total = torch.zeros(3, dtype=torch.float64)
     for frame in range(frames):
         command.time_steps.fill_(frame)
         total += term(env)*dt*term.cfg.weight
-    torch.testing.assert_close(total, torch.tensor([-10., -5., 0.], dtype=torch.float64), atol=4.e-6, rtol=0)
+    torch.testing.assert_close(total, torch.tensor([-50., -25., 0.], dtype=torch.float64), atol=1.e-5, rtol=0)
     logs = rewards._metrics(env).drain()
-    assert logs['WBCForce/ContactOrientation/left_error_deg'] == pytest.approx(10., abs=1.e-5)
-    assert logs['WBCForce/ContactOrientation/right_error_deg'] == pytest.approx(5., abs=1.e-5)
-    assert logs['WBCForce/Reward/contact_orientation_points_per_step'] == pytest.approx(-5./frames)
+    assert logs['WBCForce/Reward/false_zero_points_per_step'] == pytest.approx(-25./frames)
 
 
-def test_contact_orientation_uses_reference_contact_and_not_caps_or_actual_height(rewards):
+def test_false_zero_uses_reference_contact_and_excludes_swing(rewards):
     env = geometry_env(rewards)
     command = env.command_manager.get_term('motion')
     command.motion._body_pos_w[2, 1, 2] += .001  # Clearly above the 5 mm threshold.
-    angle = math.radians(15.)/2
-    command.robot.data = NS(body_link_quat_w=command.motion._body_quat_w[:2].clone())
-    command.robot.data.body_link_quat_w[:, 1] = torch.tensor([math.cos(angle), 0., 0., math.sin(angle)])
-    # No actual positions, forces, or height detector are available to the term.
-    env.action_manager.action.fill_(-3.)
-    term = rewards.ContactOrientationPenalty(NS(params={}, weight=-.2), env)
+    # Actual positions, orientations, and measured loads cannot erase this cost.
+    env.action_manager.action[:] = torch.tensor([-3., 3.])
+    term = rewards.FalseZeroPenalty(NS(params={}, weight=-.5), env)
     torch.testing.assert_close(term.contact_weight[:, 0], torch.tensor([1., .5, 0.], dtype=torch.float64),
                                atol=1.e-6, rtol=0)
     command.time_steps[:] = torch.tensor([0, 1])
     weighted = term(env)*env.step_dt*term.cfg.weight
-    torch.testing.assert_close(weighted, torch.tensor([-5./3, -2.5/3], dtype=torch.float64), atol=1.e-6, rtol=0)
-    env.action_manager.action.fill_(3.)
-    torch.testing.assert_close(term(env)*env.step_dt*term.cfg.weight, weighted)
+    torch.testing.assert_close(weighted, torch.tensor([-25./3, -12.5/3], dtype=torch.float64), atol=1.e-6, rtol=0)
+    env.action_manager.action[:, 0] = -2.19  # Small positive decoded caps are not false zeros.
+    assert (rewards.decode_contact_values(env.action_manager.action)[:, 0] > 0).all()
+    assert term(env).count_nonzero() == 0
+    env.action_manager.action[:, 0] = -3.
     command.time_steps.fill_(2)
     assert term(env).count_nonzero() == 0  # Reference swing is excluded.
 
 
-@pytest.mark.parametrize('params', [
-    {'orientation_scale_deg': 0.}, {'orientation_scale_deg': -1.},
-    {'orientation_scale_deg': float('nan')}, {'orientation_scale_deg': float('inf')},
-    {'clearance_start': .005, 'clearance_full': .001}, {'clearance_start': -.001},
-])
-def test_contact_orientation_rejects_invalid_parameters(rewards, params):
-    with pytest.raises(ValueError):
-        rewards.ContactOrientationPenalty(NS(params=params, weight=-.2), geometry_env(rewards))
+@pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
+def test_force_cap_gap_is_clip_scaled_and_normalized_per_foot(rewards, frames, dt):
+    env = make_env(frames, count=3, dt=dt)
+    env.action_manager.action.fill_(3.)
+    action = env.action_manager.get_term('wbc_force')
+    action.cfg.controller.contact_force_max = (200., 800.)
+    action.previous_wrench = torch.full((3, 2, 6), 999., dtype=torch.float64)
+    action.previous_wrench[..., 2] = torch.tensor([[100., 400.], [200., 400.], [200., 800.]])
+    term = rewards.ForceCapGapPenalty(NS(params={}, weight=-.1), env)
+    total = torch.zeros(3, dtype=torch.float64)
+    for frame in range(frames):
+        term.command.time_steps.fill_(frame)
+        total += term(env)*dt*term.cfg.weight
+    torch.testing.assert_close(total, torch.tensor([-2.5, -1.25, 0.], dtype=torch.float64), atol=1.e-6, rtol=0)
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Reward/force_cap_gap_points_per_step'] == pytest.approx(-1.25/frames)
+    assert logs['WBCForce/Caps/left_unused_force_N'] == pytest.approx(100./3)
+    assert logs['WBCForce/Caps/right_unused_force_N'] == pytest.approx(800./3)
+    # Rewards read the latest solve, not a wrench captured during initialization.
+    action.previous_wrench = torch.zeros_like(action.previous_wrench)
+    torch.testing.assert_close(term(env)*dt, torch.full((3,), 100./frames))
+
+
+def test_force_cap_gap_handles_zero_caps_saturation_and_failed_solves(rewards):
+    env = make_env(frames=100, count=6)
+    env.action_manager.action.fill_(3.)
+    env.action_manager.action[0] = 0.  # 300 N caps, not zero caps.
+    env.action_manager.action[1] = -3.
+    action = env.action_manager.get_term('wbc_force')
+    term = rewards.ForceCapGapPenalty(NS(params={}, weight=-.1), env)
+    # Before any solve, no capacity has been used.
+    torch.testing.assert_close(term(env)*env.step_dt, torch.tensor([.25, 0., 1., 1., 1., 1.]))
+    action.previous_wrench = torch.zeros(6, 2, 6)
+    action.previous_wrench[..., 2] = torch.tensor([
+        [150., 300.], [0., 0.], [600.001, 600.001], [-.001, -.001],
+        [float('nan'), float('inf')], [600., 600.]])
+    action.qp_failed[5] = True  # Damping is applied instead of this candidate wrench.
+    value = term(env)*env.step_dt
+    torch.testing.assert_close(value, torch.tensor([.03125, 0., 0., 1., 1., 1.]))
+    assert torch.isfinite(value).all()
+    assert all(torch.isfinite(torch.tensor(v)) for v in rewards._metrics(env).drain().values())
+
+
+@pytest.mark.parametrize('maximum', [(0., 600.), (-1., 600.), (float('nan'), 600.),
+                                    (600., float('inf')), (600.,), 600.])
+def test_force_cap_gap_rejects_invalid_maxima(rewards, maximum):
+    env = make_env()
+    env.action_manager.get_term('wbc_force').cfg.controller.contact_force_max = maximum
+    with pytest.raises(ValueError, match='finite positive'):
+        rewards.ForceCapGapPenalty(NS(params={}, weight=-.1), env)
 
 
 def test_swing_penalty_ramps_with_reference_clearance_and_ignores_actual_support(rewards):
@@ -244,27 +292,23 @@ def test_partial_contact_uses_minimum_height_and_only_penalizes_full_liftoff(
     term.command.time_steps.fill_(2)
     assert (term(env) > 0).all()
 
-    # The same partial-contact labels must supervise orientation. Flattening
-    # the tilted foot is penalized even with a zero force cap; matching is free.
+    # A grounded toe, heel, edge, or corner still makes a zero cap a false zero.
     command = env.command_manager.get_term('motion')
-    command.robot.data = NS(body_link_quat_w=torch.zeros(2, 2, 4, dtype=torch.float64))
-    command.robot.data.body_link_quat_w[..., 0] = 1.
-    orientation = rewards.ContactOrientationPenalty(NS(params={}, weight=-.2), env)
-    env.action_manager.action.fill_(-3.)
+    false_zero = rewards.FalseZeroPenalty(NS(params={}, weight=-.5), env)
+    env.action_manager.action[:, side] = -3.
     command.time_steps[:] = torch.tensor([0, 1])
-    assert (orientation(env) > 0).all()
+    torch.testing.assert_close(false_zero(env)*env.step_dt,
+                               torch.full((2,), 50./3, dtype=torch.float64))
     command.time_steps.fill_(2)
-    assert orientation(env).count_nonzero() == 0
-    command.time_steps[:] = torch.tensor([0, 1])
-    command.robot.data.body_link_quat_w[:] = motion._body_quat_w[command.time_steps]
-    torch.testing.assert_close(orientation(env), torch.zeros(2, dtype=torch.float64), atol=1.e-20, rtol=0)
+    assert false_zero(env).count_nonzero() == 0
 
 
 @pytest.mark.parametrize('params', [{'clearance_start': .005, 'clearance_full': .001},
                                   {'clearance_start': -.001}])
-def test_swing_rejects_invalid_thresholds(rewards, params):
+@pytest.mark.parametrize('name', ['SwingForcePenalty', 'FalseZeroPenalty'])
+def test_contact_penalties_reject_invalid_thresholds(rewards, params, name):
     with pytest.raises(ValueError, match='thresholds'):
-        rewards.SwingForcePenalty(NS(params=params, weight=-.5), geometry_env(rewards))
+        getattr(rewards, name)(NS(params=params, weight=-.5), geometry_env(rewards))
 
 
 def test_episode_metrics_weight_episodes_not_reset_batches_and_ignore_initial_reset(rewards):
@@ -344,6 +388,17 @@ def test_mixed_clips_normalize_independently_and_report_their_own_endpoints(rewa
     assert logs['WBCForce/Motion/walk/full_success_percent'] == 100.
     assert logs['WBCForce/Motion/sway/full_success_percent'] == 100.
     assert logs['WBCForce/Sampling/start_frame_zero_percent'] == 100.
+
+
+@pytest.mark.parametrize('name,raw', [('FalseZeroPenalty', -3.), ('ForceCapGapPenalty', 3.)])
+def test_new_penalties_scale_by_current_clip_in_mixed_batch(rewards, name, raw):
+    env = make_env(frames=15)
+    command = env.command_manager.get_term('motion')
+    command.motion.clip_bounds = lambda frame: (torch.where(frame < 5, 0, 5), torch.where(frame < 5, 5, 10))
+    command.time_steps[:] = torch.tensor([0, 5])
+    env.action_manager.action.fill_(raw)
+    term = getattr(rewards, name)(NS(params={}, weight=-.5), env)
+    torch.testing.assert_close(term(env)*env.step_dt, torch.tensor([20., 10.], dtype=term(env).dtype))
 
 
 def test_unloading_lead_does_not_cross_between_clips(rewards):
