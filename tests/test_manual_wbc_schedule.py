@@ -44,6 +44,27 @@ def test_archived_force_annotations_reject_inconsistent_action_mapping(tmp_path)
         load_force_annotations(path, motion, 3, 50.)
 
 
+def test_corner_annotations_require_point_nine_mapping(tmp_path):
+    from wbc_contact_mapping import force_action_transform
+    motion = tmp_path/'motion.npz'
+    np.savez(motion, fps=50.)
+    metadata = dict(schema_version=1, foot_order=['left', 'right'], motion_sha256=file_digest(motion),
+                    action_layout=[f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)],
+                    action_transform=force_action_transform())
+    path = tmp_path/'annotations.npz'
+    raw = np.zeros((3, 8), dtype=np.float32)
+    fractions = np.full((3, 8), 4/9)
+    np.savez(path, fps=50., reference_frame=np.arange(3), manual_raw_actions=raw,
+             manual_cap_fractions=fractions, metadata_json=json.dumps(metadata))
+    actions, _ = load_force_annotations(path, motion, 3, 50., action_dim=8)
+    np.testing.assert_array_equal(actions, raw)
+    metadata['action_transform'] = {'type': 'sigmoid_dead_zones', 'epsilon': .1, 'endpoints': [0., 1.]}
+    np.savez(path, fps=50., reference_frame=np.arange(3), manual_raw_actions=raw,
+             manual_cap_fractions=np.full((3, 8), .5), metadata_json=json.dumps(metadata))
+    with pytest.raises(ValueError, match='/0.9'):
+        load_force_annotations(path, motion, 3, 50., action_dim=8)
+
+
 @pytest.fixture
 def example(tmp_path):
     motion = tmp_path/'motion.npz'

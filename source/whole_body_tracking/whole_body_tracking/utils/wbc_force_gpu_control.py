@@ -4,18 +4,18 @@ import torch
 
 try:
     from .wbc_acc_gpu_control import WBCACCGPUQP
-    from .wbc_contact_mapping import decode_contact_values, encode_contact_values, contact_action_transform
+    from .wbc_contact_mapping import decode_force_values, encode_force_values, contact_action_transform, force_action_transform
 except ImportError:
     from wbc_acc_gpu_control import WBCACCGPUQP
-    from wbc_contact_mapping import decode_contact_values, encode_contact_values, contact_action_transform
+    from wbc_contact_mapping import decode_force_values, encode_force_values, contact_action_transform, force_action_transform
 
 
 def decode_force_actions(actions, contact_count=2):
-    """Map raw outputs to force fractions with reachable exact 0/1 regions."""
+    """Map raw outputs to force fractions using the matching corner/region mapping."""
     if actions.ndim != 2 or actions.shape[1] != contact_count or not bool(torch.isfinite(actions).all()):
         count = 'two' if contact_count == 2 else str(contact_count)
         raise ValueError(f'WBC-FORCE expects {count} finite force-limit actions per environment')
-    return decode_contact_values(actions)
+    return decode_force_values(actions)
 
 
 def encode_force_capacities(capacities, contact_count=2):
@@ -25,7 +25,7 @@ def encode_force_capacities(capacities, contact_count=2):
             or not bool(torch.isfinite(capacities).all())
             or not bool(((capacities >= 0) & (capacities <= 1)).all())):
         raise ValueError(f'Expected {contact_count} finite force capacities in [0,1] per environment')
-    return encode_contact_values(capacities)
+    return encode_force_values(capacities)
 
 
 class WBCForceGPUQP(WBCACCGPUQP):
@@ -48,7 +48,7 @@ class WBCForceGPUQP(WBCACCGPUQP):
 
 class WBCCornerForceGPUQP(WBCACCGPUQP):
     """Eight NN outputs cap four sole points per foot independently."""
-    action_transform = contact_action_transform()
+    action_transform = force_action_transform()
     force_cap_scope = 'per_sole_vertex'
     action_names = tuple(f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4))
 

@@ -188,8 +188,15 @@ tracking limitations and evaluation commands.
 
 The NN outputs **eight raw force-cap actions**: left sole corners 0–3, then
 right sole corners 0–3, in the stored `sole_vertices` order. Decode each with
-`c_i = clip((sigmoid(action_i)-0.1)/0.8, 0, 1)`; the QP enforces
+`c_i = clip((sigmoid(action_i)-0.1)/0.9, 0, 1)`; the QP enforces
 `0 <= Fz_i <= robot_mass * 9.81 * c_i` N independently at each corner.
+The Gaussian mean is `2.5*tanh(actor_output)` in training, deterministic playback,
+and ONNX/JIT export. Standard deviations still start at 1.0 and are learned;
+sampled actions can exceed the mean bound. At action 0 the cap is 0.4444, and
+at +2.5 it is about 0.9157. Exact zero starts at approximately -2.1972; full
+capacity is approached asymptotically (manual full-cap inputs use +40 for
+float32/float64 saturation). Train a fresh policy for this mean and cap mapping;
+older unbounded actor checkpoints do not load into the bounded actor.
 Each point's full cap is one robot body weight: **310.13685 N** for the
 31.61436 kg T1 model. `point_force_max_body_weights=1.0` controls this scale.
 There is no additional total-foot cap; four fully enabled corners allow up to
@@ -1109,7 +1116,8 @@ it does not substitute defaults. Only that controller's entries need filling.
 | `authority` | Left x/y/z cost-authority logits, then right x/y/z |
 
 These are raw policy outputs, not forces in newtons or fractions in [0,1]. The
-FORCE and AUTH controllers apply `clip((sigmoid(u)-0.10)/0.80, 0, 1)` internally.
+Legacy two-output FORCE and AUTH controllers apply `clip((sigmoid(u)-0.10)/0.80, 0, 1)` internally.
+The current eight-corner FORCE policy uses the /0.90 mapping described above.
 Both endpoints are reachable: -3 maps to 0 and +3 maps to 1; zero maps to 0.5.
 The selected vector is held
 constant throughout the run and recorded as `manual_nn_outputs` in diagnostics.

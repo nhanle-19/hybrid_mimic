@@ -15,9 +15,9 @@ from isaaclab_rl.rsl_rl.exporter import _OnnxPolicyExporter
 from whole_body_tracking.tasks.tracking.mdp import MotionCommand
 
 try:
-    from .wbc_contact_mapping import CONTACT_DEAD_ZONE
+    from .wbc_contact_mapping import CONTACT_DEAD_ZONE, FORCE_CAP_DENOMINATOR
 except ImportError:
-    from wbc_contact_mapping import CONTACT_DEAD_ZONE
+    from wbc_contact_mapping import CONTACT_DEAD_ZONE, FORCE_CAP_DENOMINATOR
 
 
 def export_motion_policy_as_onnx(
@@ -159,8 +159,9 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "action_type": "wbc_force_corner_force_limit_policy",
             "policy_action_dim": 8,
             "action_layout": ",".join(f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)),
-            "action_transform": "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)",
+            "action_transform": "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-epsilon),0,1)",
             "action_dead_zone_epsilon": CONTACT_DEAD_ZONE,
+            "action_denominator": FORCE_CAP_DENOMINATOR,
             "contact_force_max": force_action.normal_force_max.detach().cpu().tolist(),
             "point_force_max_body_weights": controller.point_force_max_body_weights,
             "force_cap_scope": "per_sole_vertex",

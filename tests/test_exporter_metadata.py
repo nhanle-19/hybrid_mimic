@@ -87,7 +87,8 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert metadata["action_type"] == "wbc_force_corner_force_limit_policy"
         assert metadata["policy_action_dim"] == "8"
         assert metadata["action_layout"].split(',') == [f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]
-        assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)"
+        assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-epsilon),0,1)"
+        assert float(metadata["action_denominator"]) == .9
         assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["normal_force_axis"] == "world_z"
         assert metadata["contact_gating"] == "learned_force_caps"

@@ -10,6 +10,63 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
+CORNER_LABELS = ('C0 (x−, y−)', 'C1 (x−, y+)', 'C2 (x+, y−)', 'C3 (x+, y+)')
+CORNER_COLORS = ('#0072B2', '#009E73', '#D55E00', '#CC79A7')
+CORNER_STYLES = ('-', '--', ':', '-.')
+
+
+def plot_corner_policy(directory, data, meta):
+    """Keep raw actor values, decoded bounds, and QP-selected forces distinct."""
+    n = meta['attempted_frames']
+    t = np.arange(n)*meta['policy_dt_s']
+    raw = data['audit_raw_action'].reshape(n, 2, 4)
+    caps = data['audit_cap']
+    forces = data['predicted_point_forces'][..., 2]
+    transform = json.loads(str(data['policy_action_transform_json']))
+    epsilon = transform['epsilon']
+    boundary = np.log((1.-epsilon)/epsilon)
+    denominator = transform.get('denominator', 1.-2.*epsilon)
+    full_probability = epsilon+denominator
+    full_boundary = np.log(full_probability/(1.-full_probability)) if full_probability < 1. else None
+    fig, axes = plt.subplots(3, 2, figsize=(14, 10), sharex=True)
+    raw_label = 'Raw manual action' if meta.get('policy_source') == 'manual_labels' else 'Raw NN output'
+    for foot, side in enumerate(('Left', 'Right')):
+        for row, (values, label) in enumerate(((raw, raw_label), (caps, 'Decoded cap fraction'),
+                                               (forces, 'QP predicted corner Fz (N)'))):
+            ax = axes[row, foot]
+            for corner in range(4):
+                ax.plot(t, values[:, foot, corner], color=CORNER_COLORS[corner],
+                    linestyle=CORNER_STYLES[corner], label=CORNER_LABELS[corner],
+                    drawstyle='steps-post' if row == 1 else 'default')
+            ax.set_ylabel(label)
+            ax.grid(alpha=.2)
+            ax.legend(fontsize=8, ncol=2)
+            ax.set_xlim(0, meta['expected_frames']*meta['policy_dt_s'])
+            if not meta['completed']:
+                ax.axvspan(n*meta['policy_dt_s'], meta['expected_frames']*meta['policy_dt_s'], color='gray', alpha=.2)
+        axes[0, foot].set_title(side+' foot')
+        for value in ([-boundary, full_boundary] if full_boundary is not None else [-boundary]):
+            axes[0, foot].axhline(value, color='gray', linestyle=':', linewidth=1)
+        axes[1, foot].set_ylim(-.03, 1.03)
+        axes[2, foot].set_xlabel('Reference time (s)')
+    maximum = np.asarray(meta['point_force_max_N']).reshape(2, 4)
+    full_label = (f'raw ≥ {full_boundary:.3f} maps to cap 1' if full_boundary is not None
+                  else 'cap 1 is approached asymptotically')
+    fig.suptitle(f'{directory.name}: each sole corner, before and after action decoding\n'
+        f'Raw ≤ −{boundary:.3f} maps to cap 0; {full_label}. '
+        f'One full corner cap = {maximum.min():.2f}–{maximum.max():.2f} N.', fontsize=11)
+    fig.text(.5, .01, 'Coincident corner curves overlap. Caps are upper bounds, not forces. '
+        'QP corner forces are predictions; measured forces in the contact plot are whole-foot totals.', ha='center', fontsize=9)
+    fig.tight_layout(rect=(0, .035, 1, .95))
+    fig.savefig(directory/'corner_policy.png', dpi=140)
+    plt.close(fig)
+    fields = (('raw_action', raw), ('cap_fraction', caps),
+              ('cap_N', data['normal_force_limits']), ('qp_fz_N', forces))
+    np.savetxt(directory/'corner_policy.csv', np.column_stack((np.arange(n), t,
+        *[values.reshape(n, 8) for _, values in fields])), delimiter=',', comments='',
+        header='frame,time_s,'+','.join(f'{side}_corner_{corner}_{name}'
+            for name, _ in fields for side in ('left', 'right') for corner in range(4)))
+
 
 def percent(value, mask):
     return float(np.asarray(value)[mask].mean()*100) if np.any(mask) else None
@@ -49,6 +106,7 @@ def analyze(directory):
     ref_points[..., 2] -= ground
     actual_points[..., 2] -= ground
     caps = data['audit_cap']
+    corner_caps = None
     if caps.ndim == 3:
         # Per-foot summaries use mean normalized capacity; zero means all four
         # points are disabled. Preserve the eight independent actions separately.
@@ -57,6 +115,7 @@ def analyze(directory):
         np.savetxt(directory/'corner_caps.csv', np.column_stack((np.arange(n), caps.reshape(n, 8))),
             delimiter=',', comments='', header='frame,'+','.join(
                 f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)))
+        corner_caps = caps
         caps = caps.mean(-1)
     fz = data['actual_contact_wrench'][..., 2]
     stance, swing = ref_height[:n] <= .001, ref_height[:n] >= .005
@@ -148,11 +207,16 @@ def analyze(directory):
         axes[0, i].plot(t, actual_height[:, i]*1000, label='Actual')
         axes[0, i].set(title=side+' foot', ylabel='Lowest sole vertex (mm)')
         cap_label = 'Manual force cap' if meta.get('policy_source') == 'manual_labels' else 'Learned force cap'
-        axes[1, i].step(t, caps[:, i], where='post', label=cap_label)
+        if corner_caps is None:
+            axes[1, i].step(t, caps[:, i], where='post', label=cap_label)
+        else:
+            for corner in range(4):
+                axes[1, i].step(t, corner_caps[:, i, corner], where='post', label=CORNER_LABELS[corner],
+                    color=CORNER_COLORS[corner], linestyle=CORNER_STYLES[corner])
         axes[1, i].fill_between(tf, 0, 1, where=ref_height[:, i] >= .005, alpha=.15, color='orange', label='Reference swing')
-        axes[1, i].set(ylabel='Cap fraction', ylim=(-.03, 1.03))
-        axes[2, i].plot(t, fz[:, i], label='Measured Fz, first substep')
-        axes[2, i].plot(t, data['predicted_contact_wrench'][:, i, 2], '--', label='QP Fz')
+        axes[1, i].set(ylabel='Corner cap fraction' if corner_caps is not None else 'Cap fraction', ylim=(-.03, 1.03))
+        axes[2, i].plot(t, fz[:, i], label='Measured whole-foot Fz, first substep')
+        axes[2, i].plot(t, data['predicted_contact_wrench'][:, i, 2], '--', label='QP whole-foot Fz')
         axes[2, i].set(ylabel='Vertical force (N)')
         err = np.linalg.norm(data['audit_foot_position'][:, i]-data['full_reference_foot_position'][:n, i], axis=-1)
         axes[3, i].plot(t, err*1000, label='Foot position error')
@@ -169,6 +233,8 @@ def analyze(directory):
     fig.tight_layout()
     fig.savefig(directory/'contacts.png', dpi=140)
     plt.close(fig)
+    if corner_caps is not None:
+        plot_corner_policy(directory, data, meta)
     np.savetxt(directory/'timeseries.csv', np.column_stack((np.arange(n), t, caps, ref_height[:n], actual_height, fz)),
         delimiter=',', comments='', header='frame,time_s,left_cap,right_cap,left_reference_clearance_m,right_reference_clearance_m,left_actual_clearance_m,right_actual_clearance_m,left_fz_N,right_fz_N')
     return result
@@ -190,7 +256,9 @@ def main():
         sliding_rotation='Reference moving contacts are retained: no blanket no-slip requirement. Stationary-contact slip uses only reference vertices <=1 mm with horizontal speed <=0.02 m/s.',
         contact_patch='Patch overlap is a geometric proxy using lowest collision vertices within 1 mm of floor and of the lowest vertex. Physical load is measured separately, not inferred per vertex.',
         scope='One deterministic frame-zero attempt per motion. Contact percentages describe executed prefixes; full-clip coverage also penalizes unreached frames. Completion does not establish imitation quality.',
-        sampling='Contact wrenches sampled 2 ms after each policy action, not averaged across the 20 ms control interval.')
+        sampling='Contact wrenches sampled 2 ms after each policy action, not averaged across the 20 ms control interval.',
+        cap_plots='Eight-output policies show four decoded caps per foot. The corner-policy plot separates raw actions, decoded cap fractions, and QP-predicted corner forces. Coincident curves overlap; measured corner forces are not recorded.',
+        cap_summaries='Foot-level cap statistics and left_cap/right_cap in timeseries.csv average the four decoded corner caps. A foot zero-cap sample requires all four corners to be zero. corner_policy.csv preserves each raw action, fraction, bound in N, and predicted corner Fz.')
     process_notes = []
     if (args.directory/'suite.json').exists():
         suite = json.loads((args.directory/'suite.json').read_text())
@@ -230,7 +298,10 @@ def main():
     plots = ''.join(f'<h2>{html.escape(r["motion"])}</h2><p>{html.escape(r["failure_reason"] or "Reached the full clip")}</p>'
         + (f'<video controls preload="metadata" src="{r["motion"]}/comparison.mp4" style="max-width:960px;width:100%"></video>'
            if (args.directory/r['motion']/'comparison.mp4').exists() else '')
-        + f'<img src="{r["motion"]}/contacts.png" style="max-width:1100px;width:100%">' for r in results)
+        + f'<img src="{r["motion"]}/contacts.png" style="max-width:1100px;width:100%">'
+        + (f'<p>Individual corner outputs and predicted forces: <a href="{r["motion"]}/corner_policy.csv">download CSV</a>.</p>'
+           f'<img src="{r["motion"]}/corner_policy.png" style="max-width:1200px;width:100%">'
+           if (args.directory/r['motion']/'corner_policy.png').exists() else '') for r in results)
     page = '<!doctype html><meta charset="utf-8"><title>FORCE contact evaluation</title><style>body{font:15px system-ui;margin:30px;max-width:1400px}td,th{padding:8px;border:1px solid #ccc}table{border-collapse:collapse}th{background:#eee}</style>'
     checkpoint_name = Path(results[0]['metadata']['checkpoint']).name
     manual = results[0]['metadata'].get('policy_source') == 'manual_labels'

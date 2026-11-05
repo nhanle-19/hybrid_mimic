@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'source/whole_body_tr
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from manual_contact_envelope import smooth_contact_weights
 from wbc_contact_mapping import (decode_contact_values_numpy, encode_contact_values_numpy,
-                                 contact_action_transform)
+                                 contact_action_transform, decode_force_values_numpy, force_action_transform)
 
 LAYOUTS = {
     'force': ('left_fz_limit', 'right_fz_limit'),
@@ -45,11 +45,13 @@ def load_force_annotations(path, motion_path, frame_count, fps, action_dim=2):
         if action_dim == 8 and metadata.get('action_layout') != [
                 f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]:
             raise ValueError('Corner annotations must declare left corners 0..3 then right corners 0..3')
+        if action_dim == 8 and metadata.get('action_transform') != force_action_transform():
+            raise ValueError('Corner annotations must use the current /0.9 force-cap mapping')
         if not np.isfinite(actions).all() or not np.isfinite(fractions).all():
             raise ValueError('Manual annotations must contain finite actions and fractions')
         if np.any((fractions < 0.) | (fractions > 1.)):
             raise ValueError('Manual fractions must lie in [0, 1]')
-        np.testing.assert_allclose(decode_contact_values_numpy(actions), fractions, atol=2e-7, rtol=0.)
+        np.testing.assert_allclose(decode_force_values_numpy(actions), fractions, atol=2e-7, rtol=0.)
     return actions, metadata
 
 

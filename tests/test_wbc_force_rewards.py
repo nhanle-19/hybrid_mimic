@@ -75,10 +75,10 @@ def test_corner_rewards_use_each_reference_point_without_gating_actions(rewards)
     heights = rewards._reference_clearance(env)[0]
     assert heights.shape == (3, 8)
     assert (heights[:, :2] > .005).all() and (heights[:, 2:] < .001).all()
-    env.action_manager.action.fill_(3.)
+    env.action_manager.action.fill_(40.)
     swing = rewards.SwingForcePenalty(NS(params={}, weight=-.5), env)
     torch.testing.assert_close(swing(env)/swing.scale, torch.full((2,), .25))
-    assert (env.action_manager.action == 3.).all()  # Geometry is a reward weight only.
+    assert (env.action_manager.action == 40.).all()  # Geometry is a reward weight only.
     env.action_manager.action.fill_(-3.)
     zero = rewards.FalseZeroPenalty(NS(params={}, weight=-.4), env)
     torch.testing.assert_close(zero(env)/zero.scale, torch.full((2,), .75))
@@ -86,7 +86,7 @@ def test_corner_rewards_use_each_reference_point_without_gating_actions(rewards)
 
 def test_corner_gap_uses_individual_point_forces_and_logs_foot_totals(rewards):
     env = point_env(count=1)
-    env.action_manager.action.fill_(3.)
+    env.action_manager.action.fill_(40.)
     action = env.action_manager.get_term('wbc_force')
     action.previous_point_forces = torch.zeros(1, 2, 4, 3)
     action.previous_point_forces[..., 2] = torch.tensor([[[100., 100., 0., 0.], [100., 100., 100., 100.]]])
@@ -101,7 +101,7 @@ def test_corner_gap_uses_individual_point_forces_and_logs_foot_totals(rewards):
 
 def test_corner_completion_logs_all_eight_caps_and_whole_foot_release(rewards):
     env = point_env()
-    env.action_manager.action[:] = torch.tensor([-3., -3., -3., 3., -3., -3., -3., -3.])
+    env.action_manager.action[:] = torch.tensor([-3., -3., -3., 40., -3., -3., -3., -3.])
     term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
     term(env)
     logs = rewards._metrics(env).drain()
@@ -111,6 +111,18 @@ def test_corner_completion_logs_all_eight_caps_and_whole_foot_release(rewards):
     assert logs['WBCForce/Caps/right_stance_zero_percent'] == 100.
     assert logs['WBCForce/Caps/left_corner_3_mean'] == 1.
     assert logs['WBCForce/Caps/left_corner_0_mean'] == 0.
+
+
+def test_corner_rewards_and_logs_use_point_nine_cap_mapping(rewards):
+    env = point_env(count=1)
+    term = rewards.ForceCapGapPenalty(NS(params={}, weight=-.08), env)
+    # Raw zero is 4/9 capacity; no QP force has used any of it yet.
+    torch.testing.assert_close(term(env)/term.scale, torch.tensor([(4/9)**2]))
+    completion = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
+    completion(env)
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Caps/left_mean'] == pytest.approx(4/9)
+    assert logs['WBCForce/Caps/right_corner_3_mean'] == pytest.approx(4/9)
 
 
 def test_active_reward_configuration_includes_joint_tracking_and_reduced_cap_costs(rewards):
@@ -286,7 +298,7 @@ def test_false_zero_uses_reference_contact_and_excludes_swing(rewards):
     weighted = term(env)*env.step_dt*term.cfg.weight
     torch.testing.assert_close(weighted, torch.tensor([-25./3, -12.5/3], dtype=torch.float64), atol=1.e-6, rtol=0)
     env.action_manager.action[:, 0] = -2.19  # Small positive decoded caps are not false zeros.
-    assert (rewards.decode_contact_values(env.action_manager.action)[:, 0] > 0).all()
+    assert (rewards.decode_force_values(env.action_manager.action)[:, 0] > 0).all()
     assert term(env).count_nonzero() == 0
     env.action_manager.action[:, 0] = -3.
     command.time_steps.fill_(2)

@@ -8,7 +8,7 @@ import math
 import torch
 from isaaclab.managers import ManagerTermBase
 
-from whole_body_tracking.utils.wbc_contact_mapping import decode_contact_values
+from whole_body_tracking.utils.wbc_contact_mapping import decode_force_values
 from whole_body_tracking.utils.wbc_acc_contact_policy import FEET, sole_vertices
 from whole_body_tracking.utils.wbc_acc_torch_model import rotation_xyzw
 from whole_body_tracking.utils.wbc_force_learning import (
@@ -108,7 +108,7 @@ class MotionCompletionReward(_MotionScaledTerm):
 
     def _record_step_metrics(self, env, frame, first, credited):
         reference = _reference_clearance(env)[0][frame]
-        caps = decode_contact_values(env.action_manager.action)
+        caps = decode_force_values(env.action_manager.action)
         if caps.shape[-1] == 8:
             for i, side in enumerate(('left', 'right')):
                 for corner in range(4):
@@ -213,7 +213,7 @@ class SwingForcePenalty(_MotionScaledTerm):
             cfg.params.get('unload_lead_time', 0.), env.step_dt) for start, end in slices])
 
     def __call__(self, env, command_name='motion', clearance_start=.001, clearance_full=.005, unload_lead_time=0.):
-        caps = decode_contact_values(env.action_manager.action)
+        caps = decode_force_values(env.action_manager.action)
         value = (self.unloading_weight[self.command.time_steps]*caps.square()).mean(-1)*self.scale
         _metrics(env).mean('Reward/swing_cap_points_per_step', value*env.step_dt*self.cfg.weight)
         return value
@@ -227,7 +227,7 @@ class FalseZeroPenalty(_MotionScaledTerm):
             cfg.params.get('clearance_start', .001), cfg.params.get('clearance_full', .005))
 
     def __call__(self, env, command_name='motion', clearance_start=.001, clearance_full=.005):
-        caps = decode_contact_values(env.action_manager.action)
+        caps = decode_force_values(env.action_manager.action)
         cost = (self.contact_weight[self.command.time_steps]*(caps == 0)).mean(-1)
         value = cost*self.scale
         _metrics(env).mean('Reward/false_zero_points_per_step', value*env.step_dt*self.cfg.weight)
@@ -247,7 +247,7 @@ class ForceCapGapPenalty(_MotionScaledTerm):
             raise ValueError('Force cap gap requires finite positive maxima matching the actions')
 
     def __call__(self, env, command_name='motion'):
-        caps = decode_contact_values(env.action_manager.action)
+        caps = decode_force_values(env.action_manager.action)
         # Despite its name, previous_wrench holds the current policy step's QP
         # solution by reward time, including when diagnostic recording is off.
         forces = self.action.previous_point_forces if self.point_caps else self.action.previous_wrench
@@ -294,7 +294,7 @@ class ForceActionChangePenalty(_MotionScaledTerm):
         self.valid = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
     def __call__(self, env, command_name='motion'):
-        caps = decode_contact_values(env.action_manager.action)
+        caps = decode_force_values(env.action_manager.action)
         penalty = (caps-self.previous).square().mean(-1)
         penalty = torch.where(self.valid, penalty, 0.)
         self.previous.copy_(caps)

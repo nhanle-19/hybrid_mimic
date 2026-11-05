@@ -2,7 +2,7 @@
 
 WBC-FORCE is a separate task derived from [WBC-ACC](wbc_acc_controller.md).
 It shares the robot dynamics, physical foot colliders, physics, observations and PPO
-configuration, with its own six-term reward and clip-completion boundary. The existing WBC-ACC
+hyperparameters, with a bounded actor mean, its own six-term reward and clip-completion boundary. The existing WBC-ACC
 policy retains its fourteen-output interface and acceleration objectives.
 
 ## Policy and QP
@@ -12,27 +12,33 @@ corners 0–3. Each set uses the stored `sole_vertices` order: `(x-, y-)`,
 `(x-, y+)`, `(x+, y-)`, `(x+, y+)` in the foot-link frame.
 
 ```
-c_i = clip((sigmoid(action_i) - 0.10) / 0.80, 0, 1)
+mean_i = 2.5 * tanh(actor_output_i)
+action_i ~ Normal(mean_i, std_i)
+c_i = clip((sigmoid(action_i) - 0.10) / 0.90, 0, 1)
 F_max = robot_mass * (-gravity_z) * point_force_max_body_weights
 F_limit_i = c_i * F_max
 0 <= Fz_i = sum(four_friction_rays_at_corner_i) <= F_limit_i
 ```
 
-The actor outputs unconstrained Gaussian actions. The shared FORCE/AUTH mapping
-has a 10% dead zone at each end: raw actions at or below approximately -2.197225
-give exactly zero, and actions at or above +2.197225 give exactly one. The mapping
-is continuous, with slope changes at those boundaries. Zero raw output still
-gives 50% capacity (155.06842 N per corner). PPO stores and scores the raw Gaussian actions;
-the mapping is applied only by the controller.
+The Gaussian mean is bounded to ±2.5 in training, deterministic playback, and
+ONNX/JIT export. Each action's standard deviation starts at 1.0 and remains
+learnable and independent of the observation. Gaussian samples can exceed ±2.5.
+Raw actions at or below approximately -2.197225 give exactly zero capacity;
+capacity approaches one asymptotically at the positive end. Zero raw output
+gives 4/9 capacity (137.83860 N per corner); the deterministic upper mean bound
+of +2.5 gives approximately 0.9157 capacity. PPO stores and scores raw Gaussian
+actions, and rewards and diagnostics use the same /0.90 mapping as the QP.
 
 Manual `--manual_point_caps` accepts eight fractions, including exact 0 and 1.
 `--manual_support LEFT RIGHT` applies each fraction uniformly to that foot's
 four corners. It no longer specifies a total-foot cap.
-The encoder uses ordinary raw values -3 and +3 for those endpoints. Interior
-fractions `c` encode as `logit(0.10 + 0.80*c)`. Existing plain-sigmoid checkpoints
-have different action semantics and are not equivalent controllers under this
-mapping; start a new training run for a clean comparison. Old manual schedules
-must be migrated or rebuilt; see [the schedule guide](manual_wbc_schedule.md).
+The encoder uses -3 for zero and +40 for floating-point saturation to one in
+both float32 and float64. Interior fractions `c` encode as
+`logit(0.10 + 0.90*c)`. Start a fresh training run: the bounded actor requires its
+saved mean-bound buffer, and older unbounded checkpoints have different action
+semantics. Eight-corner manual annotations must declare the new mapping and
+encode their fractions accordingly. The separate legacy region/crawl and AUTH
+controllers retain their /0.80 mapping and existing manual schedules.
 
 `point_force_max_body_weights` defaults to `1.0`. The 31.61435756 kg robot model
 and gravity 9.81 m/s² give **310.13684767 N per corner**. One corner can therefore

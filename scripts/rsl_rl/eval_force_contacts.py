@@ -39,7 +39,7 @@ from rsl_rl.runners import OnPolicyRunner
 import whole_body_tracking.tasks  # noqa: F401
 from whole_body_tracking.tasks.tracking.config.t1_wbc_acc.motion import WBCACCSinglePassMotion
 from whole_body_tracking.utils.wbc_acc_contact_policy import FEET, sole_vertices
-from whole_body_tracking.utils.wbc_contact_mapping import decode_contact_values
+from whole_body_tracking.utils.wbc_contact_mapping import decode_force_values
 
 
 def array(value):
@@ -95,6 +95,8 @@ def main():
     if controller_overrides:
         print('[CONTACT EVAL] Explicit controller overrides: '+json.dumps(controller_overrides), flush=True)
     saved_agent = yaml.safe_load((checkpoint.parent/'params/agent.yaml').read_text())
+    if saved_agent['policy']['class_name'] != agent.policy.class_name:
+        raise ValueError('Checkpoint predates the bounded FORCE mean and /0.9 cap mapping; train a fresh policy')
     agent_config = agent.to_dict()
     for key in ('policy', 'empirical_normalization', 'algorithm'):
         agent_config[key] = saved_agent[key]
@@ -148,7 +150,7 @@ def main():
                 if not torch.isfinite(chosen).all() or not torch.isfinite(obs).all():
                     raise RuntimeError('Nonfinite policy input/output')
                 rec = dict(frame=frame, raw_action=array(chosen[0]),
-                           cap=array(decode_contact_values(chosen).reshape(-1, 2, 4)[0]),
+                           cap=array(decode_force_values(chosen).reshape(-1, 2, 4)[0]),
                            actual_q=array(state['q'][0]), reference_q=array(term.references['q'][frame]),
                            pre_ground_force=array(term._gpu_ground_forces()[0]),
                            body_contact_force=array(base.scene.sensors['contact_forces'].data.net_forces_w[0]))
