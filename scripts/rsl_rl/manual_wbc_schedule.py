@@ -27,6 +27,32 @@ def file_digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def load_force_annotations(path, motion_path, frame_count, fps, action_dim=2):
+    """Validate archived raw caps for replay under the current controller settings."""
+    with np.load(path, allow_pickle=False) as archive:
+        metadata = json.loads(str(archive['metadata_json']))
+        if metadata.get('schema_version') != 1 or metadata.get('foot_order') != ['left', 'right']:
+            raise ValueError('Expected FORCE annotation schema 1 with left/right foot order')
+        if metadata.get('motion_sha256') != file_digest(motion_path):
+            raise ValueError('Manual annotations belong to a different reference motion')
+        if not np.isclose(float(archive['fps'].item()), fps, rtol=0., atol=1e-7):
+            raise ValueError('Manual annotations and reference must have the same frame rate')
+        np.testing.assert_array_equal(archive['reference_frame'], np.arange(frame_count))
+        actions = archive['manual_raw_actions'].astype(np.float32)
+        fractions = archive['manual_cap_fractions']
+        if actions.shape != (frame_count, action_dim) or fractions.shape != actions.shape:
+            raise ValueError(f'Manual annotations must contain {action_dim} caps per reference frame; legacy foot caps cannot drive a corner policy')
+        if action_dim == 8 and metadata.get('action_layout') != [
+                f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]:
+            raise ValueError('Corner annotations must declare left corners 0..3 then right corners 0..3')
+        if not np.isfinite(actions).all() or not np.isfinite(fractions).all():
+            raise ValueError('Manual annotations must contain finite actions and fractions')
+        if np.any((fractions < 0.) | (fractions > 1.)):
+            raise ValueError('Manual fractions must lie in [0, 1]')
+        np.testing.assert_allclose(decode_contact_values_numpy(actions), fractions, atol=2e-7, rtol=0.)
+    return actions, metadata
+
+
 def reference_digest(joints, positions, quaternions):
     digest = hashlib.sha256()
     for value in (joints, positions, quaternions):

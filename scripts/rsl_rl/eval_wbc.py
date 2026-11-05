@@ -25,9 +25,11 @@ parser.add_argument('--record_motion_states', action='store_true',
 parser.add_argument('--video_dir', help='Defaults to <checkpoint run>/videos/play; QP-only uses eval_data/<controller>/videos.')
 parser.add_argument('--output', help='Defaults to <checkpoint run>/diagnostics.npz; QP-only uses eval_data/<controller>/diagnostics.npz.')
 parser.add_argument('--manual_support', type=float, nargs=2, default=(1., 1.), metavar=('LEFT', 'RIGHT'),
-                    help='Manual per-foot fractions: AUTH xyz cost authority, otherwise force limits; FORCE support is controlled by caps.')
+                    help='Manual per-foot fractions: AUTH xyz cost authority, otherwise force limits; FORCE applies each fraction to all four corners.')
 parser.add_argument('--manual_authority', type=float, nargs=6, metavar='C',
                     help='QP-only WBC-AUTHORITY fractions: left xyz, then right xyz (cost only).')
+parser.add_argument('--manual_point_caps', type=float, nargs=8, metavar='C',
+                    help='QP-only FORCE fractions: left sole corners 0..3, then right 0..3.')
 parser.add_argument('--manual_inputs', type=Path,
                     help='JSON with force/authority raw NN output arrays; bypasses manual fraction encoding.')
 schedule_group = parser.add_mutually_exclusive_group()
@@ -52,6 +54,13 @@ scheduled = args.manual_schedule is not None or args.build_manual_schedule is no
 if args.record_motion_states and not scheduled:
     parser.error('--record_motion_states requires a manual schedule')
 schedule_controller = 'authority' if 'WBC-AUTHORITY' in args.task else 'force' if 'WBC-FORCE' in args.task else ''
+if schedule_controller == 'force' and (scheduled or args.manual_inputs is not None or args.force_max is not None):
+    parser.error('FORCE now has eight corner caps. Legacy two-foot schedules, JSON inputs, and --force_max are incompatible; use a fresh policy or --manual_point_caps.')
+if args.manual_point_caps is not None and (schedule_controller != 'force' or not args.zero_policy
+        or not all(math.isfinite(x) and 0 <= x <= 1 for x in args.manual_point_caps)):
+    parser.error('--manual_point_caps requires FORCE --qp_only and eight fractions in [0,1]')
+if args.manual_point_caps is not None and any(item.split('=')[0] == '--manual_support' for item in sys.argv[1:]):
+    parser.error('Use either --manual_point_caps or --manual_support')
 if scheduled:
     if (not args.zero_policy or (toy_task and not args.track_motion)
             or ('Standing' in args.task and not toy_task) or not schedule_controller
@@ -67,8 +76,8 @@ if scheduled:
 elif args.steps is None:
     args.steps = 141
 manual_values = None
-if toy_task and (not args.zero_policy or (args.manual_inputs is None and not scheduled) or args.nominal_standing):
-    parser.error('Toy tasks require --qp_only and manual inputs or a tracking schedule with the supplied reference')
+if toy_task and (not args.zero_policy or (args.manual_inputs is None and args.manual_point_caps is None and not scheduled) or args.nominal_standing):
+    parser.error('Toy tasks require --qp_only and manual inputs, corner caps, or a tracking schedule with the supplied reference')
 if args.manual_inputs is not None:
     if not args.zero_policy or any(item.split('=')[0] in
             ('--manual_support', '--manual_authority', '--manual_weight') for item in sys.argv[1:]):
@@ -309,7 +318,8 @@ def main(env_cfg, agent_cfg):
                 actions[:] = encode_authorities(actions.new_tensor(values).reshape(1, 2, 3))
             elif force_only:
                 from whole_body_tracking.utils.wbc_force_gpu_control import encode_force_capacities
-                actions[:] = encode_force_capacities(actions.new_tensor([args.manual_support]))
+                fractions = args.manual_point_caps or [args.manual_support[0]]*4+[args.manual_support[1]]*4
+                actions[:] = encode_force_capacities(actions.new_tensor([fractions]), contact_count=8)
             else:
                 actions[:, 0], actions[:, 7] = args.manual_support
                 probability = (args.manual_weight-controller.contact_weight_min)/(controller.contact_weight_max-controller.contact_weight_min)

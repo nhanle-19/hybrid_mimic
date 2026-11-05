@@ -1,11 +1,13 @@
-"""Evaluate one learned FORCE clip from frame zero, retaining contact evidence.
+"""Evaluate one FORCE clip from frame zero, retaining contact evidence.
 
 Uses the training torso/QP guards, stops on the first reset, and never wraps the
-reference. No manual labels or contact masks are supplied to the controller.
+reference. Optional archived manual actions bypass the learned policy without
+changing the controller settings or introducing contact masks.
 """
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from isaaclab.app import AppLauncher
@@ -15,8 +17,15 @@ parser.add_argument('--checkpoint', required=True, type=Path)
 parser.add_argument('--motion_file', required=True, type=Path)
 parser.add_argument('--output', required=True, type=Path)
 parser.add_argument('--seed', type=int, default=42)
+parser.add_argument('--manual_labels', type=Path, help='Archived annotations.npz raw caps; checkpoint supplies configuration only.')
+parser.add_argument('--posture_kp', type=float, help='Explicit evaluation-only posture position gain.')
+parser.add_argument('--posture_kd', type=float, help='Explicit evaluation-only posture velocity gain.')
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
+controller_overrides = {key: value for key, value in (
+    ('posture_position_gain', args.posture_kp), ('posture_velocity_gain', args.posture_kd)) if value is not None}
+if any(not math.isfinite(value) or value <= 0 for value in controller_overrides.values()):
+    parser.error('Posture gains must be finite and positive')
 launcher = AppLauncher(args, fast_shutdown=False)
 app = launcher.app
 
@@ -63,6 +72,11 @@ def main():
         fps = float(motion['fps'].item())
     if frame_count < 2 or not np.isclose(fps * cfg.sim.dt * cfg.decimation, 1.):
         raise ValueError('A nonempty clip at the policy frequency is required')
+    manual_actions, manual_metadata = None, None
+    if args.manual_labels:
+        from manual_wbc_schedule import load_force_annotations
+        manual_actions, manual_metadata = load_force_annotations(
+            args.manual_labels, args.motion_file, frame_count, fps, action_dim=8)
     # Refuse silent controller/network drift from the downloaded training run.
     saved = yaml.load((checkpoint.parent/'params/env.yaml').read_text(), Loader=yaml.BaseLoader)
     current_action = cfg.actions.wbc_force.to_dict()
@@ -73,6 +87,13 @@ def main():
                                   (cfg.decimation, saved['decimation'], 'decimation')):
         if normalized(actual) != normalized(expected):
             raise ValueError(f'Training/evaluation setting differs: {name}')
+    # Validate the baseline first, then apply only explicitly requested gains.
+    training_controller = normalized(saved['actions']['wbc_force']['controller'])
+    for key, value in controller_overrides.items():
+        setattr(cfg.actions.wbc_force.controller, key, value)
+    evaluation_controller = normalized(cfg.actions.wbc_force.controller.to_dict())
+    if controller_overrides:
+        print('[CONTACT EVAL] Explicit controller overrides: '+json.dumps(controller_overrides), flush=True)
     saved_agent = yaml.safe_load((checkpoint.parent/'params/agent.yaml').read_text())
     agent_config = agent.to_dict()
     for key in ('policy', 'empirical_normalization', 'algorithm'):
@@ -102,9 +123,12 @@ def main():
     full_reference = {}
     try:
         obs, _ = env.reset()
-        runner = OnPolicyRunner(env, agent_config, log_dir=None, device=base.device)
-        runner.load(str(checkpoint))
-        policy = runner.get_inference_policy(device=base.device)
+        if manual_actions is None:
+            runner = OnPolicyRunner(env, agent_config, log_dir=None, device=base.device)
+            runner.load(str(checkpoint))
+            policy = runner.get_inference_policy(device=base.device)
+        else:
+            manual_actions = torch.as_tensor(manual_actions, device=base.device)
         with torch.inference_mode():
             term._reference_states()
             for field in ('position', 'rotation', 'velocity'):
@@ -120,11 +144,11 @@ def main():
                 if frame != step:
                     raise RuntimeError(f'Reference skipped/wrapped: expected {step}, got {frame}')
                 state = term._states()
-                chosen = policy(obs)
+                chosen = policy(obs) if manual_actions is None else manual_actions[frame:frame+1]
                 if not torch.isfinite(chosen).all() or not torch.isfinite(obs).all():
                     raise RuntimeError('Nonfinite policy input/output')
                 rec = dict(frame=frame, raw_action=array(chosen[0]),
-                           cap=array(decode_contact_values(chosen)[0]),
+                           cap=array(decode_contact_values(chosen).reshape(-1, 2, 4)[0]),
                            actual_q=array(state['q'][0]), reference_q=array(term.references['q'][frame]),
                            pre_ground_force=array(term._gpu_ground_forces()[0]),
                            body_contact_force=array(base.scene.sensors['contact_forces'].data.net_forces_w[0]))
@@ -156,8 +180,19 @@ def main():
             failure_reason=reason, terminations=terminations, seed=args.seed,
             deterministic=True, policy_dt_s=1/fps, physics_dt_s=cfg.sim.dt,
             training_episode_length_s=float(saved['episode_length_s']), evaluation_episode_length_s=cfg.episode_length_s,
-            training_controller_matches=True, reference_preparation=command.reference_preparation,
-            contact_policy='Unmodified learned caps, no geometry gate or manual schedule',
+            training_controller_matches=training_controller == evaluation_controller,
+            controller_overrides=controller_overrides, training_controller=training_controller,
+            evaluation_controller=evaluation_controller, reference_preparation=command.reference_preparation,
+            qp_contact_model=term.solver.contact_model,
+            force_cap_scope=term.solver.force_cap_scope, policy_action_dim=term.action_dim,
+            point_force_max_N=array(term.normal_force_max).tolist(),
+            qp_contact_points_local=array(term.solver.contact_points(base.device, torch.float64)).tolist(),
+            policy_source='learned_policy' if args.manual_labels is None else 'manual_labels',
+            manual_labels_file=str(args.manual_labels.resolve()) if args.manual_labels else None,
+            manual_labels_sha256=hashlib.sha256(args.manual_labels.read_bytes()).hexdigest() if args.manual_labels else None,
+            manual_labels_metadata=manual_metadata,
+            contact_policy=('Unmodified learned caps, no geometry gate or manual schedule' if args.manual_labels is None
+                            else 'Archived manual raw caps with current controller gains and force maxima; no learned policy or geometry gate'),
             measurement='Pre-step kinematics; diagnostic wrench at first physics substep; post forces at last substep. Reset samples excluded.',
             simulation_device=base.device, torso_guards=True, reference_wrap=False)
         if term.records:

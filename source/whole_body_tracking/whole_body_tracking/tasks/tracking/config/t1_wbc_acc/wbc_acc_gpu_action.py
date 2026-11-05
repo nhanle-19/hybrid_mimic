@@ -51,6 +51,7 @@ class WBCACCGPUAction(WBCACCAction):
         self.qp_failed = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
         self.last_prediction = None
         self.previous_wrench = None
+        self.previous_point_forces = None
         self._qp_update_pending = True
         print(f'[INFO] {self.log_prefix} backend={cfg.backend}: {env.num_envs} environments; dynamics and QP on {env.device}, float64')
 
@@ -243,11 +244,13 @@ class WBCACCGPUAction(WBCACCAction):
                     logs[f'{self.log_prefix}/{FEET[foot]}_actual_{label}'] = measured[:, foot, axis].mean()
             logs[f'{self.log_prefix}/contact_wrench_prediction_rmse'] = (measured-self.previous_wrench).square().mean().sqrt()
         self.previous_wrench = result['wrenches'].detach().clone()
+        self.previous_point_forces = result['point_forces'].detach().clone()
         if self.cfg.record_diagnostics:
             self.last_prediction = dict(_valid=torch.ones_like(failed), env_id=torch.arange(self._env.num_envs, device=self._env.device),
                 time=torch.full_like(tracking_error, self._clock*self._env.physics_dt),
                 predicted_contact_wrench=result['wrenches'], support_activation=result['activation'],
                 normal_force_limits=result['normal_force_limits'], available_vertices=masks,
+                predicted_point_forces=result['point_forces'], active_force_points=result['available'],
                 contact_acceleration=result['contact_acceleration'], solver_failed=failed,
                 joint_tracking_rmse=tracking_error, torque_saturation=saturation, commanded_torque=torque,
                 qp_residual=result['residual'], foot_position_w=torch.stack([state['frames'][f]['position'] for f in FEET], 1),
@@ -280,6 +283,9 @@ class WBCACCGPUAction(WBCACCAction):
             controller_config_json=np.asarray(json.dumps(self.cfg.controller.to_dict())),
             policy_type=np.asarray(self.action_name), policy_action_dim=self.action_dim,
             wrench_measurement_version=2,
+            qp_contact_model=self.solver.contact_model,
+            force_cap_scope=getattr(self.solver, 'force_cap_scope', 'per_region_total'),
+            qp_contact_points_local=self.solver.contact_points(self._raw.device, torch.float64).cpu().numpy(),
             contact_gating=self.contact_gating,
             force_full_contact=getattr(self.cfg, 'force_full_contact', False),
             evaluation_completed=completed, failure_reason=np.asarray(failure_reason))

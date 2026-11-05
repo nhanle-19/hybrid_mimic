@@ -1,8 +1,9 @@
 """Batched version of the reference-conditioned contact WBCACC reference controller and physical QP.
 
 All dynamics, objective assembly, equality elimination and solves stay on the
-input torch device. The default two-foot layout uses 61 variables and 80
-inequality rows before six balance equalities are eliminated. FORCE may supply
+input torch device. The two-foot layout uses 61 variables and 80 inequality
+rows for region caps, or 86 rows for FORCE's eight corner caps, before six
+balance equalities are eliminated. FORCE may supply
 explicit point geometry with more regions, retaining fixed sizes per layout.
 Unavailable force columns are masked out of physics, with decoupled regularized
 dummy variables instead of zero-capacity barrier constraints.
@@ -72,6 +73,8 @@ def reference_tasks(state, ref, action, cfg, active):
 
 
 class WBCACCGPUQP:
+    contact_model = 'sole_corners'
+
     def __init__(self, cfg, friction=.6, tolerance=2e-5, max_iterations=100, solver_tolerance=1e-9, backend="batched"):
         self.cfg, self.friction, self.tolerance = cfg, friction, tolerance
         self.backend = backend
@@ -79,6 +82,13 @@ class WBCACCGPUQP:
 
     def decode_policy(self, actions):
         return decode_actions(actions, self.cfg)
+
+    def contact_points(self, device, dtype):
+        """Fixed force application points in each foot's link frame."""
+        return sole_vertices(device, dtype)
+
+    def force_capacities(self, state, activation):
+        return activation*activation.new_tensor(self.cfg.contact_force_max)
 
     def contact_objective(self, frame, desired, weights, support, tensor):
         target = desired['acceleration']+tensor(self.cfg.contact_velocity_gain)*(desired['velocity']-frame['velocity'])
@@ -91,11 +101,12 @@ class WBCACCGPUQP:
         n, nv = state['bias'].shape
         activation, weights = self.decode_policy(actions)
         nc = activation.shape[1]
-        if contact_geometry is None and masks.shape == (n, 2):
-            masks = masks[:, :, None].expand(-1, -1, 4)
         if contact_geometry is None:
-            if nc != 2 or masks.shape != (n, 2, 4) or masks.dtype != torch.bool:
-                raise ValueError('Actual support geometry must be boolean (N,2,4)')
+            point_count = self.contact_points(state['q'].device, state['q'].dtype).shape[1]
+            if masks.shape == (n, 2):
+                masks = masks[:, :, None].expand(-1, -1, point_count)
+            if nc != 2 or masks.shape != (n, 2, point_count) or masks.dtype != torch.bool:
+                raise ValueError(f'Actual support geometry must be boolean (N,2,{point_count})')
         else:
             if weights is not None or self.cfg.swing_weight:
                 raise ValueError('Explicit contact points require FORCE without foot-motion objectives')
@@ -107,12 +118,14 @@ class WBCACCGPUQP:
                 value = contact_geometry[key]
                 if value.shape != shape or not bool(torch.isfinite(value).all()):
                     raise ValueError(f'Invalid explicit contact geometry: {key}')
-        point_masks = masks & (activation > 0)[:, :, None]
+        if activation.ndim == 3 and activation.shape != masks.shape:
+            raise ValueError('Point force activations must match the contact-point layout')
+        point_masks = masks & ((activation > 0) if activation.ndim == 3 else (activation > 0)[:, :, None])
         rate, tasks = reference_tasks(state, reference, actions, self.cfg, point_masks.any(-1))
         result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks,
                                    reference, actions, contact_geometry)
         result.update(desired_rate=rate, activation=activation, available=point_masks,
-                      normal_force_limits=activation*actions.new_tensor(self.cfg.contact_force_max))
+                      normal_force_limits=self.force_capacities(state, activation))
         if weights is not None:
             result['contact_weights'] = weights
         return result
@@ -125,7 +138,7 @@ class WBCACCGPUQP:
         nx = nv+nr
         zeros = lambda *shape: s['M'].new_zeros(shape)
         tensor = lambda value: torch.as_tensor(value, device=s['M'].device, dtype=s['M'].dtype)
-        points = sole_vertices(s['q'].device, s['q'].dtype) if contact_geometry is None else None
+        points = self.contact_points(s['q'].device, s['q'].dtype) if contact_geometry is None else None
         mu = self.friction
         rays = tensor([[0., 0., -mu, mu], [mu, -mu, 0., 0.], [1., 1., 1., 1.]])
         enabled = point_masks.reshape(n, nc*np).repeat_interleave(4, dim=-1)
@@ -203,12 +216,20 @@ class WBCACCGPUQP:
             linear -= weight[:, None]*mv(j.transpose(-1, -2), target)
         equality, target = torch.cat(eq, 1), torch.cat(rhs, 1)
         nonnegative = torch.cat((zeros(n, nr, nv), -torch.diag_embed(enabled.to(s['q'].dtype))), -1)
-        normal_rows = zeros(n, nc, nx)
-        for i in range(nc):
-            sl = slice(i*np*4, (i+1)*np*4)
-            normal_rows[:, i, nv+sl.start:nv+sl.stop] = enabled[:, sl]
-        support = point_masks.any(-1)
-        capacities = activation*tensor(self.cfg.contact_force_max)
+        capacities = self.force_capacities(s, activation)
+        if activation.ndim == 3:
+            # Each row sums only one point's four friction rays. There is no
+            # additional per-foot cap and no sharing of unused point capacity.
+            normal_rows = zeros(n, nc*np, nx)
+            normal_rows[:, :, nv:] = torch.eye(nc*np, device=actions.device, dtype=actions.dtype).repeat_interleave(4, -1)[None]*enabled[:, None]
+            support = point_masks.reshape(n, nc*np)
+            capacities = capacities.reshape(n, nc*np)
+        else:
+            normal_rows = zeros(n, nc, nx)
+            for i in range(nc):
+                sl = slice(i*np*4, (i+1)*np*4)
+                normal_rows[:, i, nv+sl.start:nv+sl.stop] = enabled[:, sl]
+            support = point_masks.any(-1)
         # Disabled rows are 0 <= 1, strictly feasible and independent of x.
         # In particular zero-activation feet never introduce a zero-width
         # feasible interval into the interior-point solver.

@@ -1,4 +1,4 @@
-"""Learned force caps, absent foot objectives, and the two-output action interface."""
+"""Legacy region caps, absent foot objectives, and the eight-output action interface."""
 import copy
 import importlib.util
 import sys
@@ -11,7 +11,7 @@ import torch
 from test_wbc_acc_gpu import cfg, threads, standing_state, action_modules, DEVICES
 from test_wbc_force_rewards import rewards
 from wbc_acc_torch_model import WBCACCTorchModel, mv
-from wbc_force_gpu_control import WBCForceGPUQP, decode_force_actions, encode_force_capacities
+from wbc_force_gpu_control import WBCForceGPUQP, WBCCornerForceGPUQP, decode_force_actions, encode_force_capacities
 
 
 @pytest.mark.parametrize('device', DEVICES)
@@ -49,6 +49,39 @@ def test_force_limits_and_inverse_dynamics(cfg, device):
     assert not expected['failed'].any()
     torch.testing.assert_close(result['acceleration'], expected['acceleration'], atol=2e-3, rtol=1e-3)
     assert 'contact_weights' not in result
+
+
+@pytest.mark.parametrize('device', DEVICES)
+def test_four_corners_allow_force_redistribution_without_geometry_gate(cfg, device):
+    from wbc_acc_contact_policy import FEET, sole_vertices
+    model = WBCACCTorchModel(device)
+    state = standing_state(model, 3)
+    q = state['q'].clone()
+    # Tilt/translate the robot: all four corners must remain available even
+    # when the sole is not flat on the ground.
+    angle = q.new_tensor([0., .15, -.2])
+    q[:, 4], q[:, 6] = angle.sin(), angle.cos()
+    q[:, :3] += q.new_tensor([[0., 0., 0.], [.3, -.2, .1], [-.1, .4, .2]])
+    state = model.state(q, state['v'])
+    solver = WBCForceGPUQP(cfg)
+    result = solver.solve(state, state, encode_force_capacities(q.new_ones((3, 2))),
+                          torch.ones((3, 2), device=device, dtype=torch.bool), q.new_full((3, 23), 60.))
+    assert not result['failed'].any()
+    assert solver.contact_model == 'sole_corners'
+    assert result['point_forces'].shape == (3, 2, 4, 3)
+    assert result['rho'].shape == (3, 32)  # Four friction rays at each of eight corners.
+    assert result['available'].shape == (3, 2, 4)
+    assert result['available'].all()
+    corners = sole_vertices(device)
+    offsets = torch.stack([corners[i]@state['frames'][foot]['rotation'].transpose(-1, -2)
+                           for i, foot in enumerate(FEET)], 1)
+    force = result['wrenches'][..., :3]
+    torch.testing.assert_close(result['point_forces'].sum(2), force)
+    torch.testing.assert_close(result['wrenches'][..., 3:],
+                               torch.cross(offsets, result['point_forces'], dim=-1).sum(2))
+    # Redistributing the corner forces can produce a moment about the midpoint.
+    midpoint_moment = result['wrenches'][..., 3:]-torch.cross(offsets.mean(2), force, dim=-1)
+    assert midpoint_moment.abs().max() > 1e-3
 
 
 def test_no_reference_foot_acceleration_objective(cfg):
@@ -125,13 +158,13 @@ def test_force_action_initialization_and_reset(force_modules):
                                                  joint_damping=torch.zeros((2, 23))))
     env = SimpleNamespace(device='cpu', num_envs=2, scene={'robot': asset})
     term = config.class_type(config, env)
-    assert term.action_dim == 2 and term.raw_actions.shape == (2, 2)
-    assert isinstance(term.solver, WBCForceGPUQP)
-    term.process_actions(torch.tensor([[.2, .7], [1., 0.]]))
+    assert term.action_dim == 8 and term.raw_actions.shape == (2, 8)
+    assert isinstance(term.solver, WBCCornerForceGPUQP)
+    term.process_actions(torch.tensor([[.2, .7], [1., 0.]]).repeat_interleave(4, -1))
     term.reset(torch.tensor([1]))
-    torch.testing.assert_close(term.raw_actions, torch.tensor([[.2, .7], [0., 0.]]))
-    with pytest.raises(ValueError, match='2 finite'):
-        term.process_actions(torch.zeros((2, 14)))
+    torch.testing.assert_close(term.raw_actions, torch.tensor([[.2, .7], [0., 0.]]).repeat_interleave(4, -1))
+    with pytest.raises(ValueError, match='8 finite'):
+        term.process_actions(torch.zeros((2, 2)))
     env.action_manager = SimpleNamespace(action=torch.tensor([[2., -.2], [.5, .25]]),
                                         prev_action=torch.tensor([[1., 0.], [0., .25]]))
     torch.testing.assert_close(modules['rewards'].mapped_force_action_rate(env),
@@ -178,28 +211,29 @@ def test_force_action_uses_caps_without_geometry_gate(force_modules, action_modu
     term.set_active_contacts(None)
     with pytest.raises(ValueError):
         term.set_active_contacts(torch.tensor([[False, True], [True, True]]))
-    caps = torch.tensor([[1., 1.], [0., 1.]], dtype=torch.float64)
-    term.process_actions(encode_force_capacities(caps))
+    caps = torch.tensor([[1., 1.], [0., 1.]], dtype=torch.float64).repeat_interleave(4, -1)
+    term.process_actions(encode_force_capacities(caps, 8))
     term.apply_actions()
     assert len(applied) == 1 and not term.qp_failed.any()
     assert (term.previous_wrench[0, :, 2] > 1.).all()
     assert term.previous_wrench[1, 0].count_nonzero() == 0
-    expected = term.solver.solve(state, state, encode_force_capacities(caps),
+    expected = term.solver.solve(state, state, encode_force_capacities(caps, 8),
         torch.ones((2, 2, 4), dtype=torch.bool), term.limits)
     torch.testing.assert_close(applied[0].double(), expected['torque'], atol=2e-5, rtol=0)
     # The reward must consume the executed QP solution with diagnostics on or off.
     env.action_manager = SimpleNamespace(action=term.raw_actions, get_term=lambda _: term)
     gap = rewards.ForceCapGapPenalty(SimpleNamespace(params={}, weight=-.1), env)
-    expected_gap = (caps-expected['wrenches'][..., 2]/600.).clamp_min(0.).square().mean(-1)*50.
+    expected_gap = (caps-expected['point_forces'][..., 2].reshape(2, 8)/term.normal_force_max).clamp_min(0.).square().mean(-1)*50.
     torch.testing.assert_close((gap(env)*env.step_dt).double(), expected_gap, atol=1e-5, rtol=0)
     if record_diagnostics:
+        assert term.last_prediction['available_vertices'].shape == (2, 2, 4)
         assert term.last_prediction['available_vertices'].all()
     else:
         # A previous prediction must not make contact measurements mandatory
         # on the next policy step through the shared wrench-error logger.
         for _ in range(env.cfg.decimation-1):
             term.apply_actions()
-        term.process_actions(encode_force_capacities(caps))
+        term.process_actions(encode_force_capacities(caps, 8))
         term.apply_actions()
         assert len(applied) == env.cfg.decimation+1 and not term.qp_failed.any()
         torch.testing.assert_close(applied[-1], applied[0], atol=0, rtol=0)

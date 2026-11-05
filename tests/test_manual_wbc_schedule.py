@@ -8,7 +8,40 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts/rsl_rl'))
 from manual_wbc_schedule import (build_schedule, load_schedule, save_schedule, migrate_schedule,
-                                 decode_contact_values_numpy, encode_contact_values_numpy)
+                                 decode_contact_values_numpy, encode_contact_values_numpy,
+                                 file_digest, load_force_annotations)
+
+
+def test_archived_force_annotations_preserve_exact_manual_caps(tmp_path):
+    motion = tmp_path/'motion.npz'
+    np.savez(motion, fps=50.)
+    fractions = np.array([[0., 1.], [.2, .6], [.8, .12]], dtype=np.float32)
+    raw = encode_contact_values_numpy(fractions).astype(np.float32)
+    metadata = dict(schema_version=1, foot_order=['left', 'right'], motion_sha256=file_digest(motion))
+    path = tmp_path/'annotations.npz'
+    np.savez(path, fps=50., reference_frame=np.arange(3), manual_raw_actions=raw,
+             manual_cap_fractions=fractions, metadata_json=json.dumps(metadata))
+    actions, loaded = load_force_annotations(path, motion, 3, 50.)
+    np.testing.assert_array_equal(actions, raw)
+    assert loaded == metadata
+    with pytest.raises(ValueError, match='frame rate'):
+        load_force_annotations(path, motion, 3, 100.)
+    with pytest.raises(AssertionError):
+        load_force_annotations(path, motion, 2, 50.)
+    motion.write_bytes(b'another reference')
+    with pytest.raises(ValueError, match='different reference'):
+        load_force_annotations(path, motion, 3, 50.)
+
+
+def test_archived_force_annotations_reject_inconsistent_action_mapping(tmp_path):
+    motion = tmp_path/'motion.npz'
+    np.savez(motion, fps=50.)
+    metadata = dict(schema_version=1, foot_order=['left', 'right'], motion_sha256=file_digest(motion))
+    path = tmp_path/'annotations.npz'
+    np.savez(path, fps=50., reference_frame=np.arange(3), manual_raw_actions=np.zeros((3, 2)),
+             manual_cap_fractions=np.ones((3, 2)), metadata_json=json.dumps(metadata))
+    with pytest.raises(AssertionError):
+        load_force_annotations(path, motion, 3, 50.)
 
 
 @pytest.fixture

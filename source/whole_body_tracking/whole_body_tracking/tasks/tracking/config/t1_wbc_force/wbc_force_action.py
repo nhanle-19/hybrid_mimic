@@ -1,22 +1,26 @@
-"""Two policy outputs set hard upper bounds on foot normal forces."""
+"""Eight policy outputs set independent normal-force bounds on sole corners."""
 import torch
 
 from isaaclab.utils import configclass
 from ..t1_wbc_acc.wbc_acc_action import WBCACCActionCfg
 from ..t1_wbc_acc.wbc_acc_gpu_action import WBCACCGPUAction
 from .controller_cfg import T1WBCForceControllerCfg
-from whole_body_tracking.utils.wbc_force_gpu_control import WBCForceGPUQP
+from whole_body_tracking.utils.wbc_force_gpu_control import WBCCornerForceGPUQP
 
 
 class WBCForceAction(WBCACCGPUAction):
-    solver_type = WBCForceGPUQP
+    solver_type = WBCCornerForceGPUQP
     action_name = 'wbc_force'
     log_prefix = 'WBCForce'
     contact_gating = 'learned_force_caps'
 
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self.normal_force_max = self.solver.force_maximum(self.dynamics.mass.sum(), self.dynamics.gravity).expand(8)
+
     @property
     def action_dim(self):
-        return 2
+        return 8
 
     def _contact_masks(self, state):
         # Fixed model corners supply force moment arms, not contact labels.

@@ -1,4 +1,4 @@
-"""Render a sequential learned-policy evaluation with the orange reference overlay.
+"""Render a sequential FORCE evaluation with the orange reference overlay.
 
 Uses recorded PhysX poses in their original world frame; never reruns dynamics.
 Example: MUJOCO_GL=egl python scripts/render_force_suite_overlay.py \
@@ -48,14 +48,20 @@ def set_pose(model, state, q):
     mj.mj_forward(model, state)
 
 
+def control_label(meta):
+    return 'Manual caps' if meta.get('policy_source') == 'manual_labels' else 'Learned policy'
+
+
 def load_clips(directory, model):
     sources = sorted(directory.glob('*/diagnostics.npz'))
     if not sources:
         raise ValueError('No evaluation rollouts found')
-    manifest = json.loads((ROOT/'retargeted_motion/training_list/manifest.json').read_text())
+    suite_path = directory/'suite.json'
+    manifest = (json.loads(suite_path.read_text())['manifest'] if suite_path.exists()
+                else json.loads((ROOT/'retargeted_motion/training_list/manifest.json').read_text()))
     expected = {Path(m['file']).stem for m in manifest['motions']}
     if {p.parent.name for p in sources} != expected:
-        raise ValueError('Evaluation must cover every active training-list motion')
+        raise ValueError('Evaluation must cover exactly the motions in the suite manifest')
     names = [mj.mj_id2name(model, mj.mjtObj.mjOBJ_JOINT, j) for j in range(1, model.njnt)]
     clips = []
     for path in sources:
@@ -76,6 +82,11 @@ def load_clips(directory, model):
     checkpoints = {c['metadata']['checkpoint_sha256'] for c in clips}
     if len(checkpoints) != 1 or sha256(clips[0]['metadata']['checkpoint']) not in checkpoints:
         raise ValueError('Rollouts must come from the same unchanged checkpoint')
+    overrides = {json.dumps(c['metadata'].get('controller_overrides', {}), sort_keys=True) for c in clips}
+    if len(overrides) != 1:
+        raise ValueError('Rollouts must use the same controller overrides')
+    if len({c['metadata'].get('policy_source', 'learned_policy') for c in clips}) != 1:
+        raise ValueError('Cannot mix learned-policy and manual-cap rollouts')
     fps = 1./clips[0]['metadata']['policy_dt_s']
     for clip in clips:
         meta = clip['metadata']
@@ -83,6 +94,8 @@ def load_clips(directory, model):
             raise ValueError('Expected deterministic rollouts with a shared frame rate')
         if sha256(meta['motion_file']) != meta['motion_sha256']:
             raise ValueError('Reference file changed since evaluation')
+        if meta.get('policy_source') == 'manual_labels' and sha256(meta['manual_labels_file']) != meta['manual_labels_sha256']:
+            raise ValueError('Manual labels changed since evaluation')
     return clips, fps
 
 
@@ -101,7 +114,8 @@ def overlay_frame(renderer, model, states, option, perturb, camera, clip, index,
     renderer.enable_segmentation_rendering()
     segmentation = renderer.render().copy()
     renderer.disable_segmentation_rendering()
-    mask = (segmentation[..., 1] == mj.mjtObj.mjOBJ_GEOM) & (segmentation[..., 0] >= 0)
+    # Keep this comparison numeric; the enum triggers slow per-pixel object comparisons.
+    mask = (segmentation[..., 1] == int(mj.mjtObj.mjOBJ_GEOM)) & (segmentation[..., 0] >= 0)
     mask &= model.geom_bodyid[np.maximum(segmentation[..., 0], 0)] > 0
     first = scene.ngeom
     mj.mjv_addGeoms(model, states[1], option, perturb, mj.mjtCatBit.mjCAT_DYNAMIC, scene)
@@ -115,12 +129,17 @@ def overlay_frame(renderer, model, states, option, perturb, camera, clip, index,
     draw = ImageDraw.Draw(panel)
     draw.rectangle((0, 0, WIDTH, 90), fill=BACKGROUND)
     draw.text((28, 14), f'{task:02d} / {total:02d}   {clip["title"].upper()}', font=FONTS[32], fill=TEXT)
-    draw.text((WIDTH-260, 23), f'CHECKPOINT {clip["checkpoint_label"]}', font=FONTS[20], fill=TEXT)
+    meta = clip['metadata']
+    label = 'MANUAL FORCE CAPS' if meta.get('policy_source') == 'manual_labels' else f'CHECKPOINT {clip["checkpoint_label"]}'
+    draw.text((WIDTH-260, 23), label, font=FONTS[20], fill=TEXT)
     draw.ellipse((29, 62, 43, 76), fill=ORANGE)
     draw.text((55, 55), 'Reference: translucent orange', font=FONTS[22], fill=(160, 74, 16))
     draw.ellipse((479, 62, 493, 76), fill=(71, 87, 102))
-    draw.text((505, 55), 'Learned policy: solid slate', font=FONTS[22], fill=TEXT)
-    meta = clip['metadata']
+    draw.text((505, 55), control_label(meta)+': solid slate', font=FONTS[22], fill=TEXT)
+    if meta.get('evaluation_controller'):
+        cfg = meta['evaluation_controller']
+        draw.text((WIDTH-280, 55), f'PD: {cfg["posture_position_gain"]:g} / {cfg["posture_velocity_gain"]:g}',
+                  font=FONTS[20], fill=TEXT)
     draw.rectangle((0, HEIGHT-58, WIDTH, HEIGHT), fill=BACKGROUND)
     draw.text((28, HEIGHT-41), f'{index*meta["policy_dt_s"]:05.2f} s  /  {meta["expected_frames"]*meta["policy_dt_s"]:.2f} s',
               font=FONTS[22], fill=TEXT)
@@ -137,8 +156,13 @@ def task_card(clip, index, total):
     draw.rectangle((70, 230, 78, 450), fill=ORANGE)
     draw.text((110, 225), f'TASK {index:02d} / {total:02d}', font=FONTS[24], fill=ORANGE)
     draw.text((110, 275), clip['title'], font=FONTS[52], fill=TEXT)
-    draw.text((110, 355), f'Learned checkpoint {clip["checkpoint_label"]}  |  Reference overlaid in orange', font=FONTS[24], fill=TEXT)
+    label = 'Archived manual cap schedule' if clip['metadata'].get('policy_source') == 'manual_labels' else f'Learned checkpoint {clip["checkpoint_label"]}'
+    draw.text((110, 355), label+'  |  Reference overlaid in orange', font=FONTS[24], fill=TEXT)
     draw.text((110, 403), 'Real-time playback  |  Independent evaluation from frame zero', font=FONTS[22], fill=TEXT)
+    if clip['metadata'].get('evaluation_controller'):
+        cfg = clip['metadata']['evaluation_controller']
+        draw.text((110, 451), f'Posture PD: Kp {cfg["posture_position_gain"]:g}, Kd {cfg["posture_velocity_gain"]:g}',
+                  font=FONTS[22], fill=TEXT)
     return panel
 
 
@@ -245,6 +269,9 @@ def main():
     temporary.unlink()
     manifest = dict(file=video.name, checkpoint=clips[0]['metadata']['checkpoint'],
         checkpoint_sha256=clips[0]['metadata']['checkpoint_sha256'],
+        policy_source=clips[0]['metadata'].get('policy_source', 'learned_policy'),
+        evaluation_controller=clips[0]['metadata'].get('evaluation_controller'),
+        controller_overrides=clips[0]['metadata'].get('controller_overrides', {}),
         frames=frames, decoded_frames=decoded, fps=fps, duration_s=frames/fps,
         resolution=[WIDTH, HEIGHT], reference_rgba=REFERENCE_RGBA, actual_rgba=ACTUAL_RGBA,
         recorded_motion_frames=sum(len(c['actual']) for c in clips), chapters=chapters,
@@ -260,14 +287,16 @@ def main():
     stopped = ' '.join(f'{html.escape(c["title"])} stops at {len(c["actual"])*c["metadata"]["policy_dt_s"]:.2f} s '
         f'of its {c["metadata"]["expected_frames"]*c["metadata"]["policy_dt_s"]:.2f} s reference.'
         for c in clips if not c['metadata']['completed'])
-    (args.output/'preview.html').write_text('<!doctype html><meta charset="utf-8"><title>Learned checkpoint: all tasks</title>'
+    heading = ('Manual caps with current training PD' if clips[0]['metadata'].get('policy_source') == 'manual_labels'
+               else 'Learned checkpoint '+clips[0]['checkpoint_label'])
+    (args.output/'preview.html').write_text('<!doctype html><meta charset="utf-8"><title>FORCE evaluation: all tasks</title>'
         '<style>body{max-width:1280px;margin:30px auto;padding:0 20px;font:17px system-ui;background:#f9fafc;color:#23303e}'
         'video{width:100%}button{padding:10px;margin:4px;border:1px solid #ccd2d8;border-radius:6px;cursor:pointer;background:white}</style>'
-        f'<h1>Learned checkpoint {html.escape(clips[0]["checkpoint_label"])}: all {len(clips)} tasks</h1>'
-        '<p>Reference: translucent orange. Learned policy: solid slate. Playback at 1x speed.</p>'
+        f'<h1>{html.escape(heading)}: all {len(clips)} tasks</h1>'
+        f'<p>Reference: translucent orange. {control_label(clips[0]["metadata"])}: solid slate. Playback at 1x speed.</p>'
         '<video controls preload="metadata" poster="preview.png" src="all_tasks_overlay.mp4"></video><p>'+links+'</p>'
         f'<p>{stopped} {sum(c["metadata"]["completed"] for c in clips)}/{len(clips)} clips complete. Each task is an independent rollout from frame zero.</p>'
-        f'<p>Checkpoint: {html.escape(clips[0]["metadata"]["checkpoint"])}</p>'
+        f'<p>Configuration checkpoint: {html.escape(clips[0]["metadata"]["checkpoint"])}</p>'
         '<p><a href="all_tasks_overlay.mp4">Download video</a> &middot; <a href="video_manifest.json">Recording details</a></p>\n')
     print(f'Verified {decoded} frames, {frames/fps:.2f} s: {video}', flush=True)
 

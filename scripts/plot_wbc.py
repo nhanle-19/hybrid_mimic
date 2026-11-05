@@ -68,7 +68,10 @@ def main():
                         ax.plot(t, np.zeros_like(cap) if component == 2 else -cap, '-.', color='tab:red', label='QP lower bound')
                     elif component == 2 and 'normal_force_limits' in data and (
                             'contact_authority' not in data or data['contact_authority'].shape[-1] == 3):
-                        ax.plot(t, data['normal_force_limits'][mask, foot], '--', color='tab:green', linewidth=1.8, label='QP normal-force cap (Fz only)')
+                        cap = data['normal_force_limits'][mask, foot]
+                        if cap.ndim == 2:
+                            cap = cap.sum(-1)
+                        ax.plot(t, cap, '--', color='tab:green', linewidth=1.8, label='QP available normal force (Fz only)')
                     ax.set_ylabel(label); ax.grid(alpha=.2)
                     ax.margins(y=.2)
                 axes[0, foot].set_title(str(data['foot_names'][foot]))
@@ -83,7 +86,7 @@ def main():
             fig.tight_layout(rect=(0, 0, 1, .935))
             fig.savefig(args.output_dir/f'env{env}_wrenches.png', dpi=160); plt.close(fig)
             fig, axes = plt.subplots(5, 1, figsize=(12, 12), sharex=True)
-            axes[0].plot(t, data['support_activation'][mask]); axes[0].set_ylabel('Support activation')
+            axes[0].plot(t, data['support_activation'][mask].reshape(len(t), -1)); axes[0].set_ylabel('Support activation')
             if 'contact_authority' in data:
                 for foot in range(2):
                     for axis, label in enumerate(('x', 'y', 'z', 'rx', 'ry', 'rz')[:data['contact_authority'].shape[-1]]):
@@ -93,7 +96,7 @@ def main():
             elif 'contact_weights' in data:
                 axes[1].plot(t, data['contact_weights'][mask].reshape(len(t), -1)); axes[1].set_ylabel('Six motion weights/foot')
             else:
-                axes[1].plot(t, data['normal_force_limits'][mask]); axes[1].set_ylabel('Normal-force limits (N)')
+                axes[1].plot(t, data['normal_force_limits'][mask].reshape(len(t), -1)); axes[1].set_ylabel('Normal-force limits (N)')
             axes[2].plot(t, data['joint_tracking_rmse'][mask]); axes[2].set_ylabel('Joint tracking RMSE (rad)')
             axes[3].plot(t, data['solver_failed'][mask]); axes[3].set_ylabel('Solver failure')
             axes[4].plot(t, data['torque_saturation'][mask]); axes[4].set_ylabel('Torque saturation fraction')

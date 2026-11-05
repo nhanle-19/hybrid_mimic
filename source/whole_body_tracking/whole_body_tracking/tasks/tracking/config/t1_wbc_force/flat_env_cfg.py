@@ -1,4 +1,4 @@
-"""Force-limit policy with motion progress, contact timing, and cap-use rewards."""
+"""Force-limit policy with motion progress, joint tracking, and contact rewards."""
 from isaaclab.utils import configclass
 from isaaclab.managers import ObservationTermCfg, RewardTermCfg, TerminationTermCfg
 from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg
@@ -8,7 +8,7 @@ from .wbc_force_action import WBCForceActionCfg
 from .motion import WBCForceTrainingMotion
 from .reward_terms import (
     MotionCompletionReward, SwingForcePenalty,
-    ForceActionChangePenalty, FalseZeroPenalty, ForceCapGapPenalty, reference_motion_complete,
+    ForceActionChangePenalty, FalseZeroPenalty, ForceCapGapPenalty, JointTrackingPenalty, reference_motion_complete,
 )
 
 
@@ -24,9 +24,10 @@ class WBCForceRewardsCfg:
     swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.5,
                                params={'clearance_start': .001, 'clearance_full': .005, 'unload_lead_time': 0.})
     action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.05)
-    false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.5,
+    false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.4,
                               params={'clearance_start': .001, 'clearance_full': .005})
-    force_cap_gap = RewardTermCfg(func=ForceCapGapPenalty, weight=-.1)
+    force_cap_gap = RewardTermCfg(func=ForceCapGapPenalty, weight=-.08)
+    joint_tracking = RewardTermCfg(func=JointTrackingPenalty, weight=-.25, params={'error_scale': .2})
 
 
 def configure_wbc_force(cfg):

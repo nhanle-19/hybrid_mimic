@@ -49,6 +49,15 @@ def analyze(directory):
     ref_points[..., 2] -= ground
     actual_points[..., 2] -= ground
     caps = data['audit_cap']
+    if caps.ndim == 3:
+        # Per-foot summaries use mean normalized capacity; zero means all four
+        # points are disabled. Preserve the eight independent actions separately.
+        if caps.shape != (n, 2, 4):
+            raise ValueError('Expected four corner caps per foot')
+        np.savetxt(directory/'corner_caps.csv', np.column_stack((np.arange(n), caps.reshape(n, 8))),
+            delimiter=',', comments='', header='frame,'+','.join(
+                f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)))
+        caps = caps.mean(-1)
     fz = data['actual_contact_wrench'][..., 2]
     stance, swing = ref_height[:n] <= .001, ref_height[:n] >= .005
     feet = {}
@@ -138,7 +147,8 @@ def analyze(directory):
         axes[0, i].plot(tf, ref_height[:, i]*1000, '--', label='Reference')
         axes[0, i].plot(t, actual_height[:, i]*1000, label='Actual')
         axes[0, i].set(title=side+' foot', ylabel='Lowest sole vertex (mm)')
-        axes[1, i].step(t, caps[:, i], where='post', label='Learned force cap')
+        cap_label = 'Manual force cap' if meta.get('policy_source') == 'manual_labels' else 'Learned force cap'
+        axes[1, i].step(t, caps[:, i], where='post', label=cap_label)
         axes[1, i].fill_between(tf, 0, 1, where=ref_height[:, i] >= .005, alpha=.15, color='orange', label='Reference swing')
         axes[1, i].set(ylabel='Cap fraction', ylim=(-.03, 1.03))
         axes[2, i].plot(t, fz[:, i], label='Measured Fz, first substep')
@@ -223,7 +233,22 @@ def main():
         + f'<img src="{r["motion"]}/contacts.png" style="max-width:1100px;width:100%">' for r in results)
     page = '<!doctype html><meta charset="utf-8"><title>FORCE contact evaluation</title><style>body{font:15px system-ui;margin:30px;max-width:1400px}td,th{padding:8px;border:1px solid #ccc}table{border-collapse:collapse}th{background:#eee}</style>'
     checkpoint_name = Path(results[0]['metadata']['checkpoint']).name
-    page += f'<h1>{html.escape(checkpoint_name)}: all-motion contact evaluation</h1><p>{sum(r["completed"] for r in results)}/{len(results)} motions completed.</p>'
+    manual = results[0]['metadata'].get('policy_source') == 'manual_labels'
+    title = 'Manual caps with current training PD' if manual else checkpoint_name
+    page += f'<h1>{html.escape(title)}: contact evaluation</h1><p>{sum(r["completed"] for r in results)}/{len(results)} motions completed.</p>'
+    if manual:
+        cfg = results[0]['metadata']['evaluation_controller']
+        page += (f'<p>Posture Kp={cfg["posture_position_gain"]:g}, Kd={cfg["posture_velocity_gain"]:g}; '
+                 f'force maxima {html.escape(str(cfg["contact_force_max"]))} N. Archived raw caps replace the learned actor; '
+                 'the checkpoint is used only to verify controller settings. Archived fractions are replayed under current force maxima; '
+                 'most historical schedules used 1000 N maxima.</p>')
+        if any(r['motion'] == '09_front_kick' for r in results):
+            page += '<p>The front-kick labels include a historically unvalidated tail after frame 52.</p>'
+    overrides = results[0]['metadata'].get('controller_overrides', {})
+    if overrides:
+        baseline = results[0]['metadata']['training_controller']
+        changes = ', '.join(f'{key}: {baseline[key]:g} → {value:g}' for key, value in overrides.items())
+        page += '<p><b>Evaluation-only controller overrides:</b> '+html.escape(changes)+'.</p>'
     if (args.directory/'overlay/all_tasks_overlay.mp4').exists():
         page += '<h2>All tasks with reference overlay</h2><video controls preload="metadata" poster="overlay/preview.png" src="overlay/all_tasks_overlay.mp4" style="max-width:1280px;width:100%"></video><p><a href="overlay/preview.html">Open player with task chapters</a></p>'
     page += '<p><b>Touch, measured load, and the policy force cap are separate measurements.</b> A zero cap or load below 10 N does not establish loss of physical contact. Use geometry and motion tracking to assess whether a lightly loaded toe, rotating sole, or sliding foot retains the reference contact.</p>'
@@ -252,7 +277,7 @@ def main():
                 value = subset[i, j]
                 ax.text(j, i, '—' if np.isnan(value) else f'{value:.1f}', ha='center', va='center',
                         color='white' if value > vmax*.6 else 'black', fontsize=9)
-    fig.suptitle('Contact preservation per motion | deterministic checkpoint evaluation', fontsize=12)
+    fig.suptitle('Contact preservation per motion | deterministic FORCE evaluation', fontsize=12)
     fig.text(.5, .01, 'Touch: lowest sole <=1 mm in reference contact (penetration >30 mm excluded). Swing: sole >=5 mm and Fz <=5 N.\nTouch does not imply load; zero policy cap does not imply lost contact. Metrics cover attempted prefixes; — = no evaluated reference swing.', ha='center', fontsize=8)
     fig.tight_layout(rect=(0, .09, 1, .93))
     fig.savefig(args.directory/'overview.png', dpi=160)

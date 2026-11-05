@@ -186,17 +186,31 @@ tracking limitations and evaluation commands.
 
 ### Train WBC-FORCE
 
-The NN outputs two raw force-cap actions, left then right. Decode each with
+The NN outputs **eight raw force-cap actions**: left sole corners 0–3, then
+right sole corners 0–3, in the stored `sole_vertices` order. Decode each with
 `c_i = clip((sigmoid(action_i)-0.1)/0.8, 0, 1)`; the QP enforces
-`0 <= Fz_i <= 600 * c_i` N for each foot. All four modeled corners of each foot
+`0 <= Fz_i <= robot_mass * 9.81 * c_i` N independently at each corner.
+Each point's full cap is one robot body weight: **310.13685 N** for the
+31.61436 kg T1 model. `point_force_max_body_weights=1.0` controls this scale.
+There is no additional total-foot cap; four fully enabled corners allow up to
+1,240.55 N per foot, subject to dynamics, friction, and torque limits.
+All four modeled corners of each foot
 remain available: two-foot FORCE uses no actual- or reference-geometry contact
 mask in training or evaluation. The learned caps control loading, with the
 non-contact penalty teaching unloading during reference swing. The controller
 uses robot-model kinematics for force moment arms and Jacobians, without a
-floor-height contact test. Friction, dynamics, and torque limits still apply.
+floor-height contact test. The QP distributes force among the four corners,
+subject to their independent caps; unused capacity at one corner cannot be
+borrowed by another.
+Friction, dynamics, and torque limits still apply.
 Momentum, posture, and pelvis tracking remain; foot-acceleration objectives
 are absent. ACC, AUTHORITY, and the separate manual crawl controller retain
 their existing contact handling.
+
+Start a **fresh run**: older two-output FORCE checkpoints and manual tables
+are incompatible. Existing gains remain **1600/40**. Swing and false-zero
+rewards now evaluate each reference corner separately; reference geometry
+still supplies only reward weights and never gates the QP.
 
 Recorded two-foot FORCE training and replay results below used the former
 geometry gate. They are historical evidence and do not validate the current
@@ -216,12 +230,12 @@ export CUDA_VISIBLE_DEVICES=0
 
 python scripts/rsl_rl/train.py \
   --task Tracking-WBC-FORCE-T1-v0 \
-  --motion_file retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz \
+  --motion_file retargeted_motion/training_list \
   --device cuda:0 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
-  --run_name force_walk \
+  --run_name force_corner_caps \
   agent.resume=false
 ```
 
@@ -261,8 +275,9 @@ equal probability, then samples its phase adaptively; 20% of starts are at that
 clip's frame zero. Each episode ends at its own clip boundary. Reference
 lookahead, derivative calculations, unloading lead-in and 100-point reward
 normalization remain within that clip. `WBCForce/Motion/<clip_name>/*` reports
-separate sampling, completion and cap statistics. Inputs remain 590/861 and the
-four FORCE reward terms are shared across clips.
+separate sampling, completion and cap statistics. Inputs are 590/867 (the
+critic includes all eight previous actions), and the six FORCE reward terms
+are shared across clips.
 The sway reference does not enforce a positive action floor or prescribe cap
 variation; it supplies no manual action labels. ONNX exports include clip
 boundaries in `motion_clips_json`; their `time_step` input uses the global
@@ -298,7 +313,7 @@ bash scripts/train_labeled_force.sh
 This launcher reads `retargeted_motion/training_list/` and sets
 **1,024 environments, 7,000 PPO updates**, checkpoint saving
 every 500 updates, local TensorBoard logging, run name
-`force_labeled_caps_only`, and `agent.resume=false`. Its 15-second episode timeout
+`force_corner_caps`, and `agent.resume=false`. Its 15-second episode timeout
 allows every selected motion to reach its clip boundary. It uses the current
 two-foot FORCE controller without a geometry gate. Trailing arguments can
 override launcher settings. The source archive can be recreated where all
@@ -323,12 +338,16 @@ poses and velocities are derived by the robot model rather than repeated in
 the input. Actual root positions have the environment origin removed to match
 the reference coordinates. On reset, missing history repeats the first state
 of the new episode, independently for each environment. The critic receives
-both windows plus its existing privileged inputs, for **861 total values**.
+both windows plus its existing privileged inputs, for **867 total values**.
 FORCE rewards executed motion completion (100 points for a full clip),
 minus penalties for nonzero caps during reference swing, decoded-action changes,
-exact-zero caps during reference contact, and unused force capacity. Initial
-penalty weights are 0.5, 0.05, 0.5, and 0.1, with all five terms normalized by
-clip length. The false-zero penalty uses reference contact determined by the
+exact-zero caps during reference contact, unused force capacity, and joint-position
+tracking error. Penalty weights are 0.5, 0.05, 0.4, 0.08, and 0.25, with all six
+terms normalized by clip length. The joint penalty is
+`1 - exp(-mean((q_actual - q_reference)^2) / 0.2^2)`, using radians and the
+prepared reference in simulator joint order. It costs at most 25 points per
+full clip; a persistent 0.1-radian joint RMS error costs about 5.53 points.
+The false-zero penalty uses reference contact determined by the
 lowest sole corner, preserving toe, heel, and partial-foot contact. The cap-gap
 penalty squares the positive difference between cap and QP-used normal force,
 normalized by each foot's configured force maximum. Contact-orientation rewards
@@ -339,12 +358,12 @@ frame; random phase starts receive no credit for the skipped prefix. See the
 AUTHORITY retains its alive-only reward. FORCE keeps coarse torso-height,
 torso-tilt and QP-failure guards; hand/foot tracking error alone no longer ends
 an episode. Checkpoints go to `logs/rsl_rl/t1_wbc_force/`. Train a fresh policy:
-the two-output policy cannot load a fourteen-output WBC-ACC checkpoint.
+the eight-output corner policy cannot load two-output FORCE or fourteen-output WBC-ACC checkpoints.
 Earlier FORCE checkpoints with 236 or 1,432 actor inputs are also incompatible
 with this layout; keep `agent.resume=false` for a fresh run.
 
 The five-step walk uses the standard `train.py` entry point, PPO algorithm,
-network, and five-term FORCE reward. FORCE training and crawl replay read
+network, and six-term FORCE reward. FORCE training and crawl replay read
 the same controller gains and objective weights. Training starts from a random
 policy and requires no manual labels or files from `eval_data/`.
 
@@ -367,23 +386,25 @@ server command above.
 
 | Setting | Default server training value |
 | --- | --- |
-| Reference | `retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz` (261 frames, 5.22 s) |
+| Reference | `retargeted_motion/training_list/` (eight clips, 3,376 frames) |
 | Environments / iterations | 1,024 / 30,000 |
 | Rollout / PPO minibatch | 24 steps per environment; 24,576 transitions per rollout; 6,144 per minibatch |
 | PPO epochs / minibatches | 5 / 4 |
 | Actor and critic hidden layers | 1,024 → 512 → 256 → 256, ELU; observation normalization enabled |
-| Actor / critic inputs | 590 / 861; five reference frames + five actual-state frames, plus privileged inputs for the critic |
+| Actor / critic inputs | 590 / 867; five reference frames + five actual-state frames, plus privileged inputs for the critic |
+| Policy outputs | Eight independent normal-force caps: four sole corners per foot |
 | Initial learning rate / schedule | 0.001 / adaptive KL, target 0.01 |
 | Discount / GAE lambda / PPO clip | 0.99 / 0.95 / 0.2 |
 | Entropy / value loss / gradient norm limit | 0.005 / 1.0 / 1.0 |
 | Initial action standard deviation | 1.0 |
 | Physics / policy and QP rate | 500 Hz / 50 Hz |
-| Per-foot force maximum / friction | 600 N / 0.6 |
+| Per-corner force maximum / friction | One body weight, 310.13685 N / 0.6; no additional foot-total cap |
 | Contact patch height tolerance | Unused for two-foot FORCE force availability |
 | Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
 | Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
-| Reward weights: completion / swing cap / cap change / false zero / force cap gap | 1.0 / −0.5 / −0.05 / −0.5 / −0.1 |
-| Maximum full-clip false-zero / force-cap-gap cost | 50 / 10 points |
+| Reward weights: completion / swing cap / cap change / false zero / force cap gap / joint tracking | 1.0 / −0.5 / −0.05 / −0.4 / −0.08 / −0.25 |
+| Maximum full-clip false-zero / force-cap-gap / joint-tracking cost | 40 / 8 / 25 points |
+| Joint-tracking error scale | 0.2 rad |
 | Checkpoint interval / logging | Every 500 iterations and at completion / W&B |
 
 Checkpoints and events are written under `logs/rsl_rl/t1_wbc_force/`.
@@ -391,9 +412,12 @@ FORCE now reports `WBCForce/FullMotion/*` separately from sampled-suffix
 completion, with per-foot swing zero-cap coverage, hold duration, liftoff
 timing, measured swing load, and cap changes. Twenty percent of resets start
 at frame zero so short adaptive suffixes cannot be mistaken for full-motion
-performance. Tune the new penalties with `env.rewards.false_zero.weight` and
-`env.rewards.force_cap_gap.weight`; their initial values have not been tuned
-through training. Tracking commands still come from the QP. See the
+performance. Tune the penalties with `env.rewards.false_zero.weight`,
+`env.rewards.force_cap_gap.weight`, `env.rewards.joint_tracking.weight`, and
+`env.rewards.joint_tracking.params.error_scale`. The reduced cap penalties and
+new joint penalty require training or fine-tuning before they affect a policy;
+these defaults have not been validated by a training run. Tracking commands
+still come from the QP. See the
 [contact-learning metrics](docs/wbc_force_controller.md#contact-learning-logs)
 for units and the optional unloading lead-in.
 Evaluate deterministic outputs across the motion separately from exploration
@@ -649,7 +673,8 @@ arguments. Add `--video` to record the rollout.
 
 The same evaluator supports `Tracking-WBC-FORCE-T1-Eval-v0` and
 `Standing-WBC-FORCE-T1-v0`. For WBC-FORCE, `--manual_support LEFT RIGHT` sets
-the two normalized force caps during `--qp_only`; `--manual_weight` does not
+uniform fractions for each foot's four corner caps during `--qp_only`;
+`--manual_point_caps` accepts all eight independently. `--manual_weight` does not
 apply. For either learned policy, videos go to the checkpoint run's
 `videos/play/` folder and diagnostics to its `diagnostics.npz`. WBC-FORCE runs
 are under `logs/rsl_rl/t1_wbc_force/`. Plot a run with

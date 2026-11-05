@@ -38,7 +38,8 @@ def render(directory):
         with mj.Renderer(model, height=height, width=width) as renderer:
             for index, (ref, act) in enumerate(zip(reference, actual)):
                 panels = []
-                for title, q in [('REFERENCE', ref), ('ACTUAL - learned contact policy', act)]:
+                actual_title = 'ACTUAL - manual force caps' if meta.get('policy_source') == 'manual_labels' else 'ACTUAL - learned contact policy'
+                for title, q in [('REFERENCE', ref), (actual_title, act)]:
                     state.qpos[:] = np.r_[q[:3], q[[6, 3, 4, 5]], q[7:][order]]
                     mj.mj_forward(model, state)
                     camera.lookat[:] = [ref[0], ref[1], .45]
@@ -60,6 +61,7 @@ def render(directory):
         writer.close()
     Image.fromarray(np.concatenate(previews)).save(directory/'review_frames.jpg', quality=90)
     (directory/'video.json').write_text(json.dumps(dict(frames=len(actual), fps=1/meta['policy_dt_s'],
+        policy_source=meta.get('policy_source', 'learned_policy'),
         source='Recorded pre-step PhysX states, visualized with MuJoCo; no dynamics or interpolation.',
         full_clip=meta['completed'], failed_terminal_state_included=False,
         diagnostics=str((directory/'diagnostics.npz').resolve())), indent=2)+'\n')

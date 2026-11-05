@@ -3,6 +3,8 @@
 RewardManager multiplies terms by step_dt. Return rates here so each executed
 reference frame contributes 100 / frame_count before the configured weight.
 """
+import math
+
 import torch
 from isaaclab.managers import ManagerTermBase
 
@@ -30,7 +32,10 @@ def _reference_clearance(env):
         position = motion._body_pos_w[:, body_ids]
         rotation = rotation_xyzw(motion._body_quat_w[:, body_ids][..., [1, 2, 3, 0]])
         vertices = sole_vertices(position.device, position.dtype) @ rotation.transpose(-1, -2)
-        heights = (vertices[..., 2]+position[..., None, 2]-controller.ground_height).amin(-1)
+        heights = vertices[..., 2]+position[..., None, 2]-controller.ground_height
+        # Reference geometry supplies reward weights only. For the eight-output
+        # policy, a grounded heel must not label the elevated toe as contacting.
+        heights = heights.flatten(1) if env.action_manager.action.shape[-1] == 8 else heights.amin(-1)
         env._wbc_force_reference_clearance = (heights, body_ids, controller.ground_height)
     return env._wbc_force_reference_clearance
 
@@ -104,6 +109,16 @@ class MotionCompletionReward(_MotionScaledTerm):
     def _record_step_metrics(self, env, frame, first, credited):
         reference = _reference_clearance(env)[0][frame]
         caps = decode_contact_values(env.action_manager.action)
+        if caps.shape[-1] == 8:
+            for i, side in enumerate(('left', 'right')):
+                for corner in range(4):
+                    point = i*4+corner
+                    self.metrics.mean(f'Caps/{side}_corner_{corner}_mean', caps[:, point])
+                    self.metrics.mean(f'Caps/{side}_corner_{corner}_zero_percent', (caps[:, point] == 0).float()*100.)
+            # Existing foot-level summaries mean the four normalized caps.
+            # A foot is unloaded only when every point cap is zero.
+            reference = reference.reshape(-1, 2, 4).amin(-1)
+            caps = caps.reshape(-1, 2, 4).mean(-1)
         self.metrics.mean('Caps/both_zero_percent', (caps == 0).all(-1).float()*100.)
         for i, side in enumerate(('left', 'right')):
             swing, stance = reference[:, i] >= .005, reference[:, i] <= .001
@@ -184,8 +199,8 @@ class SwingForcePenalty(_MotionScaledTerm):
     """Penalize capacity during reference swing and a short unloading lead-in.
 
     The reference supplies only a reward weight. Actual contact gating and the NN
-    outputs sent to the QP are untouched. Toe/heel contact is determined using the
-    lowest collision vertex, not the height of the foot-link origin.
+    outputs sent to the QP are untouched. The corner policy uses each reference
+    corner's clearance; legacy foot caps use the lowest collision vertex.
     """
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
@@ -220,21 +235,23 @@ class FalseZeroPenalty(_MotionScaledTerm):
 
 
 class ForceCapGapPenalty(_MotionScaledTerm):
-    """Squared unused normal-force capacity, normalized by each foot's maximum."""
+    """Squared unused capacity, normalized by each independently capped unit."""
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         self.action = env.action_manager.get_term('wbc_force')
-        self.force_max = env.action_manager.action.new_tensor(self.action.cfg.controller.contact_force_max)
-        if (self.force_max.shape != (2,) or
+        self.point_caps = env.action_manager.action.shape[-1] == 8
+        maximum = self.action.normal_force_max if self.point_caps else self.action.cfg.controller.contact_force_max
+        self.force_max = torch.as_tensor(maximum, device=env.action_manager.action.device, dtype=env.action_manager.action.dtype)
+        if (self.force_max.shape != (env.action_manager.action.shape[-1],) or
                 not bool(torch.isfinite(self.force_max).all() & (self.force_max > 0).all())):
-            raise ValueError('Force cap gap requires two finite positive contact_force_max values')
+            raise ValueError('Force cap gap requires finite positive maxima matching the actions')
 
     def __call__(self, env, command_name='motion'):
         caps = decode_contact_values(env.action_manager.action)
         # Despite its name, previous_wrench holds the current policy step's QP
         # solution by reward time, including when diagnostic recording is off.
-        wrench = self.action.previous_wrench
-        used = torch.zeros_like(caps) if wrench is None else wrench[..., 2].to(caps)
+        forces = self.action.previous_point_forces if self.point_caps else self.action.previous_wrench
+        used = torch.zeros_like(caps) if forces is None else forces[..., 2].reshape_as(caps).to(caps)
         # A failed solve applies damping, not its candidate wrench. Count its
         # capacity as unused and keep nonfinite solver candidates out of rewards.
         valid = ~self.action.qp_failed[:, None] & torch.isfinite(used)
@@ -242,9 +259,30 @@ class ForceCapGapPenalty(_MotionScaledTerm):
         gap = (caps-used/self.force_max).clamp_min(0.)
         value = gap.square().mean(-1)*self.scale
         metrics = _metrics(env)
+        unused = (gap*self.force_max).reshape(-1, 2, 4).sum(-1) if self.point_caps else gap*self.force_max
         for i, side in enumerate(('left', 'right')):
-            metrics.mean(f'Caps/{side}_unused_force_N', gap[:, i]*self.force_max[i])
+            metrics.mean(f'Caps/{side}_unused_force_N', unused[:, i])
         metrics.mean('Reward/force_cap_gap_points_per_step', value*env.step_dt*self.cfg.weight)
+        return value
+
+
+class JointTrackingPenalty(_MotionScaledTerm):
+    """Bounded mean squared joint-position error against the prepared reference."""
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self.error_scale = cfg.params.get('error_scale', .2)
+        if not math.isfinite(self.error_scale) or self.error_scale <= 0:
+            raise ValueError('Joint tracking error_scale must be finite and positive')
+
+    def __call__(self, env, command_name='motion', error_scale=.2):
+        # Both properties use simulator joint ordering and the currently executed
+        # reference frame. Rewards run before command advancement and robot resets.
+        squared_error = (self.command.joint_pos-self.command.robot_joint_pos).square().mean(-1)
+        penalty = -torch.expm1(-squared_error/self.error_scale**2)
+        value = penalty*self.scale
+        metrics = _metrics(env)
+        metrics.mean('Tracking/joint_position_rmse_rad', squared_error.sqrt())
+        metrics.mean('Reward/joint_tracking_points_per_step', value*env.step_dt*self.cfg.weight)
         return value
 
 

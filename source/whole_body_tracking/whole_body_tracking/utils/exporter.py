@@ -150,21 +150,27 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "actor_inputs": "reference_only:frames_0_1_5_10",
         })
     elif "wbc_force" in env.action_manager.active_terms:
-        controller = env.action_manager.get_term("wbc_force").cfg.controller
+        force_action = env.action_manager.get_term("wbc_force")
+        controller = force_action.cfg.controller
         reference_params = env.observation_manager.cfg.policy.reference.params
         actual_history_length = env.observation_manager.cfg.policy.actual_state.history_length
         reference_offsets = list(reference_params.get("offsets", (0, 1, 5, 10)))
         metadata.update({
-            "action_type": "wbc_force_reference_force_limit_policy",
-            "policy_action_dim": 2,
-            "action_layout": "left_foot_normal_force_capacity,right_foot_normal_force_capacity",
+            "action_type": "wbc_force_corner_force_limit_policy",
+            "policy_action_dim": 8,
+            "action_layout": ",".join(f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)),
             "action_transform": "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)",
             "action_dead_zone_epsilon": CONTACT_DEAD_ZONE,
-            "contact_force_max": list(controller.contact_force_max),
+            "contact_force_max": force_action.normal_force_max.detach().cpu().tolist(),
+            "point_force_max_body_weights": controller.point_force_max_body_weights,
+            "force_cap_scope": "per_sole_vertex",
+            "qp_contact_points_local_json": json.dumps(force_action.solver.contact_points('cpu', torch.float64).tolist()),
             "normal_force_limit_units": "N",
             "normal_force_axis": "world_z",
             "foot_acceleration_objectives": False,
             "contact_gating": "learned_force_caps",
+            "qp_contact_model": "sole_corners",
+            "qp_contact_point_definition": "stored_sole_vertices_in_foot_link_frame",
             "contact_measurements_required": False,
             "actor_inputs": "reference_window,actual_state_history",
             "actor_reference_body_selection": "anchor_only" if reference_params.get("root_only", False) else "all_bodies",

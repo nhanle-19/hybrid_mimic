@@ -52,17 +52,133 @@ def make_env(frames=10, count=2, dt=.02):
         termination_manager=NS(terminated=torch.zeros(count, dtype=torch.bool), active_terms=[]))
 
 
-def test_active_reward_configuration_replaces_contact_orientation(rewards):
+def point_env(frames=10, count=2, dt=.02):
+    env = make_env(frames, count, dt)
+    env.action_manager.action = torch.zeros(count, 8)
+    action = env.action_manager.get_term('wbc_force')
+    action.normal_force_max = torch.full((8,), 100.)
+    action.previous_point_forces = None
+    return env
+
+
+def test_corner_rewards_use_each_reference_point_without_gating_actions(rewards):
+    env = point_env(frames=3)
+    motion = env.command_manager.get_term('motion').motion
+    points = rewards.sole_vertices(dtype=torch.float32)
+    motion._body_pos_w[..., 2] = -points[0, 0, 2]
+    # Body index 1 is the left foot. Pitch it and place its low edge at ground.
+    angle = torch.tensor(.3)
+    motion._body_quat_w[:, 1] = torch.tensor([torch.cos(angle/2), 0., torch.sin(angle/2), 0.])
+    rotation = rewards.rotation_xyzw(motion._body_quat_w[:, 1, [1, 2, 3, 0]])
+    rotated = points[0]@rotation.transpose(-1, -2)
+    motion._body_pos_w[:, 1, 2] = -rotated[..., 2].amin(-1)
+    heights = rewards._reference_clearance(env)[0]
+    assert heights.shape == (3, 8)
+    assert (heights[:, :2] > .005).all() and (heights[:, 2:] < .001).all()
+    env.action_manager.action.fill_(3.)
+    swing = rewards.SwingForcePenalty(NS(params={}, weight=-.5), env)
+    torch.testing.assert_close(swing(env)/swing.scale, torch.full((2,), .25))
+    assert (env.action_manager.action == 3.).all()  # Geometry is a reward weight only.
+    env.action_manager.action.fill_(-3.)
+    zero = rewards.FalseZeroPenalty(NS(params={}, weight=-.4), env)
+    torch.testing.assert_close(zero(env)/zero.scale, torch.full((2,), .75))
+
+
+def test_corner_gap_uses_individual_point_forces_and_logs_foot_totals(rewards):
+    env = point_env(count=1)
+    env.action_manager.action.fill_(3.)
+    action = env.action_manager.get_term('wbc_force')
+    action.previous_point_forces = torch.zeros(1, 2, 4, 3)
+    action.previous_point_forces[..., 2] = torch.tensor([[[100., 100., 0., 0.], [100., 100., 100., 100.]]])
+    term = rewards.ForceCapGapPenalty(NS(params={}, weight=-.08), env)
+    torch.testing.assert_close(term(env)/term.scale, torch.tensor([.25]))
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Caps/left_unused_force_N'] == 200.
+    assert logs['WBCForce/Caps/right_unused_force_N'] == 0.
+    action.qp_failed[:] = True
+    torch.testing.assert_close(term(env)/term.scale, torch.ones(1))
+
+
+def test_corner_completion_logs_all_eight_caps_and_whole_foot_release(rewards):
+    env = point_env()
+    env.action_manager.action[:] = torch.tensor([-3., -3., -3., 3., -3., -3., -3., -3.])
+    term = rewards.MotionCompletionReward(NS(params={}, weight=1.), env)
+    term(env)
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Caps/left_mean'] == .25
+    assert logs['WBCForce/Caps/right_mean'] == 0.
+    assert logs['WBCForce/Caps/left_stance_zero_percent'] == 0.
+    assert logs['WBCForce/Caps/right_stance_zero_percent'] == 100.
+    assert logs['WBCForce/Caps/left_corner_3_mean'] == 1.
+    assert logs['WBCForce/Caps/left_corner_0_mean'] == 0.
+
+
+def test_active_reward_configuration_includes_joint_tracking_and_reduced_cap_costs(rewards):
     tree = ast.parse((SOURCE/'tasks/tracking/config/t1_wbc_force/flat_env_cfg.py').read_text())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'WBCForceRewardsCfg')
     namespace = dict(vars(rewards), configclass=lambda cls: cls, RewardTermCfg=NS)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), '<force_rewards_cfg>', 'exec'), namespace)
     config = namespace['WBCForceRewardsCfg']()
     assert not hasattr(config, 'contact_orientation')
-    assert config.false_zero.func is rewards.FalseZeroPenalty and config.false_zero.weight < 0
-    assert config.force_cap_gap.func is rewards.ForceCapGapPenalty and config.force_cap_gap.weight < 0
+    assert config.false_zero.func is rewards.FalseZeroPenalty and config.false_zero.weight == -.4
+    assert config.force_cap_gap.func is rewards.ForceCapGapPenalty and config.force_cap_gap.weight == -.08
+    assert config.joint_tracking.func is rewards.JointTrackingPenalty
+    assert config.joint_tracking.weight == -.25 and config.joint_tracking.params == {'error_scale': .2}
     assert config.motion_completion.weight == 1.
     assert config.swing_force.weight == -.5 and config.action_change.weight == -.05
+
+
+@pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
+def test_joint_tracking_clip_cost_and_logging_are_independent_of_length_and_timestep(rewards, frames, dt):
+    env = make_env(frames, dt=dt)
+    command = env.command_manager.get_term('motion')
+    command.joint_pos = torch.full((2, 23), .5)
+    command.robot_joint_pos = command.joint_pos.clone()
+    term = rewards.JointTrackingPenalty(NS(params={'error_scale': .2}, weight=-.25), env)
+    assert term(env).count_nonzero() == 0
+    rewards._metrics(env).drain()
+    command.robot_joint_pos[1] += .1
+    points = term(env)*dt*term.cfg.weight
+    # Constant 0.1-radian RMS error costs 25 * (1 - exp(-0.25)) per full clip.
+    torch.testing.assert_close(points*frames, torch.tensor([0., -5.5299804]))
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Tracking/joint_position_rmse_rad'] == pytest.approx(.05)
+    assert logs['WBCForce/Reward/joint_tracking_points_per_step'] == pytest.approx(float(points.mean()))
+
+
+def test_joint_tracking_uses_current_reference_mean_error_and_remains_bounded_on_failure(rewards):
+    env = make_env()
+    command = env.command_manager.get_term('motion')
+    command.joint_pos = torch.tensor([[.2, .6], [.2, .6]])
+    command.robot_joint_pos = torch.tensor([[0., .6], [.4, .6]])
+    term = rewards.JointTrackingPenalty(NS(params={}, weight=-.25), env)
+    expected = torch.full((2,), 1.-torch.exp(torch.tensor(-.5)))
+    torch.testing.assert_close(term(env)/term.scale, expected)
+    command.joint_pos = command.joint_pos.repeat(1, 3)
+    command.robot_joint_pos = command.robot_joint_pos.repeat(1, 3)
+    torch.testing.assert_close(term(env)/term.scale, expected)  # Mean, not sum over joints.
+    command.joint_pos.copy_(command.robot_joint_pos)
+    assert term(env).count_nonzero() == 0  # Reference updates are read on every call.
+    command.robot_joint_pos += 100.
+    env.termination_manager.terminated[:] = True
+    torch.testing.assert_close(term(env)/term.scale, torch.ones(2))
+
+
+def test_joint_tracking_scales_by_each_current_clip(rewards):
+    env = make_env(frames=15)
+    command = env.command_manager.get_term('motion')
+    command.motion.clip_bounds = lambda frame: (torch.where(frame < 5, 0, 5), torch.where(frame < 5, 5, 10))
+    command.time_steps[:] = torch.tensor([0, 5])
+    command.joint_pos, command.robot_joint_pos = torch.zeros(2, 23), torch.full((2, 23), .2)
+    term = rewards.JointTrackingPenalty(NS(params={}, weight=-.25), env)
+    expected = (1.-torch.exp(torch.tensor(-1.)))*torch.tensor([20., 10.])
+    torch.testing.assert_close(term(env)*env.step_dt, expected)
+
+
+@pytest.mark.parametrize('scale', [0., -.1, float('nan'), float('inf')])
+def test_joint_tracking_rejects_invalid_error_scale(rewards, scale):
+    with pytest.raises(ValueError, match='error_scale'):
+        rewards.JointTrackingPenalty(NS(params={'error_scale': scale}, weight=-.25), make_env())
 
 
 @pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])

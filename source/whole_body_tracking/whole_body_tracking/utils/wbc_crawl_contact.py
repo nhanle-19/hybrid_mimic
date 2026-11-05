@@ -117,6 +117,8 @@ class CrawlContactGeometry:
 class WBCCrawlForceQP(WBCForceGPUQP):
     """Eight floor-normal bounds from decoded NN outputs and live geometry."""
 
+    contact_model = 'explicit_contact_points'
+
     def __init__(self, cfg, geometry, **kwargs):
         # Many nearly coincident patch vertices make force sharing weakly
         # conditioned. Tight stationarity is needed for OSQP torque parity,

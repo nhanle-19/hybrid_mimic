@@ -51,6 +51,10 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
             contact_authority_weights=(100.,)*3)))
         env.action_manager.active_terms = list(terms)
         if hybrid == "wbc_force":
+            from wbc_acc_contact_policy import sole_vertices
+            terms[hybrid].normal_force_max = torch.full((8,), 310.)
+            terms[hybrid].cfg.controller.point_force_max_body_weights = 1.
+            terms[hybrid].solver = NS(contact_points=sole_vertices)
             env.step_dt = .02
             reference = NS(params={"root_only": True, "offsets": (0, 1, 3, 5, 10)}, history_length=0)
             actual = NS(history_length=5)
@@ -80,13 +84,15 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert "action_scale" not in metadata
         return
     if hybrid == "wbc_force":
-        assert metadata["action_type"] == "wbc_force_reference_force_limit_policy"
-        assert metadata["policy_action_dim"] == "2"
-        assert metadata["action_layout"] == "left_foot_normal_force_capacity,right_foot_normal_force_capacity"
+        assert metadata["action_type"] == "wbc_force_corner_force_limit_policy"
+        assert metadata["policy_action_dim"] == "8"
+        assert metadata["action_layout"].split(',') == [f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]
         assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-2*epsilon),0,1)"
         assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["normal_force_axis"] == "world_z"
         assert metadata["contact_gating"] == "learned_force_caps"
+        assert metadata["qp_contact_model"] == "sole_corners"
+        assert metadata["qp_contact_point_definition"] == "stored_sole_vertices_in_foot_link_frame"
         assert metadata["contact_measurements_required"] == "False"
         assert metadata["actor_reference_body_selection"] == "anchor_only"
         assert metadata["actor_inputs"] == "reference_window,actual_state_history"
@@ -96,7 +102,9 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert [float(x) for x in metadata["observation_history_lengths"].split(",")] == [1, 5]
         assert metadata["actor_actual_state_history_reset"] == "repeat_first_state_of_new_episode"
         assert float(metadata["actor_state_sample_dt"]) == .02
-        assert [float(x) for x in metadata["contact_force_max"].split(",")] == [600., 600.]
+        assert [float(x) for x in metadata["contact_force_max"].split(",")] == [310.]*8
+        assert metadata['force_cap_scope'] == 'per_sole_vertex'
+        assert float(metadata['point_force_max_body_weights']) == 1.
         assert "contact_weight_max" not in metadata
         assert "action_scale" not in metadata
         return

@@ -12,7 +12,7 @@ exec "${FORCE_PYTHON:-python}" scripts/rsl_rl/train.py \
   --max_iterations 7000 \
   --device cuda:0 --headless \
   --logger tensorboard \
-  --run_name force_labeled_caps_only \
+  --run_name force_corner_caps \
   env.episode_length_s=15.0 \
   agent.resume=false \
   "$@"

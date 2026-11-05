@@ -35,8 +35,12 @@ class MotionOnPolicyRunner(OnPolicyRunner):
         values = metrics.drain()
         policy = self.alg.policy
         std = policy.std if hasattr(policy, 'std') else policy.log_std.exp()
+        per_foot = std.reshape(2, -1)
         for i, side in enumerate(('left', 'right')):
-            values[f'WBCForce/Policy/{side}_noise_std'] = float(std[i].detach())
+            values[f'WBCForce/Policy/{side}_noise_std'] = float(per_foot[i].mean().detach())
+            if per_foot.shape[1] == 4:
+                for corner in range(4):
+                    values[f'WBCForce/Policy/{side}_corner_{corner}_noise_std'] = float(per_foot[i, corner].detach())
         for name, value in values.items():
             self.writer.add_scalar(name, value, locs['it'])
         # FORCE's old reset-time means and per-step termination counts are
