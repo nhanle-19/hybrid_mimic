@@ -2,7 +2,7 @@
 
 WBC-FORCE is a separate task derived from [WBC-ACC](wbc_acc_controller.md).
 It shares the robot dynamics, physical foot colliders, physics, observations and PPO
-hyperparameters, with a bounded actor mean, its own six-term reward and clip-completion boundary. The existing WBC-ACC
+hyperparameters, with fixed unit exploration noise, its own six-term reward and clip-completion boundary. The existing WBC-ACC
 policy retains its fourteen-output interface and acceleration objectives.
 
 ## Policy and QP
@@ -12,21 +12,21 @@ corners 0–3. Each set uses the stored `sole_vertices` order: `(x-, y-)`,
 `(x-, y+)`, `(x+, y-)`, `(x+, y+)` in the foot-link frame.
 
 ```
-mean_i = 2.5 * tanh(actor_output_i)
-action_i ~ Normal(mean_i, std_i)
+mean_i = actor_output_i
+action_i ~ Normal(mean_i, 1.0)
 c_i = clip((sigmoid(action_i) - 0.10) / 0.90, 0, 1)
 F_max = robot_mass * (-gravity_z) * point_force_max_body_weights
 F_limit_i = c_i * F_max
 0 <= Fz_i = sum(four_friction_rays_at_corner_i) <= F_limit_i
 ```
 
-The Gaussian mean is bounded to ±2.5 in training, deterministic playback, and
-ONNX/JIT export. Each action's standard deviation starts at 1.0 and remains
-learnable and independent of the observation. Gaussian samples can exceed ±2.5.
+The Gaussian mean is the unrestricted linear actor output in training,
+deterministic playback, and ONNX/JIT export. Each action's standard deviation is
+fixed at 1.0 in a checkpointed buffer that PPO cannot optimize. The configured
+Gaussian entropy bonus is therefore constant and contributes no policy gradient.
 Raw actions at or below approximately -2.197225 give exactly zero capacity;
 capacity approaches one asymptotically at the positive end. Zero raw output
-gives 4/9 capacity (137.83860 N per corner); the deterministic upper mean bound
-of +2.5 gives approximately 0.9157 capacity. PPO stores and scores raw Gaussian
+gives 4/9 capacity (137.83860 N per corner). PPO stores and scores raw Gaussian
 actions, and rewards and diagnostics use the same /0.90 mapping as the QP.
 
 Manual `--manual_point_caps` accepts eight fractions, including exact 0 and 1.
@@ -34,9 +34,10 @@ Manual `--manual_point_caps` accepts eight fractions, including exact 0 and 1.
 four corners. It no longer specifies a total-foot cap.
 The encoder uses -3 for zero and +40 for floating-point saturation to one in
 both float32 and float64. Interior fractions `c` encode as
-`logit(0.10 + 0.90*c)`. Start a fresh training run: the bounded actor requires its
-saved mean-bound buffer, and older unbounded checkpoints have different action
-semantics. Eight-corner manual annotations must declare the new mapping and
+`logit(0.10 + 0.90*c)`. Start a fresh training run for `FixedStdActorCritic`;
+archived bounded-mean checkpoints require the retained `BoundedMeanActorCritic`
+class for playback. Checkpoints with non-unit noise are rejected by the new
+policy. Eight-corner manual annotations must declare the /0.90 mapping and
 encode their fractions accordingly. The separate legacy region/crawl and AUTH
 controllers retain their /0.80 mapping and existing manual schedules.
 

@@ -1,4 +1,4 @@
-"""Gaussian policy with a bounded mean shared by sampling and exported inference."""
+"""Legacy bounded Gaussian policy, retained for archived checkpoint playback."""
 import torch
 from torch import nn
 from rsl_rl.modules import ActorCritic

@@ -190,13 +190,13 @@ The NN outputs **eight raw force-cap actions**: left sole corners 0–3, then
 right sole corners 0–3, in the stored `sole_vertices` order. Decode each with
 `c_i = clip((sigmoid(action_i)-0.1)/0.9, 0, 1)`; the QP enforces
 `0 <= Fz_i <= robot_mass * 9.81 * c_i` N independently at each corner.
-The Gaussian mean is `2.5*tanh(actor_output)` in training, deterministic playback,
-and ONNX/JIT export. Standard deviations still start at 1.0 and are learned;
-sampled actions can exceed the mean bound. At action 0 the cap is 0.4444, and
-at +2.5 it is about 0.9157. Exact zero starts at approximately -2.1972; full
+The Gaussian mean is the unrestricted linear actor output in training,
+deterministic playback, and ONNX/JIT export. Each action's standard deviation is
+fixed at **1.0** as a non-trainable buffer. At action 0 the cap is 0.4444.
+Exact zero starts at approximately -2.1972; full
 capacity is approached asymptotically (manual full-cap inputs use +40 for
-float32/float64 saturation). Train a fresh policy for this mean and cap mapping;
-older unbounded actor checkpoints do not load into the bounded actor.
+float32/float64 saturation). Start a fresh training run for this policy; archived
+bounded-mean checkpoints use the retained legacy policy class for playback.
 Each point's full cap is one robot body weight: **310.13685 N** for the
 31.61436 kg T1 model. `point_force_max_body_weights=1.0` controls this scale.
 There is no additional total-foot cap; four fully enabled corners allow up to
@@ -403,7 +403,7 @@ server command above.
 | Initial learning rate / schedule | 0.001 / adaptive KL, target 0.01 |
 | Discount / GAE lambda / PPO clip | 0.99 / 0.95 / 0.2 |
 | Entropy / value loss / gradient norm limit | 0.005 / 1.0 / 1.0 |
-| Initial action standard deviation | 1.0 |
+| Action standard deviation | Fixed at 1.0; not learned |
 | Physics / policy and QP rate | 500 Hz / 50 Hz |
 | Per-corner force maximum / friction | One body weight, 310.13685 N / 0.6; no additional foot-total cap |
 | Contact patch height tolerance | Unused for two-foot FORCE force availability |
