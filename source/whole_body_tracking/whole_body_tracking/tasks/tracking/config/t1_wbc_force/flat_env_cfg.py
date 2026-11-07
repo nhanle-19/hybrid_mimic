@@ -23,11 +23,11 @@ class WBCForceRewardsCfg:
     motion_completion = RewardTermCfg(func=MotionCompletionReward, weight=1.)
     swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.5,
                                params={'clearance_start': .001, 'clearance_full': .005, 'unload_lead_time': 0.})
-    action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.05)
+    action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.5)
     false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.4,
                               params={'clearance_start': .001, 'clearance_full': .005})
     force_cap_gap = RewardTermCfg(func=ForceCapGapPenalty, weight=-.08)
-    joint_tracking = RewardTermCfg(func=JointTrackingPenalty, weight=-.25, params={'error_scale': .2})
+    joint_tracking = RewardTermCfg(func=JointTrackingPenalty, weight=-.5, params={'error_scale': .2})
 
 
 def configure_wbc_force(cfg):

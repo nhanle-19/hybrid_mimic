@@ -125,7 +125,7 @@ def test_corner_rewards_and_logs_use_point_nine_cap_mapping(rewards):
     assert logs['WBCForce/Caps/right_corner_3_mean'] == pytest.approx(4/9)
 
 
-def test_active_reward_configuration_includes_joint_tracking_and_reduced_cap_costs(rewards):
+def test_active_reward_configuration_includes_stronger_tracking_and_cap_change_costs(rewards):
     tree = ast.parse((SOURCE/'tasks/tracking/config/t1_wbc_force/flat_env_cfg.py').read_text())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'WBCForceRewardsCfg')
     namespace = dict(vars(rewards), configclass=lambda cls: cls, RewardTermCfg=NS)
@@ -135,9 +135,9 @@ def test_active_reward_configuration_includes_joint_tracking_and_reduced_cap_cos
     assert config.false_zero.func is rewards.FalseZeroPenalty and config.false_zero.weight == -.4
     assert config.force_cap_gap.func is rewards.ForceCapGapPenalty and config.force_cap_gap.weight == -.08
     assert config.joint_tracking.func is rewards.JointTrackingPenalty
-    assert config.joint_tracking.weight == -.25 and config.joint_tracking.params == {'error_scale': .2}
+    assert config.joint_tracking.weight == -.5 and config.joint_tracking.params == {'error_scale': .2}
     assert config.motion_completion.weight == 1.
-    assert config.swing_force.weight == -.5 and config.action_change.weight == -.05
+    assert config.swing_force.weight == -.5 and config.action_change.weight == -.5
 
 
 @pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])

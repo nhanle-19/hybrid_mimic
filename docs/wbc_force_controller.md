@@ -192,10 +192,10 @@ the policy and the WBC. FORCE uses six reward terms:
 ```text
 r_t = (100 / N) * [alive_new_frame
                   - 0.5 * mean_i(swing_weight[t,i] * c[t,i]^2)
-                  - 0.05 * mean_i((c[t,i] - c[t-1,i])^2)
+                  - 0.5 * mean_i((c[t,i] - c[t-1,i])^2)
                   - 0.4 * mean_i(contact_weight[t,i] * indicator(c[t,i] == 0))
                   - 0.08 * mean_i(max(c[t,i] - F_used[t,i] / F_max[i], 0)^2)
-                  - 0.25 * (1 - exp(-mean_j((q_actual[t,j] - q_reference[t,j])^2) / 0.2^2))]
+                  - 0.5 * (1 - exp(-mean_j((q_actual[t,j] - q_reference[t,j])^2) / 0.2^2))]
 contact_weight[t,i] = 1 - swing_weight[t,i]
 ```
 
@@ -271,17 +271,19 @@ terminates the episode. PhysX-measured loads remain separate diagnostics.
 The joint-tracking penalty compares all actual joint positions with the current
 prepared reference in simulator joint order. Its bounded cost is
 `1 - exp(-mean((q_actual - q_reference)^2) / error_scale^2)`, with
-`error_scale=0.2` radians and weight **-0.25**. Exact tracking costs zero, and
-the maximum full-clip cost is 25 points. A persistent joint RMS error of 0.1 rad
-costs 5.53 points; 0.2 rad costs 15.80 points. Averaging over joints keeps its
+`error_scale=0.2` radians and weight **-0.5**. Exact tracking costs zero, and
+the maximum full-clip cost is 50 points. A persistent joint RMS error of 0.1 rad
+costs 11.06 points; 0.2 rad costs 31.61 points. Averaging over joints keeps its
 scale independent of joint count. Tune `env.rewards.joint_tracking.weight`
 and `env.rewards.joint_tracking.params.error_scale`.
 
 The contact-orientation reward remains removed. The penalties still charge failing
 steps before reset and use the current clip's frame count in mixed-motion batches.
 Actor/critic inputs are unchanged; existing checkpoints acquire these objectives
-only through further training. The reduced cap penalties and new joint-tracking
-penalty have not been validated by a training run.
+only through further training. The cap-change weight is now **-0.5** (10 times
+its previous magnitude), and the joint-tracking weight is **-0.5** (twice its
+previous magnitude). These stronger penalties have not been validated by a
+training run.
 
 Training prioritizes balanced, feasible motion. Limb tracking error does not
 terminate an episode. The existing coarse torso guards remain:

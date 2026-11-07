@@ -349,11 +349,11 @@ both windows plus its existing privileged inputs, for **867 total values**.
 FORCE rewards executed motion completion (100 points for a full clip),
 minus penalties for nonzero caps during reference swing, decoded-action changes,
 exact-zero caps during reference contact, unused force capacity, and joint-position
-tracking error. Penalty weights are 0.5, 0.05, 0.4, 0.08, and 0.25, with all six
+tracking error. Penalty weights are 0.5, 0.5, 0.4, 0.08, and 0.5, with all six
 terms normalized by clip length. The joint penalty is
 `1 - exp(-mean((q_actual - q_reference)^2) / 0.2^2)`, using radians and the
-prepared reference in simulator joint order. It costs at most 25 points per
-full clip; a persistent 0.1-radian joint RMS error costs about 5.53 points.
+prepared reference in simulator joint order. It costs at most 50 points per
+full clip; a persistent 0.1-radian joint RMS error costs about 11.06 points.
 The false-zero penalty uses reference contact determined by the
 lowest sole corner, preserving toe, heel, and partial-foot contact. The cap-gap
 penalty squares the positive difference between cap and QP-used normal force,
@@ -409,8 +409,8 @@ server command above.
 | Contact patch height tolerance | Unused for two-foot FORCE force availability |
 | Posture position gain / velocity gain / weight | 1600.0 / 40.0 / 0.1 |
 | Linear / angular momentum weights | `[1, 1, 1]` / `[10, 10, 10]` |
-| Reward weights: completion / swing cap / cap change / false zero / force cap gap / joint tracking | 1.0 / −0.5 / −0.05 / −0.4 / −0.08 / −0.25 |
-| Maximum full-clip false-zero / force-cap-gap / joint-tracking cost | 40 / 8 / 25 points |
+| Reward weights: completion / swing cap / cap change / false zero / force cap gap / joint tracking | 1.0 / −0.5 / −0.5 / −0.4 / −0.08 / −0.5 |
+| Maximum full-clip false-zero / force-cap-gap / joint-tracking cost | 40 / 8 / 50 points |
 | Joint-tracking error scale | 0.2 rad |
 | Checkpoint interval / logging | Every 500 iterations and at completion / W&B |
 
@@ -420,9 +420,9 @@ completion, with per-foot swing zero-cap coverage, hold duration, liftoff
 timing, measured swing load, and cap changes. Twenty percent of resets start
 at frame zero so short adaptive suffixes cannot be mistaken for full-motion
 performance. Tune the penalties with `env.rewards.false_zero.weight`,
-`env.rewards.force_cap_gap.weight`, `env.rewards.joint_tracking.weight`, and
-`env.rewards.joint_tracking.params.error_scale`. The reduced cap penalties and
-new joint penalty require training or fine-tuning before they affect a policy;
+`env.rewards.force_cap_gap.weight`, `env.rewards.action_change.weight`,
+`env.rewards.joint_tracking.weight`, and `env.rewards.joint_tracking.params.error_scale`.
+The stronger cap-change and joint-tracking penalties require training or fine-tuning before they affect a policy;
 these defaults have not been validated by a training run. Tracking commands
 still come from the QP. See the
 [contact-learning metrics](docs/wbc_force_controller.md#contact-learning-logs)
