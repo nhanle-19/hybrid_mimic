@@ -196,11 +196,12 @@ class MotionCompletionReward(_MotionScaledTerm):
 
 
 class SwingForcePenalty(_MotionScaledTerm):
-    """Penalize capacity during reference swing and a short unloading lead-in.
+    """Sum squared capacity during reference swing and an unloading lead-in.
 
     The reference supplies only a reward weight. Actual contact gating and the NN
     outputs sent to the QP are untouched. The corner policy uses each reference
-    corner's clearance; legacy foot caps use the lowest collision vertex.
+    corner's clearance; legacy foot caps use the lowest collision vertex. Sum
+    over capped units within each environment, preserving the batch dimension.
     """
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
@@ -214,13 +215,13 @@ class SwingForcePenalty(_MotionScaledTerm):
 
     def __call__(self, env, command_name='motion', clearance_start=.001, clearance_full=.005, unload_lead_time=0.):
         caps = decode_force_values(env.action_manager.action)
-        value = (self.unloading_weight[self.command.time_steps]*caps.square()).mean(-1)*self.scale
+        value = (self.unloading_weight[self.command.time_steps]*caps.square()).sum(-1)*self.scale
         _metrics(env).mean('Reward/swing_cap_points_per_step', value*env.step_dt*self.cfg.weight)
         return value
 
 
 class FalseZeroPenalty(_MotionScaledTerm):
-    """Penalize an exact-zero decoded cap where reference geometry has contact."""
+    """Sum reference-contact weights for exact-zero caps in each environment."""
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         self.contact_weight = 1.-swing_weights(_reference_clearance(env)[0],
@@ -228,7 +229,7 @@ class FalseZeroPenalty(_MotionScaledTerm):
 
     def __call__(self, env, command_name='motion', clearance_start=.001, clearance_full=.005):
         caps = decode_force_values(env.action_manager.action)
-        cost = (self.contact_weight[self.command.time_steps]*(caps == 0)).mean(-1)
+        cost = (self.contact_weight[self.command.time_steps]*(caps == 0)).sum(-1)
         value = cost*self.scale
         _metrics(env).mean('Reward/false_zero_points_per_step', value*env.step_dt*self.cfg.weight)
         return value

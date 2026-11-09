@@ -21,10 +21,12 @@ class WBCForceActionsCfg:
 class WBCForceRewardsCfg:
     # All terms share 100 / reference_frame_count scaling per policy step.
     motion_completion = RewardTermCfg(func=MotionCompletionReward, weight=1.)
-    swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.5,
+    # Sum over eight corners: one-quarter the old mean weight gives twice its cost.
+    swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.125,
                                params={'clearance_start': .001, 'clearance_full': .005, 'unload_lead_time': 0.})
     action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.5)
-    false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.4,
+    # Like swing_force, sum with one-quarter the old mean weight doubles its cost.
+    false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.1,
                               params={'clearance_start': .001, 'clearance_full': .005})
     force_cap_gap = RewardTermCfg(func=ForceCapGapPenalty, weight=-.08)
     joint_tracking = RewardTermCfg(func=JointTrackingPenalty, weight=-.5, params={'error_scale': .2})

@@ -191,9 +191,9 @@ the policy and the WBC. FORCE uses six reward terms:
 
 ```text
 r_t = (100 / N) * [alive_new_frame
-                  - 0.5 * mean_i(swing_weight[t,i] * c[t,i]^2)
+                  - 0.125 * sum_i(swing_weight[t,i] * c[t,i]^2)
                   - 0.5 * mean_i((c[t,i] - c[t-1,i])^2)
-                  - 0.4 * mean_i(contact_weight[t,i] * indicator(c[t,i] == 0))
+                  - 0.1 * sum_i(contact_weight[t,i] * indicator(c[t,i] == 0))
                   - 0.08 * mean_i(max(c[t,i] - F_used[t,i] / F_max[i], 0)^2)
                   - 0.5 * (1 - exp(-mean_j((q_actual[t,j] - q_reference[t,j])^2) / 0.2^2))]
 contact_weight[t,i] = 1 - swing_weight[t,i]
@@ -219,7 +219,15 @@ swing. Reference geometry is training supervision only: it never replaces NN
 outputs or masks the QP with a contact label. Actual geometry also does not
 remove support from the two-foot FORCE QP.
 
-Completion, swing-cap, and action-change terms retain their weights and contact timing. Optional
+The nonzero swing-cap and false-zero penalties use sums over corners. The swing-cap weight is
+**-0.125**, reduced from the previous mean penalty's **-0.5**. With eight outputs,
+the weighted cost is twice as large for identical caps and reference geometry.
+A sum weight of -0.0625 would be exactly equivalent to the old mean weight;
+switching reductions alone does not prioritize left-foot errors over right-foot
+errors. One fully enabled corner in full reference swing throughout a clip now
+costs 12.5 points; four such corners cost 50 points. This is a stronger soft cost,
+not a requirement that every swing cap be zero. The other four terms and contact
+timing are unchanged. Optional
 `env.rewards.swing_force.params.unload_lead_time` (seconds, default **0**) adds
 a linearly discounted lookahead to this same cap penalty, allowing an unloading
 lead-in before reference liftoff. It never shifts the end of swing later or
@@ -230,17 +238,20 @@ The QP continues to command tracking, while the joint penalty below rewards
 tracking outcomes. No clearance, foot-position, or foot-velocity reward is added.
 
 The false-zero penalty complements the swing-cap penalty: a zero decoded cap
-costs reference contact weight, with weight **-0.4** (reduced from -0.5). Reference contact
+costs reference contact weight, summed over corners with weight **-0.1**. This is
+twice the cost of the previous mean with weight **-0.4** for eight outputs; a sum
+weight of -0.05 would preserve the previous cost. Reference contact
 weight is one at or below 1 mm corner clearance, decreases smoothly to zero at
 5 mm, and is evaluated independently for each reference corner. Actual foot height, load,
 and orientation do not change this weight. This term uses current reference
 contact with no unloading lead-in.
 
 False-zero means an **exact zero after decoding**. A raw action of zero decodes
-to 0.5 and is free; any positive decoded cap is also free. This term encourages
-available support without prescribing a minimum stance load. A zero cap on one
-fully contacting foot throughout a clip costs 20 points; on both feet it costs
-40 points. Tune `env.rewards.false_zero.weight` and its `clearance_start` /
+to 4/9 in the eight-corner policy and is free; any positive decoded cap is also
+free. This term encourages available support without prescribing a minimum stance
+load. One zero cap at a fully contacting corner throughout a clip costs 10 points;
+four zero caps on one fully contacting foot cost 40 points, and all eight cost
+80 points. Tune `env.rewards.false_zero.weight` and its `clearance_start` /
 `clearance_full` parameters in metres. Because costs are normalized by the full
 clip, short contact or swing intervals contribute only part of the total return.
 
@@ -279,11 +290,10 @@ and `env.rewards.joint_tracking.params.error_scale`.
 
 The contact-orientation reward remains removed. The penalties still charge failing
 steps before reset and use the current clip's frame count in mixed-motion batches.
-Actor/critic inputs are unchanged; existing checkpoints acquire these objectives
-only through further training. The cap-change weight is now **-0.5** (10 times
-its previous magnitude), and the joint-tracking weight is **-0.5** (twice its
-previous magnitude). These stronger penalties have not been validated by a
-training run.
+Actor/critic inputs are unchanged; existing checkpoints acquire the stronger
+swing-cap and false-zero objectives only through further training. The cap-change
+and joint-tracking weights remain **-0.5**. The new summed contact-penalty settings
+have not been validated by a training run.
 
 Training prioritizes balanced, feasible motion. Limb tracking error does not
 terminate an episode. The existing coarse torso guards remain:

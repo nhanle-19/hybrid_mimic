@@ -77,11 +77,11 @@ def test_corner_rewards_use_each_reference_point_without_gating_actions(rewards)
     assert (heights[:, :2] > .005).all() and (heights[:, 2:] < .001).all()
     env.action_manager.action.fill_(40.)
     swing = rewards.SwingForcePenalty(NS(params={}, weight=-.5), env)
-    torch.testing.assert_close(swing(env)/swing.scale, torch.full((2,), .25))
+    torch.testing.assert_close(swing(env)/swing.scale, torch.full((2,), 2.))
     assert (env.action_manager.action == 40.).all()  # Geometry is a reward weight only.
     env.action_manager.action.fill_(-3.)
     zero = rewards.FalseZeroPenalty(NS(params={}, weight=-.4), env)
-    torch.testing.assert_close(zero(env)/zero.scale, torch.full((2,), .75))
+    torch.testing.assert_close(zero(env)/zero.scale, torch.full((2,), 6.))
 
 
 def test_corner_gap_uses_individual_point_forces_and_logs_foot_totals(rewards):
@@ -125,19 +125,47 @@ def test_corner_rewards_and_logs_use_point_nine_cap_mapping(rewards):
     assert logs['WBCForce/Caps/right_corner_3_mean'] == pytest.approx(4/9)
 
 
-def test_active_reward_configuration_includes_stronger_tracking_and_cap_change_costs(rewards):
+@pytest.fixture
+def reward_config(rewards):
     tree = ast.parse((SOURCE/'tasks/tracking/config/t1_wbc_force/flat_env_cfg.py').read_text())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'WBCForceRewardsCfg')
     namespace = dict(vars(rewards), configclass=lambda cls: cls, RewardTermCfg=NS)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), '<force_rewards_cfg>', 'exec'), namespace)
-    config = namespace['WBCForceRewardsCfg']()
+    return namespace['WBCForceRewardsCfg']()
+
+
+def test_active_reward_configuration_includes_summed_contact_costs(rewards, reward_config):
+    config = reward_config
     assert not hasattr(config, 'contact_orientation')
-    assert config.false_zero.func is rewards.FalseZeroPenalty and config.false_zero.weight == -.4
+    assert config.false_zero.func is rewards.FalseZeroPenalty and config.false_zero.weight == -.1
     assert config.force_cap_gap.func is rewards.ForceCapGapPenalty and config.force_cap_gap.weight == -.08
     assert config.joint_tracking.func is rewards.JointTrackingPenalty
     assert config.joint_tracking.weight == -.5 and config.joint_tracking.params == {'error_scale': .2}
     assert config.motion_completion.weight == 1.
-    assert config.swing_force.weight == -.5 and config.action_change.weight == -.5
+    assert config.swing_force.weight == -.125 and config.action_change.weight == -.5
+
+
+@pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
+def test_swing_total_counts_each_corner_per_environment_and_preserves_clip_units(
+        rewards, reward_config, frames, dt):
+    env = point_env(frames, count=3, dt=dt)
+    command = env.command_manager.get_term('motion')
+    command.motion._body_pos_w[..., 2] = .1  # Every reference corner is in swing.
+    env.action_manager.action.fill_(-3.)  # All decoded caps initially zero.
+    env.action_manager.action[0, 0] = 40.  # One left corner incorrectly enabled.
+    env.action_manager.action[1, 4] = 40.  # One right corner: identical cost.
+    env.action_manager.action[2, :4] = 40.  # Four errors add; batch rows stay separate.
+    term = rewards.SwingForcePenalty(reward_config.swing_force, env)
+    total = torch.zeros(3)
+    for frame in range(frames):
+        command.time_steps.fill_(frame)
+        total += term(env)*dt*term.cfg.weight
+    torch.testing.assert_close(total, torch.tensor([-12.5, -12.5, -50.]), atol=3e-4, rtol=0)
+    # The former mean with weight -0.5 charged half as much for eight outputs.
+    previous_total = torch.tensor([-6.25, -6.25, -25.])
+    torch.testing.assert_close(total, 2*previous_total, atol=3e-4, rtol=0)
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Reward/swing_cap_points_per_step'] == pytest.approx(-25./frames)
 
 
 @pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
@@ -280,9 +308,34 @@ def test_false_zero_is_clip_scaled_and_uses_decoded_caps(rewards, frames, dt):
     for frame in range(frames):
         command.time_steps.fill_(frame)
         total += term(env)*dt*term.cfg.weight
-    torch.testing.assert_close(total, torch.tensor([-50., -25., 0.], dtype=torch.float64), atol=1.e-5, rtol=0)
+    torch.testing.assert_close(total, torch.tensor([-100., -50., 0.], dtype=torch.float64), atol=1.e-5, rtol=0)
     logs = rewards._metrics(env).drain()
-    assert logs['WBCForce/Reward/false_zero_points_per_step'] == pytest.approx(-25./frames)
+    assert logs['WBCForce/Reward/false_zero_points_per_step'] == pytest.approx(-50./frames)
+
+
+@pytest.mark.parametrize('frames,dt', [(1, .02), (10, .02), (261, .02), (100, .01)])
+def test_false_zero_total_counts_grounded_corners_per_environment_and_preserves_clip_units(
+        rewards, reward_config, frames, dt):
+    env = point_env(frames, count=4, dt=dt)
+    command = env.command_manager.get_term('motion')
+    vertices = rewards.sole_vertices(dtype=torch.float32)
+    command.motion._body_pos_w[..., 2] = -vertices[0, 0, 2]  # Flat soles at the floor.
+    env.action_manager.action.fill_(0.)  # Positive decoded capacity, not false zero.
+    env.action_manager.action[0, 0] = -3.  # One grounded left corner disabled.
+    env.action_manager.action[1, 4] = -3.  # One grounded right corner: identical cost.
+    env.action_manager.action[2, :4] = -3.  # One whole foot disabled.
+    env.action_manager.action[3, :] = -3.  # Both feet disabled.
+    term = rewards.FalseZeroPenalty(reward_config.false_zero, env)
+    total = torch.zeros(4)
+    for frame in range(frames):
+        command.time_steps.fill_(frame)
+        total += term(env)*dt*term.cfg.weight
+    torch.testing.assert_close(total, torch.tensor([-10., -10., -40., -80.]), atol=3e-4, rtol=0)
+    # The former mean with weight -0.4 charged half as much for eight outputs.
+    previous_total = torch.tensor([-5., -5., -20., -40.])
+    torch.testing.assert_close(total, 2*previous_total, atol=3e-4, rtol=0)
+    logs = rewards._metrics(env).drain()
+    assert logs['WBCForce/Reward/false_zero_points_per_step'] == pytest.approx(-35./frames)
 
 
 def test_false_zero_uses_reference_contact_and_excludes_swing(rewards):
@@ -296,7 +349,7 @@ def test_false_zero_uses_reference_contact_and_excludes_swing(rewards):
                                atol=1.e-6, rtol=0)
     command.time_steps[:] = torch.tensor([0, 1])
     weighted = term(env)*env.step_dt*term.cfg.weight
-    torch.testing.assert_close(weighted, torch.tensor([-25./3, -12.5/3], dtype=torch.float64), atol=1.e-6, rtol=0)
+    torch.testing.assert_close(weighted, torch.tensor([-50./3, -25./3], dtype=torch.float64), atol=1.e-6, rtol=0)
     env.action_manager.action[:, 0] = -2.19  # Small positive decoded caps are not false zeros.
     assert (rewards.decode_force_values(env.action_manager.action)[:, 0] > 0).all()
     assert term(env).count_nonzero() == 0
@@ -365,7 +418,7 @@ def test_swing_penalty_ramps_with_reference_clearance_and_ignores_actual_support
     assert term.swing_weight[:, 1].count_nonzero() == 0
     term.command.time_steps[:] = torch.tensor([1, 2])
     # Raw zero means a 0.5 capacity; only the left foot is penalized.
-    expected = torch.tensor([.0625, .125], dtype=torch.float64)*100/3
+    expected = torch.tensor([.125, .25], dtype=torch.float64)*100/3
     torch.testing.assert_close(term(env)*env.step_dt, expected, atol=1e-6, rtol=0)
     env.action_manager.action[:, 0] = -3.
     env.action_manager.action[:, 1] = 3.
@@ -426,7 +479,7 @@ def test_partial_contact_uses_minimum_height_and_only_penalizes_full_liftoff(
     env.action_manager.action[:, side] = -3.
     command.time_steps[:] = torch.tensor([0, 1])
     torch.testing.assert_close(false_zero(env)*env.step_dt,
-                               torch.full((2,), 50./3, dtype=torch.float64))
+                               torch.full((2,), 100./3, dtype=torch.float64))
     command.time_steps.fill_(2)
     assert false_zero(env).count_nonzero() == 0
 
@@ -518,15 +571,15 @@ def test_mixed_clips_normalize_independently_and_report_their_own_endpoints(rewa
     assert logs['WBCForce/Sampling/start_frame_zero_percent'] == 100.
 
 
-@pytest.mark.parametrize('name,raw', [('FalseZeroPenalty', -3.), ('ForceCapGapPenalty', 3.)])
-def test_new_penalties_scale_by_current_clip_in_mixed_batch(rewards, name, raw):
+@pytest.mark.parametrize('name,raw,cost', [('FalseZeroPenalty', -3., 2.), ('ForceCapGapPenalty', 3., 1.)])
+def test_new_penalties_scale_by_current_clip_in_mixed_batch(rewards, name, raw, cost):
     env = make_env(frames=15)
     command = env.command_manager.get_term('motion')
     command.motion.clip_bounds = lambda frame: (torch.where(frame < 5, 0, 5), torch.where(frame < 5, 5, 10))
     command.time_steps[:] = torch.tensor([0, 5])
     env.action_manager.action.fill_(raw)
     term = getattr(rewards, name)(NS(params={}, weight=-.5), env)
-    torch.testing.assert_close(term(env)*env.step_dt, torch.tensor([20., 10.], dtype=term(env).dtype))
+    torch.testing.assert_close(term(env)*env.step_dt, cost*torch.tensor([20., 10.], dtype=term(env).dtype))
 
 
 def test_unloading_lead_does_not_cross_between_clips(rewards):
