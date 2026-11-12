@@ -261,9 +261,15 @@ in this folder and its `manifest.json`; do not redirect training to a different
 collection directory. The loader reads all `.npz` files directly in this folder.
 Copy the updated folder to the training machine before starting a remote run.
 
-The current selection contains eight motions: walking, wide tilted sway,
+The current selection contains **15 clips, totaling 6,491 frames at 50 Hz**:
+walking plus original and left/right mirrored versions of wide tilted sway,
 standing, narrow sway, sliding, sole rotation, toe rotation, and the G3 front
-kick, totaling **3,376 frames at 50 Hz**. Turn-right is excluded from training.
+kick. Walking has no mirrored duplicate. Turn-right is excluded from training.
+The `_mirrored.npz` files reflect world Y across the XZ plane, swap left/right
+limbs, and transform rotations, velocities, and directional metadata together.
+Original files are preserved. To regenerate missing mirrors or verify existing
+ones, run `python scripts/mirror_training_motions.py` (NumPy only); it also updates
+the manifest with source hashes. Both versions are sampled as separate clips.
 Use:
 
 ```bash
@@ -399,7 +405,7 @@ server command above.
 
 | Setting | Default server training value |
 | --- | --- |
-| Reference | `retargeted_motion/training_list/` (eight clips, 3,376 frames) |
+| Reference | `retargeted_motion/training_list/` (15 clips, 6,491 frames) |
 | Environments / iterations | 1,024 / 30,000 |
 | Rollout / PPO minibatch | 24 steps per environment; 24,576 transitions per rollout; 6,144 per minibatch |
 | PPO epochs / minibatches | 5 / 4 |

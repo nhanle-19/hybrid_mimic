@@ -96,11 +96,16 @@ def test_equal_clip_sampling_survives_length_and_failure_imbalance(tmp_path):
 def test_bundled_motions_have_expected_identity_and_order():
     motion = library.MotionLibrary(ROOT/'retargeted_motion/training_list')
     assert motion.clip_names == [
-        '01_walk', '02_tilted_sway', '03_standing', '04_narrow_sway',
-        '05_slide', '06_sole_rotation', '07_toe_rotation', '09_front_kick',
+        '01_walk', '02_tilted_sway', '02_tilted_sway_mirrored',
+        '03_standing', '03_standing_mirrored', '04_narrow_sway', '04_narrow_sway_mirrored',
+        '05_slide', '05_slide_mirrored', '06_sole_rotation', '06_sole_rotation_mirrored',
+        '07_toe_rotation', '07_toe_rotation_mirrored', '09_front_kick', '09_front_kick_mirrored',
     ]
-    assert motion.clip_lengths.tolist() == [261, 500, 500, 500, 500, 500, 500, 115]
-    assert motion.time_step_total == 3376
+    assert motion.clip_lengths.tolist() == [261] + [500]*12 + [115]*2
+    assert motion.time_step_total == 6491
     with np.load(motion.clip_paths[1]) as sway:
         assert sway['tilted_side'].item() == 'left'
+        assert sway['tilt_deg'].item() == 15.
+    with np.load(motion.clip_paths[2]) as sway:
+        assert sway['tilted_side'].item() == 'right'
         assert sway['tilt_deg'].item() == 15.
