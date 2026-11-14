@@ -14,9 +14,6 @@ import cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
-parser.add_argument(
-    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
-)
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--motion_file", type=str, default=None, help="Path to the motion file.")
@@ -24,7 +21,7 @@ parser.add_argument("--checkpoint_no", type=int, default=None, help="Checkpoint 
 parser.add_argument("--debug_observations", action="store_true", help="Print the first environment's observation vector every step.")
 parser.add_argument("--record_contacts", action="store_true", help="Save control-rate normal contact forces and available model wrenches in the evaluation NPZ.")
 # append RSL-RL cli arguments
-cli_args.add_rsl_rl_args(parser)
+cli_args.add_rsl_rl_args(parser, include_wandb_path=True)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()

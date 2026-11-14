@@ -182,6 +182,11 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "actor_actual_state_history_reset": "repeat_first_state_of_new_episode",
             "actor_state_sample_dt": float(env.step_dt),
         })
+        reference_func = getattr(env.observation_manager.cfg.policy.reference, 'func', None)
+        reference_metadata = getattr(reference_func, 'export_metadata', None)
+        if reference_metadata is not None:
+            metadata.update(reference_metadata)
+            metadata['actor_reference_body_names'] = list(robot_data.body_names)
     elif "wbc_acc" in env.action_manager.active_terms:
         wbc_acc = env.action_manager.get_term("wbc_acc")
         controller = wbc_acc.cfg.controller

@@ -7,11 +7,12 @@ if TYPE_CHECKING:
     from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg
 
 
-def add_rsl_rl_args(parser: argparse.ArgumentParser):
+def add_rsl_rl_args(parser: argparse.ArgumentParser, *, include_wandb_path: bool = False):
     """Add RSL-RL arguments to the parser.
 
     Args:
         parser: The parser to add the arguments to.
+        include_wandb_path: Include remote checkpoint lookup for playback scripts.
     """
     # create a new argument group
     arg_group = parser.add_argument_group("rsl_rl", description="Arguments for RSL-RL agent.")
@@ -31,9 +32,10 @@ def add_rsl_rl_args(parser: argparse.ArgumentParser):
     arg_group.add_argument(
         "--log_project_name", type=str, default=None, help="Name of the logging project when using wandb or neptune."
     )
-    arg_group.add_argument(
-        "--wandb_path", type=str, default=None, help="Name of the logging project when using wandb or neptune."
-    )
+    if include_wandb_path:
+        arg_group.add_argument(
+            "--wandb_path", type=str, default=None, help="W&B run or checkpoint path for playback."
+        )
 
 
 def parse_rsl_rl_cfg(task_name: str, args_cli: argparse.Namespace) -> RslRlOnPolicyRunnerCfg:

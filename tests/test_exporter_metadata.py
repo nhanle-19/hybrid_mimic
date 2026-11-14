@@ -28,11 +28,14 @@ def exporter(monkeypatch):
     return module
 
 
-@pytest.mark.parametrize("hybrid", [False, True, "wbc_acc", "wbc_force", "wbc_authority"])
+@pytest.mark.parametrize("hybrid", [False, True, "wbc_acc", "wbc_force", "wbc_force2", "wbc_authority"])
 @pytest.mark.parametrize("nominal", [False, True])
 def test_metadata_export(exporter, tmp_path, hybrid, nominal):
+    force2 = hybrid == 'wbc_force2'
+    if force2:
+        hybrid = 'wbc_force'
     joints = [f"joint_{i}" for i in range(23)]
-    data = NS(joint_names=joints, joint_stiffness=torch.zeros(2, 23),
+    data = NS(joint_names=joints, body_names=[f'body_{i}' for i in range(24)], joint_stiffness=torch.zeros(2, 23),
               joint_damping=torch.zeros(2, 23), default_joint_pos=torch.ones(2, 23))
     if nominal:
         data.default_joint_pos_nominal = torch.full((23,), 2.)
@@ -57,6 +60,14 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
             terms[hybrid].solver = NS(contact_points=sole_vertices)
             env.step_dt = .02
             reference = NS(params={"root_only": True, "offsets": (0, 1, 3, 5, 10)}, history_length=0)
+            if force2:
+                source = Path(__file__).resolve().parents[1]/'source/whole_body_tracking/whole_body_tracking'
+                spec = importlib.util.spec_from_file_location('force2_export_observations',
+                    source/'tasks/tracking/config/t1_wbc_force2/observations.py')
+                observations = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(observations)
+                reference.func = observations.reference_window
+                reference.params = {'offsets': (0, 1, 3, 5, 10)}
             actual = NS(history_length=5)
             env.observation_manager.active_terms['policy'] = ['reference', 'actual_state']
             env.observation_manager.cfg.policy = NS(history_length=None, reference=reference,
@@ -95,10 +106,17 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert metadata["qp_contact_model"] == "sole_corners"
         assert metadata["qp_contact_point_definition"] == "stored_sole_vertices_in_foot_link_frame"
         assert metadata["contact_measurements_required"] == "False"
-        assert metadata["actor_reference_body_selection"] == "anchor_only"
+        if force2:
+            assert metadata['actor_reference_body_selection'] == 'offset_0:anchor_only;future_offsets:all_bodies'
+            assert metadata['actor_reference_layout'] == (
+                'frame_major;offset_0:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w;'
+                'future_offsets:body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w')
+            assert metadata['actor_reference_body_names'].split(',') == data.body_names
+        else:
+            assert metadata["actor_reference_body_selection"] == "anchor_only"
+            assert metadata["actor_reference_layout"] == "frame_major:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w"
         assert metadata["actor_inputs"] == "reference_window,actual_state_history"
         assert [float(x) for x in metadata["actor_reference_frame_offsets"].split(",")] == [0, 1, 3, 5, 10]
-        assert metadata["actor_reference_layout"] == "frame_major:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w"
         assert [float(x) for x in metadata["actor_actual_state_frame_offsets"].split(",")] == [-4, -3, -2, -1, 0]
         assert [float(x) for x in metadata["observation_history_lengths"].split(",")] == [1, 5]
         assert metadata["actor_actual_state_history_reset"] == "repeat_first_state_of_new_episode"
