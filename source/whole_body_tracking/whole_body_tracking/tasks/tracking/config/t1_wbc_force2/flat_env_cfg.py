@@ -44,7 +44,7 @@ def configure_wbc_force(cfg):
     cfg.actions.wbc_force.record_diagnostics = previous.record_diagnostics
     cfg.actions.wbc_force.standing_only = previous.standing_only
     # Both networks keep current joints/root and five measured-state frames;
-    # future references contain all-link poses/velocities without joint fields.
+    # future frames contain COM-relative sole-corner positions and velocities.
     for group in (cfg.observations.policy, cfg.observations.critic):
         # A group-level history would override the individual term lengths.
         group.history_length = None

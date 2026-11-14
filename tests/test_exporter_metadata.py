@@ -107,11 +107,15 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert metadata["qp_contact_point_definition"] == "stored_sole_vertices_in_foot_link_frame"
         assert metadata["contact_measurements_required"] == "False"
         if force2:
-            assert metadata['actor_reference_body_selection'] == 'offset_0:anchor_only;future_offsets:all_bodies'
+            assert metadata['actor_reference_body_selection'] == 'offset_0:anchor_only;future_offsets:sole_corners'
             assert metadata['actor_reference_layout'] == (
                 'frame_major;offset_0:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w;'
-                'future_offsets:body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w')
+                'future_offsets:corner_major:position_relative_to_reference_com_xyz,linear_velocity_world_xyz')
             assert metadata['actor_reference_body_names'].split(',') == data.body_names
+            assert metadata['actor_reference_contact_point_order'].split(',') == [
+                f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]
+            assert metadata['actor_reference_future_frame_size'] == '48'
+            assert metadata['actor_reference_future_floor_clearance'] == 'False'
         else:
             assert metadata["actor_reference_body_selection"] == "anchor_only"
             assert metadata["actor_reference_layout"] == "frame_major:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w"
