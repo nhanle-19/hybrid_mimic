@@ -1,4 +1,4 @@
-"""Physical consistency and provenance of the non-walking training mirrors."""
+"""Physical consistency and provenance of all training mirrors, including walking."""
 import hashlib
 import importlib.util
 import json
@@ -71,8 +71,10 @@ def test_reflected_rotations_and_velocities_match_robot_kinematics():
         np.testing.assert_allclose(velocity, frame['velocity'], atol=1e-12)
 
 
-@pytest.mark.parametrize('stem', ['02_tilted_sway', '03_standing', '04_narrow_sway',
-                                 '05_slide', '06_sole_rotation', '07_toe_rotation', '09_front_kick'])
+SELECTION = json.loads((ROOT/'configs/contact_training_sources.json').read_text())
+
+
+@pytest.mark.parametrize('stem', SELECTION['retained_originals'] + [r['name'] for r in SELECTION['sources']])
 def test_bundled_mirror_is_reversible_and_has_consistent_body_poses(stem):
     original = read_npz(DIRECTORY / f'{stem}.npz')
     reflected = read_npz(DIRECTORY / f'{stem}_mirrored.npz')
@@ -93,19 +95,23 @@ def test_bundled_mirror_is_reversible_and_has_consistent_body_poses(stem):
             np.testing.assert_allclose(rotation, frame['rotation'], atol=2e-6, rtol=0)
 
 
-def test_generator_preserves_originals_excludes_walk_and_is_repeatable(tmp_path):
+def test_generator_preserves_originals_includes_walk_and_is_repeatable(tmp_path):
     manifest = json.loads((DIRECTORY / 'manifest.json').read_text())
     manifest['motions'] = [record for record in manifest['motions'] if 'mirrored_from' not in record]
     for record in manifest['motions']:
         source = DIRECTORY / record['file']
         assert hashlib.sha256(source.read_bytes()).hexdigest() == record['sha256']
-        assert source.read_bytes() == (ROOT / record['collection_source']).read_bytes()
+        if record.get('collection_source') and (ROOT / record['collection_source']).exists():
+            assert source.read_bytes() == (ROOT / record['collection_source']).read_bytes()
         shutil.copyfile(source, tmp_path / source.name)
     (tmp_path / 'manifest.json').write_text(json.dumps(manifest))
     generated = mirror.generate(tmp_path)
-    assert len(generated['motions']) == 15
-    assert generated['total_frames'] == 6491
-    assert not (tmp_path / '01_walk_mirrored.npz').exists()
+    assert len(generated['motions']) == 70
+    assert generated['total_frames'] == 2*sum(r['frames'] for r in manifest['motions'])
+    assert generated['mirroring']['excluded'] == []
+    for record in manifest['motions']:
+        assert (tmp_path / (Path(record['file']).stem+'_mirrored.npz')).exists()
+    assert not (tmp_path / '04_narrow_sway.npz').exists()
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     mirror.generate(tmp_path)
     assert before == {path.name: path.read_bytes() for path in tmp_path.iterdir()}

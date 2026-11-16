@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "output_fps": 50,
+  "retarget_fps": 30,
+  "retained_originals": [
+    "01_walk",
+    "02_tilted_sway",
+    "03_standing",
+    "05_slide",
+    "06_sole_rotation",
+    "07_toe_rotation",
+    "09_front_kick"
+  ],
+  "removed_originals": [
+    "04_narrow_sway"
+  ],
+  "mirror_all": true,
+  "sources": [
+    {
+      "name": "08_turn_right",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E1_-_Turn_around_right_stageii.npz",
+      "source_sha256": "4323bbbbe52134e1f7306f7d2abc1fe3b77736a930c6bd475381a5c1e7592199",
+      "family": "turns",
+      "contact_focus": "Sole and toe pivots; support changes",
+      "existing_reference": "eval_data/reference_e1_turn_right/short_reanchor/reference.npz"
+    },
+    {
+      "name": "10_turn_left",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E2_-_Turn_around_left_stageii.npz",
+      "source_sha256": "ebcfba291ae20b070361108a52ed78e662a3be63508cb8d8c2cacc000fc7d580",
+      "family": "turns",
+      "contact_focus": "Sole and toe pivots; support changes"
+    },
+    {
+      "name": "11_switch_stance",
+      "source": "ACCAD/Male2MartialArtsStances_c3d/D15_-_switch_stance_stageii.npz",
+      "source_sha256": "eacbcd66a51bf650d43ff1731f4cab259075ba6fa935dba5e444e218129aba52",
+      "family": "stance_switch",
+      "contact_focus": "Foot rotation with unloading and reloading"
+    },
+    {
+      "name": "12_stand_to_ready",
+      "source": "ACCAD/Male2MartialArtsStances_c3d/D1_-_stand_to_ready_stageii.npz",
+      "source_sha256": "5cdfdb0ed9a81684cc6970b725593c978789041f09b07c802d40cb1f2f6afa98",
+      "family": "stance_switch",
+      "contact_focus": "Foot rotation with unloading and reloading"
+    },
+    {
+      "name": "13_bounce",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E8_-_bounce_stageii.npz",
+      "source_sha256": "b1338f7ba7e3a057f8cee7a00d7d59ec790b82c609daddaaf98d07b967e525e5",
+      "family": "bounce",
+      "contact_focus": "Repeated heel lift and forefoot support; inspect flight phases"
+    },
+    {
+      "name": "14_cross_punch_left",
+      "source": "ACCAD/Male2MartialArtsPunches_c3d/E3_-__cross_left_stageii.npz",
+      "source_sha256": "33a1fa9a6c5007706e0a78417c589f369b97723a234f4a2590359194aca4b64c",
+      "family": "cross_punch",
+      "contact_focus": "Inspect rear-foot heel lift and toe pivot"
+    },
+    {
+      "name": "15_cross_punch_right",
+      "source": "ACCAD/Male2MartialArtsPunches_c3d/E4_-__cross_right_stageii.npz",
+      "source_sha256": "617bee0b276c3ac6b3bd50905aa83242cb4221ebdb61798bd7c8de35a1cb45b7",
+      "family": "cross_punch",
+      "contact_focus": "Inspect rear-foot heel lift and toe pivot"
+    },
+    {
+      "name": "16_natural_sway_female",
+      "source": "ACCAD/Female1General_c3d/A2_-_Sway_stageii.npz",
+      "source_sha256": "97d9de1054bf167106a827e14c41a4a12db4cb3a9e82a1bbbbb1eeac54064ab1",
+      "family": "natural_sway",
+      "contact_focus": "Continuous weight transfer with feet near the floor"
+    },
+    {
+      "name": "17_natural_sway_male",
+      "source": "ACCAD/Male2General_c3d/A2-_Sway_stageii.npz",
+      "source_sha256": "1a79af3a36408173297dd412fe95ca786212d6f2bb8327da3095ddc4198f8d15",
+      "family": "natural_sway",
+      "contact_focus": "Alternate natural weight transfer"
+    },
+    {
+      "name": "18_stand_to_walk",
+      "source": "ACCAD/Female1Walking_c3d/B1_-_stand_to_walk_stageii.npz",
+      "source_sha256": "4d2ce33de4db211676c4875f8d3038d501890b427a0118db3ac5206221d79c27",
+      "family": "start_stop",
+      "contact_focus": "Double support to single support and back; foot rolling"
+    },
+    {
+      "name": "19_walk_to_stand",
+      "source": "ACCAD/Female1Walking_c3d/B2_-_walk_to_stand_stageii.npz",
+      "source_sha256": "8d5afe25e0b6d48af1d47467beaacb2b5cfbc4448018406b5d5dde6aeb3d1826",
+      "family": "start_stop",
+      "contact_focus": "Double support to single support and back; foot rolling"
+    },
+    {
+      "name": "20_side_step_left",
+      "source": "ACCAD/Female1Walking_c3d/B22_-_side_step_left_stageii.npz",
+      "source_sha256": "1cff42ab6dd1346e77ee65218c2555d5f09ace7a7bb5fd8e7d5169075c0fcc7e",
+      "family": "side_step",
+      "contact_focus": "Lateral support transfer and landing",
+      "existing_reference": "retargeted_motion/b22_side_step_left_female1_t1_training.npz"
+    },
+    {
+      "name": "21_side_step_right",
+      "source": "ACCAD/Female1Walking_c3d/B23_-_side_step_right_stageii.npz",
+      "source_sha256": "4145ab4c6f335e55ccb2eb900c3f7e7853fdf8450c4b75618d87028922d59fed",
+      "family": "side_step",
+      "contact_focus": "Lateral support transfer and landing"
+    },
+    {
+      "name": "22_advance",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E3_-_advance_stageii.npz",
+      "source_sha256": "df2391022ea36bd4f6f7b920cb4ac83896849f328c88633db0f43262d1fd01a0",
+      "family": "advance_retreat",
+      "contact_focus": "Low foot clearance; investigate sliding, do not assume it"
+    },
+    {
+      "name": "23_retreat",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E5_-_retreat_stageii.npz",
+      "source_sha256": "89f79051ac85417d51c175f71cd4a5fe11c6eb581f2926d78960288eb1e68434",
+      "family": "advance_retreat",
+      "contact_focus": "Low foot clearance; investigate sliding, do not assume it"
+    },
+    {
+      "name": "24_dodge_left",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E19_-_dodge_left_stageii.npz",
+      "source_sha256": "881b36d7043e7d669264ec1e2cd808506fa7bf16c1dd114d494cabd136acbd5c",
+      "family": "dodge",
+      "contact_focus": "Lateral balance and changes in support"
+    },
+    {
+      "name": "25_dodge_right",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E20_-_dodge_right_stageii.npz",
+      "source_sha256": "ecf9b122bbffa64a4f522acab547f6b40049de84f4af8a1493bd762a0276ac12",
+      "family": "dodge",
+      "contact_focus": "Lateral balance and changes in support"
+    },
+    {
+      "name": "26_walk_to_crouch",
+      "source": "ACCAD/Female1Walking_c3d/B24_-_walk_to_crouch_stageii.npz",
+      "source_sha256": "d37aad8b2f3d8a27e50d884b97f920ee9c7a43ad435f8ba285be542b1686aa29",
+      "family": "crouch_transition",
+      "contact_focus": "Load transfer while changing COM height"
+    },
+    {
+      "name": "27_crouch_to_walk",
+      "source": "ACCAD/Female1Walking_c3d/B25_-_crouch_to_walk1_stageii.npz",
+      "source_sha256": "da46b25cbb6cf5e44aa1ff9e05685191a64ffe9eb44fc25019d85a4d0edda241",
+      "family": "crouch_transition",
+      "contact_focus": "Load transfer while changing COM height"
+    },
+    {
+      "name": "28_stand_to_walk_back",
+      "source": "ACCAD/Female1Walking_c3d/B4_-_stand_to_walk_back_stageii.npz",
+      "source_sha256": "4d67d5a5d98042a8706a22ad5249d254af488a3fcf6fa25f8cc554a9ddd6bafb",
+      "family": "backward_start_stop",
+      "contact_focus": "Different foot rolling and support ordering"
+    },
+    {
+      "name": "29_walk_back_to_stand",
+      "source": "ACCAD/Female1Walking_c3d/B6_-_walk_backwards_to_stand_stageii.npz",
+      "source_sha256": "206bc3bf8311ea1626797cc8c3c05cb1d4ff9935c3126b17af73050412127611",
+      "family": "backward_start_stop",
+      "contact_focus": "Different foot rolling and support ordering"
+    },
+    {
+      "name": "30_push_kick_left",
+      "source": "ACCAD/Male2MartialArtsKicks_c3d/G17-__push_kick_left_stageii.npz",
+      "source_sha256": "2cbe0c3b62dd8ca7796628d8284d23559db437672b21a534228ff39544a10b62",
+      "family": "push_kick",
+      "contact_focus": "Single-foot support with release and landing"
+    },
+    {
+      "name": "31_push_kick_right",
+      "source": "ACCAD/Male2MartialArtsKicks_c3d/G18-__push_kick_right_stageii.npz",
+      "source_sha256": "53543b1b1676ebb74713644eda91d5a9801825ef4312cd25615d4129e012f521",
+      "family": "push_kick",
+      "contact_focus": "Single-foot support with release and landing",
+      "existing_reference": "retargeted_motion/g18_push_kick_right_t1_training.npz"
+    },
+    {
+      "name": "32_forward_walk_bk",
+      "source": "HDM05/bk/HDM_bk_01-01_01_120_stageii.npz",
+      "source_sha256": "9d201e3c6220ec3a850e94f1282f3961672d753c4f8b309e1c0d166405bb2b59",
+      "family": "walking_take",
+      "contact_focus": "Crop foot rolling, turns, and low-clearance sections after inspection",
+      "existing_reference": "retargeted_motion/hdm_bk_normal_walk_repaired_t1_training.npz"
+    },
+    {
+      "name": "33_walk_dg",
+      "source": "HDM05/dg/HDM_dg_01-01_01_120_stageii.npz",
+      "source_sha256": "84f8e7d3568883562a53779956ce0ee22a469830059c7e76fd985cfc7f5bfbaf",
+      "family": "walking_take",
+      "contact_focus": "Alternate actor for development or held-out evaluation",
+      "crop_seconds": [
+        12,
+        20
+      ],
+      "crop_reason": "Eight-second window with many heel/toe lift and near-floor rotation events, excluding recording endpoints; geometric screen only."
+    },
+    {
+      "name": "34_dance_mm",
+      "source": "HDM05/mm/HDM_mm_03-01_01_120_stageii.npz",
+      "source_sha256": "4cffecaee55bff3bf4132fa8869f90fd546b598713025c9d4dcf3639fc53b6ce",
+      "family": "dance_take",
+      "contact_focus": "Explore pivots and possible sliding; no verified slide yet",
+      "crop_seconds": [
+        50,
+        58
+      ],
+      "crop_reason": "Eight-second window with many heel/toe lift and near-floor rotation events, excluding recording endpoints; geometric screen only."
+    },
+    {
+      "name": "35_dance_tr",
+      "source": "HDM05/tr/HDM_tr_03-01_01_120_stageii.npz",
+      "source_sha256": "42b3610d51b6f926ff4dccde84ed6e3aa6cd2daa701b3d439ea395120abbbc3a",
+      "family": "dance_take",
+      "contact_focus": "Explore pivots and possible sliding; no verified slide yet",
+      "crop_seconds": [
+        58,
+        66
+      ],
+      "crop_reason": "Eight-second window with many heel/toe lift and near-floor rotation events, excluding recording endpoints; geometric screen only."
+    },
+    {
+      "name": "36_natural_standing",
+      "source": "ACCAD/Female1General_c3d/A1_-_Stand_stageii.npz",
+      "source_sha256": "e807da291efd5081c585f9b1286a969f7b170583cd94bda0de911ef2e145a32a",
+      "family": "standing_baseline",
+      "contact_focus": "Short natural standing baseline"
+    }
+  ]
+}

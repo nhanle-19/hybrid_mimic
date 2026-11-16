@@ -232,6 +232,6 @@ def test_force2_reward_configuration_replaces_joint_tracking(rewards):
         'error_scale': .05, 'velocity_error_scale': .2, 'angular_velocity_error_scale': .5}
     assert config.motion_completion.weight == 1.
     assert config.swing_force.weight == -.125
-    assert config.action_change.weight == -.5
+    assert config.action_change.weight == -.6
     assert config.false_zero.weight == -.1
     assert config.force_cap_gap.weight == -.08

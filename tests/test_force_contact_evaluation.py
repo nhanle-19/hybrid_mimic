@@ -83,6 +83,53 @@ def test_invalid_gain_rejected_before_starting_evaluation(tmp_path, monkeypatch,
         suite.main()
 
 
+def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monkeypatch):
+    suite = load('eval_force_motion_suite')
+    monkeypatch.setattr(suite, 'ROOT', tmp_path)
+    checkpoint = tmp_path/'logs/rsl_rl/t1_wbc_force2/2026-11-14/model_6999.pt'
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.write_bytes(b'force2')
+    motions = tmp_path/'motions'
+    motions.mkdir()
+    (motions/'motion.npz').write_bytes(b'motion')
+    motion_hash = hashlib.sha256(b'motion').hexdigest()
+    (motions/'manifest.json').write_text(json.dumps({
+        'motions': [{'file': 'motion.npz', 'sha256': motion_hash}]}))
+    output = tmp_path/'results'
+    task = 'Tracking-WBC-FORCE2-T1-v0'
+    arguments = ['suite', '--task', task, '--motions', str(motions), '--output', str(output)]
+    monkeypatch.setattr(sys, 'argv', arguments)
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if '--checkpoint' in command:
+            (output/'motion/diagnostics.npz').touch()
+            (output/'motion/run.json').write_text(json.dumps({
+                'task': task, 'checkpoint_sha256': hashlib.sha256(b'force2').hexdigest(),
+                'motion_sha256': motion_hash, 'qp_contact_model': 'sole_corners',
+                'force_cap_scope': 'per_sole_vertex'}))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(suite.subprocess, 'run', run)
+    suite.main()
+    assert calls[0][calls[0].index('--task')+1] == task
+    assert calls[0][calls[0].index('--checkpoint')+1] == str(checkpoint)
+    assert json.loads((output/'suite.json').read_text())['task'] == task
+    monkeypatch.setattr(sys, 'argv', arguments+['--skip_existing'])
+    calls.clear()
+    suite.main()
+    assert len(calls) == 1 and '--checkpoint' not in calls[0]
+    metadata = output/'motion/run.json'
+    saved = json.loads(metadata.read_text())
+    saved.pop('task')  # Historical FORCE evaluations did not record the task.
+    metadata.write_text(json.dumps(saved))
+    calls.clear()
+    with pytest.raises(ValueError, match='different task'):
+        suite.main()
+    assert not calls
+
+
 def test_contact_geometry_retains_stationary_toe_during_rotation():
     module = load('analyze_force_contacts')
     # Toe at x=0.1 stays fixed: origin velocity cancels omega cross r.

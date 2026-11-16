@@ -261,15 +261,28 @@ in this folder and its `manifest.json`; do not redirect training to a different
 collection directory. The loader reads all `.npz` files directly in this folder.
 Copy the updated folder to the training machine before starting a remote run.
 
-The current selection contains **15 clips, totaling 6,491 frames at 50 Hz**:
-walking plus original and left/right mirrored versions of wide tilted sway,
-standing, narrow sway, sliding, sole rotation, toe rotation, and the G3 front
-kick. Walking has no mirrored duplicate. Turn-right is excluded from training.
+The current selection contains **70 clips, totaling 24,210 frames at 50 Hz**:
+35 originals and a left/right mirror of every original, including all walking
+clips. Narrow sway and its mirror are removed. The set retains walk-in-place,
+wide tilted sway, standing, sliding, sole/toe rotation, and the G3 front kick,
+and adds the 28 contact-focused sources in `configs/contact_training_sources.json`:
+turns, stance changes, bounce, cross punches, natural sway, walking starts/stops,
+side steps, advance/retreat, dodges, crouch transitions, backward walking,
+push kicks, forward walking, dance excerpts, and natural standing.
+Long HDM sources use recorded excerpts; the manifest records crop times,
+source hashes and reference preparation. New clips are kinematically prepared
+references, not demonstrated FORCE2 policy successes. Synthetic sliding remains
+to ensure sliding coverage while natural sliding candidates are assessed.
 The `_mirrored.npz` files reflect world Y across the XZ plane, swap left/right
 limbs, and transform rotations, velocities, and directional metadata together.
 Original files are preserved. To regenerate missing mirrors or verify existing
 ones, run `python scripts/mirror_training_motions.py` (NumPy only); it also updates
 the manifest with source hashes. Both versions are sampled as separate clips.
+Validate the installed selection with
+`python scripts/validate_contact_training_list.py --directory retargeted_motion/training_list`.
+The rebuild workflow is `scripts/build_contact_training_list.py`: `retarget`
+uses the GMR environment, `assemble` uses the training environment, and `install`
+requires a passing staging validation and preserves the previous folder as a backup.
 Use:
 
 ```bash
@@ -405,7 +418,7 @@ server command above.
 
 | Setting | Default server training value |
 | --- | --- |
-| Reference | `retargeted_motion/training_list/` (15 clips, 6,491 frames) |
+| Reference | `retargeted_motion/training_list/` (70 clips, 24,210 frames) |
 | Environments / iterations | 1,024 / 30,000 |
 | Rollout / PPO minibatch | 24 steps per environment; 24,576 transitions per rollout; 6,144 per minibatch |
 | PPO epochs / minibatches | 5 / 4 |
@@ -710,6 +723,10 @@ motion in the active training manifest, run:
 ```bash
 python scripts/eval_force_motion_suite.py --output outputs/force_contact_evaluation
 ```
+
+For FORCE2, add `--task Tracking-WBC-FORCE2-T1-v0`; this selects the newest
+checkpoint under `logs/rsl_rl/t1_wbc_force2/` and loads its observation layout.
+Both tasks verify the saved policy and critic observation settings before rollout.
 
 The suite selects the highest checkpoint iteration in the newest run, verifies
 the reference hashes and saved controller settings, and executes each clip once

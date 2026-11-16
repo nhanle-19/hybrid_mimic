@@ -9,6 +9,15 @@
       "fps": 50.0
     },
     {
+      "file": "01_walk_mirrored.npz",
+      "source": "01_walk.npz",
+      "mirrored_from": "01_walk.npz",
+      "source_sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79",
+      "sha256": "f741ccf8e10b554a97d77a055c51e3bfee420eecadecd6be1e2036fc38e3b461",
+      "frames": 261,
+      "fps": 50.0
+    },
+    {
       "file": "02_tilted_sway.npz",
       "source": "eval_data/toy_standing_sway_wide02/reference.npz",
       "collection_source": "retargeted_motion/labeled_force/motions/02_tilted_sway.npz",
@@ -39,23 +48,6 @@
       "mirrored_from": "03_standing.npz",
       "source_sha256": "738a0330786ccc38162d16ac0543c060ece49e792af3988d511cb62ecbbd85b2",
       "sha256": "ad550f7dca7a0a03a25289c936b2e594d3ce0275aa7a18c4c6833c4c141218e2",
-      "frames": 500,
-      "fps": 50.0
-    },
-    {
-      "file": "04_narrow_sway.npz",
-      "source": "eval_data/toy_standing_sway/reference.npz",
-      "collection_source": "retargeted_motion/labeled_force/motions/04_narrow_sway.npz",
-      "sha256": "62c763c8495e67b4ec8dc9251b2b246e9843ce71c7726e171aed858615b91f19",
-      "frames": 500,
-      "fps": 50.0
-    },
-    {
-      "file": "04_narrow_sway_mirrored.npz",
-      "source": "04_narrow_sway.npz",
-      "mirrored_from": "04_narrow_sway.npz",
-      "source_sha256": "62c763c8495e67b4ec8dc9251b2b246e9843ce71c7726e171aed858615b91f19",
-      "sha256": "810d71128f4aa257e2490507d298d5ad3f0fb5a1ad65532fffed252070f3d9ef",
       "frames": 500,
       "fps": 50.0
     },
@@ -111,43 +103,958 @@
       "fps": 50.0
     },
     {
+      "file": "08_turn_right.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E1_-_Turn_around_right_stageii.npz",
+      "source_sha256": "4323bbbbe52134e1f7306f7d2abc1fe3b77736a930c6bd475381a5c1e7592199",
+      "sha256": "10d01f81a65cb48b64db1c9e3fff534b03b0c92fd5d4c159fbd3ab805b349b79",
+      "frames": 661,
+      "fps": 50.0,
+      "family": "turns",
+      "contact_focus": "Sole and toe pivots; support changes",
+      "preparation": {
+        "method": "Existing T1 reference with standard WBC limit/floor preparation",
+        "source": "eval_data/reference_e1_turn_right/short_reanchor/reference.npz",
+        "source_sha256": "b03922821a748e16bb6bdc4546c9dd5047b2f4d8ed4e5248cf2ab1da66c13a3d",
+        "timing_scale": 1.0,
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 4.2890971593823046e-08,
+          "initial_root_lift_m": 4.0159094660818795e-09
+        },
+        "max_joint_speed_limit_fraction": 0.1749872680401153
+      }
+    },
+    {
+      "file": "08_turn_right_mirrored.npz",
+      "source": "08_turn_right.npz",
+      "mirrored_from": "08_turn_right.npz",
+      "source_sha256": "10d01f81a65cb48b64db1c9e3fff534b03b0c92fd5d4c159fbd3ab805b349b79",
+      "sha256": "234dc77aa670ef729f9f6087302f0fffd73f8c551880bde75060a92e40a336bf",
+      "frames": 661,
+      "fps": 50.0
+    },
+    {
       "file": "09_front_kick.npz",
       "source": "eval_data/reference_planted_kick_20261016/g3_front_kick_t1_training.npz",
-      "collection_source": "retargeted_motion/labeled_force/motions/09_front_kick.npz",
-      "sha256": "71149b98123642cfe54dd05ac539de70e744302e7d4e931fad381d2ee141d489",
+      "sha256": "17be89fe87d12b02823033dae34d6fe58b09f4071ede451a509222c4faaaf58e",
       "frames": 115,
-      "fps": 50.0
+      "fps": 50.0,
+      "unprepared_collection_source": "retargeted_motion/labeled_force/motions/09_front_kick.npz",
+      "unprepared_sha256": "71149b98123642cfe54dd05ac539de70e744302e7d4e931fad381d2ee141d489",
+      "preparation": {
+        "version": 1,
+        "joint_values_clamped": 0,
+        "max_joint_correction_rad": 2.9802322387695312e-08,
+        "max_root_lift_m": 0.08915516550304776,
+        "initial_root_lift_m": 0.08915516550304776
+      }
     },
     {
       "file": "09_front_kick_mirrored.npz",
       "source": "09_front_kick.npz",
       "mirrored_from": "09_front_kick.npz",
-      "source_sha256": "71149b98123642cfe54dd05ac539de70e744302e7d4e931fad381d2ee141d489",
-      "sha256": "0036905ab647adba410d698764b3b7548bbdebfebf4b0afd8c69cc3d57182e77",
+      "source_sha256": "17be89fe87d12b02823033dae34d6fe58b09f4071ede451a509222c4faaaf58e",
+      "sha256": "952469cbe66ec681c1d02a3565c433ea8e9f822af56df304ec14f2207185bf83",
       "frames": 115,
+      "fps": 50.0
+    },
+    {
+      "file": "10_turn_left.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E2_-_Turn_around_left_stageii.npz",
+      "source_sha256": "ebcfba291ae20b070361108a52ed78e662a3be63508cb8d8c2cacc000fc7d580",
+      "sha256": "b77ff6304a2102bb8de60b60e8c4acbb09a2041768f47f1ef3ede7a56b6681f8",
+      "frames": 654,
+      "fps": 50.0,
+      "family": "turns",
+      "contact_focus": "Sole and toe pivots; support changes",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "034a7e3910f0b1afdfa4bcc0c27f4bce7adf8c4a41af0f39c489815deb1788d0",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.08362854286271579,
+          "initial_root_lift_m": 0.08349268124447659
+        },
+        "max_joint_speed_limit_fraction": 0.3417577222681067
+      }
+    },
+    {
+      "file": "10_turn_left_mirrored.npz",
+      "source": "10_turn_left.npz",
+      "mirrored_from": "10_turn_left.npz",
+      "source_sha256": "b77ff6304a2102bb8de60b60e8c4acbb09a2041768f47f1ef3ede7a56b6681f8",
+      "sha256": "185d34549ee33250ea090da9ff9b2b807ed863cfb4651f3653b3ad2d0713007c",
+      "frames": 654,
+      "fps": 50.0
+    },
+    {
+      "file": "11_switch_stance.npz",
+      "source": "ACCAD/Male2MartialArtsStances_c3d/D15_-_switch_stance_stageii.npz",
+      "source_sha256": "eacbcd66a51bf650d43ff1731f4cab259075ba6fa935dba5e444e218129aba52",
+      "sha256": "9fcad35e9366268307c08b946604d05985bbb54b34c78d893c257cb2b4424f52",
+      "frames": 152,
+      "fps": 50.0,
+      "family": "stance_switch",
+      "contact_focus": "Foot rotation with unloading and reloading",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "d77ddfef4aa0cc5d1ba7f5cc67812f205097a516dbb50dd71a2dfcc260e1f66e",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 3.924173334915502e-18,
+          "max_root_lift_m": 0.07779916437112376,
+          "initial_root_lift_m": 0.07607299699043532
+        },
+        "max_joint_speed_limit_fraction": 0.43690543367710793
+      }
+    },
+    {
+      "file": "11_switch_stance_mirrored.npz",
+      "source": "11_switch_stance.npz",
+      "mirrored_from": "11_switch_stance.npz",
+      "source_sha256": "9fcad35e9366268307c08b946604d05985bbb54b34c78d893c257cb2b4424f52",
+      "sha256": "c7791b88eba5d8c31f3832d33f133c7f9245bdc209b84b9e2fbef361cd67be58",
+      "frames": 152,
+      "fps": 50.0
+    },
+    {
+      "file": "12_stand_to_ready.npz",
+      "source": "ACCAD/Male2MartialArtsStances_c3d/D1_-_stand_to_ready_stageii.npz",
+      "source_sha256": "5cdfdb0ed9a81684cc6970b725593c978789041f09b07c802d40cb1f2f6afa98",
+      "sha256": "1d4a78db9eb60d59ff4db96bbaa219d78409ac4bf8418c3b49e32e21d7a9675b",
+      "frames": 147,
+      "fps": 50.0,
+      "family": "stance_switch",
+      "contact_focus": "Foot rotation with unloading and reloading",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "68c39d3a28afd1e97f02c38ace1b8b11460a34969a3e39ad254d8e327fd86cbd",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 2.467444691203874e-18,
+          "max_root_lift_m": 0.07171764092506291,
+          "initial_root_lift_m": 0.06934749540421276
+        },
+        "max_joint_speed_limit_fraction": 0.2991019574791986
+      }
+    },
+    {
+      "file": "12_stand_to_ready_mirrored.npz",
+      "source": "12_stand_to_ready.npz",
+      "mirrored_from": "12_stand_to_ready.npz",
+      "source_sha256": "1d4a78db9eb60d59ff4db96bbaa219d78409ac4bf8418c3b49e32e21d7a9675b",
+      "sha256": "9eee96a41c2e2d195939d9694b13103d13c43960e9b327a86aeeaa6a0bc16574",
+      "frames": 147,
+      "fps": 50.0
+    },
+    {
+      "file": "13_bounce.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E8_-_bounce_stageii.npz",
+      "source_sha256": "b1338f7ba7e3a057f8cee7a00d7d59ec790b82c609daddaaf98d07b967e525e5",
+      "sha256": "ba64178f90875cf8b51dfaaf3b0f3e28bb6f30a49f1e90b4fc109d2007da9f40",
+      "frames": 377,
+      "fps": 50.0,
+      "family": "bounce",
+      "contact_focus": "Repeated heel lift and forefoot support; inspect flight phases",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "e829fc3d756cbe778f8038aad4e4d43fdf59868aff951f62c23cbcd6c8e57ba1",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.08222688659627168,
+          "initial_root_lift_m": 0.07222987170017772
+        },
+        "max_joint_speed_limit_fraction": 0.4274130703439556
+      }
+    },
+    {
+      "file": "13_bounce_mirrored.npz",
+      "source": "13_bounce.npz",
+      "mirrored_from": "13_bounce.npz",
+      "source_sha256": "ba64178f90875cf8b51dfaaf3b0f3e28bb6f30a49f1e90b4fc109d2007da9f40",
+      "sha256": "6ae45b566aebe420af14285298b73a2e80e9a910a47b002c74f3679757699ac4",
+      "frames": 377,
+      "fps": 50.0
+    },
+    {
+      "file": "14_cross_punch_left.npz",
+      "source": "ACCAD/Male2MartialArtsPunches_c3d/E3_-__cross_left_stageii.npz",
+      "source_sha256": "33a1fa9a6c5007706e0a78417c589f369b97723a234f4a2590359194aca4b64c",
+      "sha256": "db9fd222421ef2641ebb8d87ab14b8be6eafeb32aa32ca8c58d90d58699567ef",
+      "frames": 162,
+      "fps": 50.0,
+      "family": "cross_punch",
+      "contact_focus": "Inspect rear-foot heel lift and toe pivot",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "6700e88164197457f6845d898b986cfd00c84f0b5e032c599a314361847daf7d",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.06954613530209831,
+          "initial_root_lift_m": 0.06954613530209831
+        },
+        "max_joint_speed_limit_fraction": 0.4548037884366748
+      }
+    },
+    {
+      "file": "14_cross_punch_left_mirrored.npz",
+      "source": "14_cross_punch_left.npz",
+      "mirrored_from": "14_cross_punch_left.npz",
+      "source_sha256": "db9fd222421ef2641ebb8d87ab14b8be6eafeb32aa32ca8c58d90d58699567ef",
+      "sha256": "ea9401d8313ac936f74c981d4b4a38a3f1a714784a5f676b47490700f4a34572",
+      "frames": 162,
+      "fps": 50.0
+    },
+    {
+      "file": "15_cross_punch_right.npz",
+      "source": "ACCAD/Male2MartialArtsPunches_c3d/E4_-__cross_right_stageii.npz",
+      "source_sha256": "617bee0b276c3ac6b3bd50905aa83242cb4221ebdb61798bd7c8de35a1cb45b7",
+      "sha256": "37e512f1098bfb34200486810d109b0e859ab9d98850b6a243b8e4e6efb1a437",
+      "frames": 122,
+      "fps": 50.0,
+      "family": "cross_punch",
+      "contact_focus": "Inspect rear-foot heel lift and toe pivot",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "7d998ba893c0dd2ff7b9b523868aa178566b236c14feb30f47570346f7418f52",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.0828660148044712,
+          "initial_root_lift_m": 0.08168991534407294
+        },
+        "max_joint_speed_limit_fraction": 0.670096963259066
+      }
+    },
+    {
+      "file": "15_cross_punch_right_mirrored.npz",
+      "source": "15_cross_punch_right.npz",
+      "mirrored_from": "15_cross_punch_right.npz",
+      "source_sha256": "37e512f1098bfb34200486810d109b0e859ab9d98850b6a243b8e4e6efb1a437",
+      "sha256": "5e95df6343b7c6c4abded8d6b050951e390f0b22d65c4a38ed2f0e8351881403",
+      "frames": 122,
+      "fps": 50.0
+    },
+    {
+      "file": "16_natural_sway_female.npz",
+      "source": "ACCAD/Female1General_c3d/A2_-_Sway_stageii.npz",
+      "source_sha256": "97d9de1054bf167106a827e14c41a4a12db4cb3a9e82a1bbbbb1eeac54064ab1",
+      "sha256": "6a4d87a69792ce2b832ae04c4d70d483e7aa6b5bbce2d2048dd987b75f2273b4",
+      "frames": 601,
+      "fps": 50.0,
+      "family": "natural_sway",
+      "contact_focus": "Continuous weight transfer with feet near the floor",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "f384e9a281bb0852e5ebd48e062d75e9948f661872f43e9275bfcb19df66a9b5",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 1.470880367094157e-17,
+          "max_root_lift_m": 0.02360625698742641,
+          "initial_root_lift_m": 0.007383790743918393
+        },
+        "max_joint_speed_limit_fraction": 0.20533180255762457
+      }
+    },
+    {
+      "file": "16_natural_sway_female_mirrored.npz",
+      "source": "16_natural_sway_female.npz",
+      "mirrored_from": "16_natural_sway_female.npz",
+      "source_sha256": "6a4d87a69792ce2b832ae04c4d70d483e7aa6b5bbce2d2048dd987b75f2273b4",
+      "sha256": "c253e888df9c8d6cfb5b9fbb6db03d2ce8c362a9df3978c3bea1b01869caa6fc",
+      "frames": 601,
+      "fps": 50.0
+    },
+    {
+      "file": "17_natural_sway_male.npz",
+      "source": "ACCAD/Male2General_c3d/A2-_Sway_stageii.npz",
+      "source_sha256": "1a79af3a36408173297dd412fe95ca786212d6f2bb8327da3095ddc4198f8d15",
+      "sha256": "d97a29bfd3195e0e3934397370f35690e6a73bfc4cfe049fe4a272b82cbd7e7e",
+      "frames": 532,
+      "fps": 50.0,
+      "family": "natural_sway",
+      "contact_focus": "Alternate natural weight transfer",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "469da29383efeb768874d660cb365d5bae0777f183c2e3addc6762637cedac17",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 9.87030929143253e-18,
+          "max_root_lift_m": 0.07062361479815821,
+          "initial_root_lift_m": 0.045353958235563145
+        },
+        "max_joint_speed_limit_fraction": 0.05755287365537847
+      }
+    },
+    {
+      "file": "17_natural_sway_male_mirrored.npz",
+      "source": "17_natural_sway_male.npz",
+      "mirrored_from": "17_natural_sway_male.npz",
+      "source_sha256": "d97a29bfd3195e0e3934397370f35690e6a73bfc4cfe049fe4a272b82cbd7e7e",
+      "sha256": "a114db4e0713cd227714f969c88963b8d7a3ad68ef5ccb32e39f90ab7c0b0804",
+      "frames": 532,
+      "fps": 50.0
+    },
+    {
+      "file": "18_stand_to_walk.npz",
+      "source": "ACCAD/Female1Walking_c3d/B1_-_stand_to_walk_stageii.npz",
+      "source_sha256": "4d2ce33de4db211676c4875f8d3038d501890b427a0118db3ac5206221d79c27",
+      "sha256": "efbfc2c5b78e400124aedc9b9cfd3c41b6cc307dd7dfd03a452635082cea28dd",
+      "frames": 311,
+      "fps": 50.0,
+      "family": "start_stop",
+      "contact_focus": "Double support to single support and back; foot rolling",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "7a5b8f46e2fb9daa708feee564e270dbe397e2e6977fecee74dab6fe7a896a14",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 5.8048887698790255e-18,
+          "max_root_lift_m": 0.07389999175585038,
+          "initial_root_lift_m": 0.01613983669364811
+        },
+        "max_joint_speed_limit_fraction": 0.4226746192991491
+      }
+    },
+    {
+      "file": "18_stand_to_walk_mirrored.npz",
+      "source": "18_stand_to_walk.npz",
+      "mirrored_from": "18_stand_to_walk.npz",
+      "source_sha256": "efbfc2c5b78e400124aedc9b9cfd3c41b6cc307dd7dfd03a452635082cea28dd",
+      "sha256": "803079e6487eb5a59c4e6bcf8f73a6bb32f527068840ba8de672a802263fb012",
+      "frames": 311,
+      "fps": 50.0
+    },
+    {
+      "file": "19_walk_to_stand.npz",
+      "source": "ACCAD/Female1Walking_c3d/B2_-_walk_to_stand_stageii.npz",
+      "source_sha256": "8d5afe25e0b6d48af1d47467beaacb2b5cfbc4448018406b5d5dde6aeb3d1826",
+      "sha256": "003bd66a42e2f9fc1058f169507a506b26cc97bbcf51990103738f79481ddd04",
+      "frames": 284,
+      "fps": 50.0,
+      "family": "start_stop",
+      "contact_focus": "Double support to single support and back; foot rolling",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "0d04f9df181edbf0f33ff556bae99587d74c0089f46b7df7a9536d289db2b253",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 1.1738509271459636e-17,
+          "max_root_lift_m": 0.05538006950332066,
+          "initial_root_lift_m": 0.005663130975152773
+        },
+        "max_joint_speed_limit_fraction": 0.44290317039661564
+      }
+    },
+    {
+      "file": "19_walk_to_stand_mirrored.npz",
+      "source": "19_walk_to_stand.npz",
+      "mirrored_from": "19_walk_to_stand.npz",
+      "source_sha256": "003bd66a42e2f9fc1058f169507a506b26cc97bbcf51990103738f79481ddd04",
+      "sha256": "9eac1c7289dc5af3f0f19c87d5bff02adee0616e615a2c78e97992165cd0e7b4",
+      "frames": 284,
+      "fps": 50.0
+    },
+    {
+      "file": "20_side_step_left.npz",
+      "source": "ACCAD/Female1Walking_c3d/B22_-_side_step_left_stageii.npz",
+      "source_sha256": "1cff42ab6dd1346e77ee65218c2555d5f09ace7a7bb5fd8e7d5169075c0fcc7e",
+      "sha256": "25ea143f046f2a8f9bb32d20cfac11d7d59131d3ae3c7a5eab3a6ea3fbd1862c",
+      "frames": 457,
+      "fps": 50.0,
+      "family": "side_step",
+      "contact_focus": "Lateral support transfer and landing",
+      "preparation": {
+        "method": "Existing T1 reference with standard WBC limit/floor preparation",
+        "source": "retargeted_motion/b22_side_step_left_female1_t1_training.npz",
+        "source_sha256": "0edce6b9f8455a23b1ab1a832f677aaa89ea2b8663dd0d532c1a26bbabad4f82",
+        "timing_scale": 1.0,
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 2.2007672901287785e-17,
+          "max_root_lift_m": 0.0658508641577526,
+          "initial_root_lift_m": 0.03875937045945009
+        },
+        "max_joint_speed_limit_fraction": 0.43278460734930324
+      }
+    },
+    {
+      "file": "20_side_step_left_mirrored.npz",
+      "source": "20_side_step_left.npz",
+      "mirrored_from": "20_side_step_left.npz",
+      "source_sha256": "25ea143f046f2a8f9bb32d20cfac11d7d59131d3ae3c7a5eab3a6ea3fbd1862c",
+      "sha256": "6d49fda77e7b71620e423d894141bdf119545e691fc16d1be7a20b8e95d2ed8a",
+      "frames": 457,
+      "fps": 50.0
+    },
+    {
+      "file": "21_side_step_right.npz",
+      "source": "ACCAD/Female1Walking_c3d/B23_-_side_step_right_stageii.npz",
+      "source_sha256": "4145ab4c6f335e55ccb2eb900c3f7e7853fdf8450c4b75618d87028922d59fed",
+      "sha256": "7ed6415d9257213f06ecff02f439244d2e32e832fc815422afed64f23c5bc511",
+      "frames": 416,
+      "fps": 50.0,
+      "family": "side_step",
+      "contact_focus": "Lateral support transfer and landing",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "136a6e6353fb9dc22b90777d623aa6a73d0e309349a9d03fe0a13abed7bd37f6",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.1016997876423996,
+          "initial_root_lift_m": 0.004976280294301583
+        },
+        "max_joint_speed_limit_fraction": 0.800547581775611
+      }
+    },
+    {
+      "file": "21_side_step_right_mirrored.npz",
+      "source": "21_side_step_right.npz",
+      "mirrored_from": "21_side_step_right.npz",
+      "source_sha256": "7ed6415d9257213f06ecff02f439244d2e32e832fc815422afed64f23c5bc511",
+      "sha256": "fee0568d2734d30637c11c513e44af6bcfc28092bec882ed6553d81dd1f9c2d3",
+      "frames": 416,
+      "fps": 50.0
+    },
+    {
+      "file": "22_advance.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E3_-_advance_stageii.npz",
+      "source_sha256": "df2391022ea36bd4f6f7b920cb4ac83896849f328c88633db0f43262d1fd01a0",
+      "sha256": "752102eb3859e55771369e740cc653ce2cec9c0a1e2202dbf35d3a1ffb204e98",
+      "frames": 317,
+      "fps": 50.0,
+      "family": "advance_retreat",
+      "contact_focus": "Low foot clearance; investigate sliding, do not assume it",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "cd5c0f1d10057f69470c4023868c50ba00e84501ec81470f81b85f9d8fdb72c6",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.08510705523464027,
+          "initial_root_lift_m": 0.0745145603952048
+        },
+        "max_joint_speed_limit_fraction": 0.5384383086154024
+      }
+    },
+    {
+      "file": "22_advance_mirrored.npz",
+      "source": "22_advance.npz",
+      "mirrored_from": "22_advance.npz",
+      "source_sha256": "752102eb3859e55771369e740cc653ce2cec9c0a1e2202dbf35d3a1ffb204e98",
+      "sha256": "92e2ee314f775fc4accc1ea5aee9a7e0676748b44621956acc655336b6abd3c3",
+      "frames": 317,
+      "fps": 50.0
+    },
+    {
+      "file": "23_retreat.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E5_-_retreat_stageii.npz",
+      "source_sha256": "89f79051ac85417d51c175f71cd4a5fe11c6eb581f2926d78960288eb1e68434",
+      "sha256": "738967c3f62fda255a22bf1a6f84063f9fe5bf5b6833d724fdb02cfc122eca83",
+      "frames": 386,
+      "fps": 50.0,
+      "family": "advance_retreat",
+      "contact_focus": "Low foot clearance; investigate sliding, do not assume it",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "6c2923701f5b29b9b98c907d32049823934a77e36f96b6c2142f4ee9c7289608",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.07943287459652197,
+          "initial_root_lift_m": 0.07679001212373424
+        },
+        "max_joint_speed_limit_fraction": 0.5891658891953129
+      }
+    },
+    {
+      "file": "23_retreat_mirrored.npz",
+      "source": "23_retreat.npz",
+      "mirrored_from": "23_retreat.npz",
+      "source_sha256": "738967c3f62fda255a22bf1a6f84063f9fe5bf5b6833d724fdb02cfc122eca83",
+      "sha256": "4a69ba4cb93a821dfc9a3a628f271994e41bbdc52da1763ed10869866a42d10c",
+      "frames": 386,
+      "fps": 50.0
+    },
+    {
+      "file": "24_dodge_left.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E19_-_dodge_left_stageii.npz",
+      "source_sha256": "881b36d7043e7d669264ec1e2cd808506fa7bf16c1dd114d494cabd136acbd5c",
+      "sha256": "ec3a33aee2655c3679ff2c67e8a59701196863396756ae112986b07faa3a24b7",
+      "frames": 111,
+      "fps": 50.0,
+      "family": "dodge",
+      "contact_focus": "Lateral balance and changes in support",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "39e86b7bae67215ea976ad6ca8e4bab0c632110a0c80e921e2d2152a25bf33a1",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.08905646132003615,
+          "initial_root_lift_m": 0.07735193525645447
+        },
+        "max_joint_speed_limit_fraction": 0.2665064794275745
+      }
+    },
+    {
+      "file": "24_dodge_left_mirrored.npz",
+      "source": "24_dodge_left.npz",
+      "mirrored_from": "24_dodge_left.npz",
+      "source_sha256": "ec3a33aee2655c3679ff2c67e8a59701196863396756ae112986b07faa3a24b7",
+      "sha256": "243aee850a90da52db59bf37c8e86a4cb0e243dab91b33082b3ba2c57148fd91",
+      "frames": 111,
+      "fps": 50.0
+    },
+    {
+      "file": "25_dodge_right.npz",
+      "source": "ACCAD/MartialArtsWalksTurns_c3d/E20_-_dodge_right_stageii.npz",
+      "source_sha256": "ecf9b122bbffa64a4f522acab547f6b40049de84f4af8a1493bd762a0276ac12",
+      "sha256": "691c13fb74329a2aa0e39d22d2b6197629ef35d6514ce3c0d9c3fb74c5d65994",
+      "frames": 139,
+      "fps": 50.0,
+      "family": "dodge",
+      "contact_focus": "Lateral balance and changes in support",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "957b72e38fb312f871cca9aea146bfb6d1cc317a9c05bffa93ca458d4ccaa646",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.08910357624434909,
+          "initial_root_lift_m": 0.08910357624434909
+        },
+        "max_joint_speed_limit_fraction": 0.2571167668478423
+      }
+    },
+    {
+      "file": "25_dodge_right_mirrored.npz",
+      "source": "25_dodge_right.npz",
+      "mirrored_from": "25_dodge_right.npz",
+      "source_sha256": "691c13fb74329a2aa0e39d22d2b6197629ef35d6514ce3c0d9c3fb74c5d65994",
+      "sha256": "c4f244f05234dcc5830d566a974c5f32607c75466b6e8b3803f7a741827d9c92",
+      "frames": 139,
+      "fps": 50.0
+    },
+    {
+      "file": "26_walk_to_crouch.npz",
+      "source": "ACCAD/Female1Walking_c3d/B24_-_walk_to_crouch_stageii.npz",
+      "source_sha256": "d37aad8b2f3d8a27e50d884b97f920ee9c7a43ad435f8ba285be542b1686aa29",
+      "sha256": "f3f6517bb29809b8cec9e33453beb777ea26eba0bd6a8488f71b37a42ebe7f9f",
+      "frames": 354,
+      "fps": 50.0,
+      "family": "crouch_transition",
+      "contact_focus": "Load transfer while changing COM height",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "1b6e6ee1f121c7d59a77f0966670271f9cbddb736978df705b22b78b50d9c3f5",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 4.768371586472142e-08,
+          "max_root_lift_m": 0.0678651021114081,
+          "initial_root_lift_m": 0.007085476698502735
+        },
+        "max_joint_speed_limit_fraction": 0.47685369290837365
+      }
+    },
+    {
+      "file": "26_walk_to_crouch_mirrored.npz",
+      "source": "26_walk_to_crouch.npz",
+      "mirrored_from": "26_walk_to_crouch.npz",
+      "source_sha256": "f3f6517bb29809b8cec9e33453beb777ea26eba0bd6a8488f71b37a42ebe7f9f",
+      "sha256": "eb0eeeaad0f93119f08bce1d553a5a4ae1ef8fbecb79984215d11bceb2648ced",
+      "frames": 354,
+      "fps": 50.0
+    },
+    {
+      "file": "27_crouch_to_walk.npz",
+      "source": "ACCAD/Female1Walking_c3d/B25_-_crouch_to_walk1_stageii.npz",
+      "source_sha256": "da46b25cbb6cf5e44aa1ff9e05685191a64ffe9eb44fc25019d85a4d0edda241",
+      "sha256": "b3a34d2464efa2ed5c441f0e3000d026d615398ee7ede5814d7b1c6bab45633f",
+      "frames": 296,
+      "fps": 50.0,
+      "family": "crouch_transition",
+      "contact_focus": "Load transfer while changing COM height",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "60196d4bd87b826b95fdd2302db49a598e13e17597d5a9d8206269aeedf07e21",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 4.768371586472142e-08,
+          "max_root_lift_m": 0.07384192464352304,
+          "initial_root_lift_m": 0.048329684946093215
+        },
+        "max_joint_speed_limit_fraction": 0.5392040207964243
+      }
+    },
+    {
+      "file": "27_crouch_to_walk_mirrored.npz",
+      "source": "27_crouch_to_walk.npz",
+      "mirrored_from": "27_crouch_to_walk.npz",
+      "source_sha256": "b3a34d2464efa2ed5c441f0e3000d026d615398ee7ede5814d7b1c6bab45633f",
+      "sha256": "2384b8b57ac913072ec2acc2a4b83cfa6bd5bea69f6164e99b233d40da3a026b",
+      "frames": 296,
+      "fps": 50.0
+    },
+    {
+      "file": "28_stand_to_walk_back.npz",
+      "source": "ACCAD/Female1Walking_c3d/B4_-_stand_to_walk_back_stageii.npz",
+      "source_sha256": "4d67d5a5d98042a8706a22ad5249d254af488a3fcf6fa25f8cc554a9ddd6bafb",
+      "sha256": "68a1717ec9ec496e9a27d853dc165130e0c589456289bf4925cdfaf7ac5c12bc",
+      "frames": 377,
+      "fps": 50.0,
+      "family": "backward_start_stop",
+      "contact_focus": "Different foot rolling and support ordering",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "c0dd9f04934a2b2ef15aa0f19816c1cd2b888ea0550819d97bd6661bfab48074",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.046849677255061485,
+          "initial_root_lift_m": 0.012078056951219822
+        },
+        "max_joint_speed_limit_fraction": 0.3066367622937518
+      }
+    },
+    {
+      "file": "28_stand_to_walk_back_mirrored.npz",
+      "source": "28_stand_to_walk_back.npz",
+      "mirrored_from": "28_stand_to_walk_back.npz",
+      "source_sha256": "68a1717ec9ec496e9a27d853dc165130e0c589456289bf4925cdfaf7ac5c12bc",
+      "sha256": "ed867dafcb1ccefb311a19067d3136b59d07b2e68fce92ab5ca48757d828986c",
+      "frames": 377,
+      "fps": 50.0
+    },
+    {
+      "file": "29_walk_back_to_stand.npz",
+      "source": "ACCAD/Female1Walking_c3d/B6_-_walk_backwards_to_stand_stageii.npz",
+      "source_sha256": "206bc3bf8311ea1626797cc8c3c05cb1d4ff9935c3126b17af73050412127611",
+      "sha256": "9617caae18455179faeaf905b16bc7daa534ab3ba8fd06b2c327ccdb7920a5e7",
+      "frames": 409,
+      "fps": 50.0,
+      "family": "backward_start_stop",
+      "contact_focus": "Different foot rolling and support ordering",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "5bf0c86dcd3412c6be062b2ea74cc6d9619929a16659b7048b2678ad55bfbd25",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 6.700616934197852e-18,
+          "max_root_lift_m": 0.053327461491991864,
+          "initial_root_lift_m": 0.028922540907486145
+        },
+        "max_joint_speed_limit_fraction": 0.3550469159304354
+      }
+    },
+    {
+      "file": "29_walk_back_to_stand_mirrored.npz",
+      "source": "29_walk_back_to_stand.npz",
+      "mirrored_from": "29_walk_back_to_stand.npz",
+      "source_sha256": "9617caae18455179faeaf905b16bc7daa534ab3ba8fd06b2c327ccdb7920a5e7",
+      "sha256": "43bf4dd2bb7709b93f2b300d12cd8bb23a2c90adbbda96431673bfdc237255a6",
+      "frames": 409,
+      "fps": 50.0
+    },
+    {
+      "file": "30_push_kick_left.npz",
+      "source": "ACCAD/Male2MartialArtsKicks_c3d/G17-__push_kick_left_stageii.npz",
+      "source_sha256": "2cbe0c3b62dd8ca7796628d8284d23559db437672b21a534228ff39544a10b62",
+      "sha256": "57483b69a0932cc8ae3b2fe3cdc1a52f1aaccf0d884294e191672d5acf74486d",
+      "frames": 227,
+      "fps": 50.0,
+      "family": "push_kick",
+      "contact_focus": "Single-foot support with release and landing",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "b5fe04bd7098f562e89021e44df72b7f4cd4d44c7a231b3f17c93df8720ce1a9",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 4.768371586472142e-08,
+          "max_root_lift_m": 0.08285648619955253,
+          "initial_root_lift_m": 0.07524940200030102
+        },
+        "max_joint_speed_limit_fraction": 0.7073059086668546
+      }
+    },
+    {
+      "file": "30_push_kick_left_mirrored.npz",
+      "source": "30_push_kick_left.npz",
+      "mirrored_from": "30_push_kick_left.npz",
+      "source_sha256": "57483b69a0932cc8ae3b2fe3cdc1a52f1aaccf0d884294e191672d5acf74486d",
+      "sha256": "03ad115a83e4bf065cc73e7973a16186363154ef47a607daa9858a2fed8a16ec",
+      "frames": 227,
+      "fps": 50.0
+    },
+    {
+      "file": "31_push_kick_right.npz",
+      "source": "ACCAD/Male2MartialArtsKicks_c3d/G18-__push_kick_right_stageii.npz",
+      "source_sha256": "53543b1b1676ebb74713644eda91d5a9801825ef4312cd25615d4129e012f521",
+      "sha256": "cee09547d14eae0f35c0fb87162ef34dae1e44757473fb476915510867611c05",
+      "frames": 142,
+      "fps": 50.0,
+      "family": "push_kick",
+      "contact_focus": "Single-foot support with release and landing",
+      "preparation": {
+        "method": "Existing T1 reference with standard WBC limit/floor preparation",
+        "source": "retargeted_motion/g18_push_kick_right_t1_training.npz",
+        "source_sha256": "7861c80b432e950a2a9736bb8aa852482cf8308280ee1de71482320c24828e85",
+        "timing_scale": 1.0,
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 5.960464477539063e-08,
+          "max_root_lift_m": 0.09109487292421178,
+          "initial_root_lift_m": 0.09109487292421178
+        },
+        "max_joint_speed_limit_fraction": 0.8769157748249375
+      }
+    },
+    {
+      "file": "31_push_kick_right_mirrored.npz",
+      "source": "31_push_kick_right.npz",
+      "mirrored_from": "31_push_kick_right.npz",
+      "source_sha256": "cee09547d14eae0f35c0fb87162ef34dae1e44757473fb476915510867611c05",
+      "sha256": "abb681ea8c81598443912270178534afa3b430f9fef76a58e3d220cfeaefcbd8",
+      "frames": 142,
+      "fps": 50.0
+    },
+    {
+      "file": "32_forward_walk_bk.npz",
+      "source": "HDM05/bk/HDM_bk_01-01_01_120_stageii.npz",
+      "source_sha256": "9d201e3c6220ec3a850e94f1282f3961672d753c4f8b309e1c0d166405bb2b59",
+      "sha256": "0e8f2fd1027027133a4c411ecdad68b6baa310564e6aef831720493d9d2c8bed",
+      "frames": 249,
+      "fps": 50.0,
+      "family": "walking_take",
+      "contact_focus": "Crop foot rolling, turns, and low-clearance sections after inspection",
+      "preparation": {
+        "method": "Existing T1 reference with standard WBC limit/floor preparation",
+        "source": "retargeted_motion/hdm_bk_normal_walk_repaired_t1_training.npz",
+        "source_sha256": "084a9ee96f499fe9c270f0b76d7b4f134602c0a2408c6e99e6be6c7e855b0479",
+        "timing_scale": 1.0,
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.0,
+          "initial_root_lift_m": 0.0
+        },
+        "max_joint_speed_limit_fraction": 0.5262762039541037
+      }
+    },
+    {
+      "file": "32_forward_walk_bk_mirrored.npz",
+      "source": "32_forward_walk_bk.npz",
+      "mirrored_from": "32_forward_walk_bk.npz",
+      "source_sha256": "0e8f2fd1027027133a4c411ecdad68b6baa310564e6aef831720493d9d2c8bed",
+      "sha256": "3c30952936cbc0ffc0d2365bde7a45f80e4dd440870d645733d6e06ce569dbd8",
+      "frames": 249,
+      "fps": 50.0
+    },
+    {
+      "file": "33_walk_dg.npz",
+      "source": "HDM05/dg/HDM_dg_01-01_01_120_stageii.npz",
+      "source_sha256": "84f8e7d3568883562a53779956ce0ee22a469830059c7e76fd985cfc7f5bfbaf",
+      "sha256": "6da9f60f16062264cb4165c6f17cedd7d9880dc9385f201b0145055dac688aa3",
+      "frames": 399,
+      "fps": 50.0,
+      "family": "walking_take",
+      "contact_focus": "Alternate actor for development or held-out evaluation",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "841029300f5ead5f958a435f8b324e1d860f333cb358bb0573aa7c5755696739",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 1.2551718770624966e-17,
+          "max_root_lift_m": 0.08460367651170413,
+          "initial_root_lift_m": 0.025311698059021975
+        },
+        "max_joint_speed_limit_fraction": 0.5122652770011603
+      },
+      "source_crop_seconds": [
+        12,
+        20
+      ]
+    },
+    {
+      "file": "33_walk_dg_mirrored.npz",
+      "source": "33_walk_dg.npz",
+      "mirrored_from": "33_walk_dg.npz",
+      "source_sha256": "6da9f60f16062264cb4165c6f17cedd7d9880dc9385f201b0145055dac688aa3",
+      "sha256": "9d1f24dc41169dc24052fc99cb0a8e0035fc83283872d37495f046e9bfb12972",
+      "frames": 399,
+      "fps": 50.0
+    },
+    {
+      "file": "34_dance_mm.npz",
+      "source": "HDM05/mm/HDM_mm_03-01_01_120_stageii.npz",
+      "source_sha256": "4cffecaee55bff3bf4132fa8869f90fd546b598713025c9d4dcf3639fc53b6ce",
+      "sha256": "3d7e6b8f72513c847b28ee3795ed52c76ee2d0774fd0880abf5859dc27498504",
+      "frames": 399,
+      "fps": 50.0,
+      "family": "dance_take",
+      "contact_focus": "Explore pivots and possible sliding; no verified slide yet",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "c81d7c5ba8d6180a512c75bb2df0cb7cd708f3828c78229ce1afd7bbc6e54c38",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.06918548544609551,
+          "initial_root_lift_m": 0.03279653836799432
+        },
+        "max_joint_speed_limit_fraction": 0.4925276884174247
+      },
+      "source_crop_seconds": [
+        50,
+        58
+      ]
+    },
+    {
+      "file": "34_dance_mm_mirrored.npz",
+      "source": "34_dance_mm.npz",
+      "mirrored_from": "34_dance_mm.npz",
+      "source_sha256": "3d7e6b8f72513c847b28ee3795ed52c76ee2d0774fd0880abf5859dc27498504",
+      "sha256": "87310938e3d8b0863299db7468307edae7f4557a19b76ffce4e93ee91b43dd55",
+      "frames": 399,
+      "fps": 50.0
+    },
+    {
+      "file": "35_dance_tr.npz",
+      "source": "HDM05/tr/HDM_tr_03-01_01_120_stageii.npz",
+      "source_sha256": "42b3610d51b6f926ff4dccde84ed6e3aa6cd2daa701b3d439ea395120abbbc3a",
+      "sha256": "e75bf42246d7bc48393293317896548cc5007deea31c9e4d7e02969c5efa288f",
+      "frames": 399,
+      "fps": 50.0,
+      "family": "dance_take",
+      "contact_focus": "Explore pivots and possible sliding; no verified slide yet",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "8188b61cade92ba5c24253fa7ff8821838d5ce27c7f6492a3690bda2492ca721",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 0.0,
+          "max_root_lift_m": 0.08208810060368107,
+          "initial_root_lift_m": 0.049617113482591076
+        },
+        "max_joint_speed_limit_fraction": 0.5247582909391112
+      },
+      "source_crop_seconds": [
+        58,
+        66
+      ]
+    },
+    {
+      "file": "35_dance_tr_mirrored.npz",
+      "source": "35_dance_tr.npz",
+      "mirrored_from": "35_dance_tr.npz",
+      "source_sha256": "e75bf42246d7bc48393293317896548cc5007deea31c9e4d7e02969c5efa288f",
+      "sha256": "1a586d05464c588bd967662210865f635e8a7f69960762315a7c5411e8fad526",
+      "frames": 399,
+      "fps": 50.0
+    },
+    {
+      "file": "36_natural_standing.npz",
+      "source": "ACCAD/Female1General_c3d/A1_-_Stand_stageii.npz",
+      "source_sha256": "e807da291efd5081c585f9b1286a969f7b170583cd94bda0de911ef2e145a32a",
+      "sha256": "92301295991a4c4473a5568855495005fa7266d43060ab00a5d1e82bfc29aea9",
+      "frames": 149,
+      "fps": 50.0,
+      "family": "standing_baseline",
+      "contact_focus": "Short natural standing baseline",
+      "preparation": {
+        "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+        "timing_scale": 1.0,
+        "raw_retarget_sha256": "bd5946a250e3e0ebeacede4a56a42c5875998f4adda80fa1bf5efb272611cdd8",
+        "preparation": {
+          "version": 1,
+          "joint_values_clamped": 0,
+          "max_joint_correction_rad": 1.3660543262152618e-17,
+          "max_root_lift_m": 0.010061342861907081,
+          "initial_root_lift_m": 0.008683001975139736
+        },
+        "max_joint_speed_limit_fraction": 0.044440369028311597
+      }
+    },
+    {
+      "file": "36_natural_standing_mirrored.npz",
+      "source": "36_natural_standing.npz",
+      "mirrored_from": "36_natural_standing.npz",
+      "source_sha256": "92301295991a4c4473a5568855495005fa7266d43060ab00a5d1e82bfc29aea9",
+      "sha256": "e92f2a0ea14e637f243c1dedc0aaf412ef2d43858562444c2988ebb2d468070b",
+      "frames": 149,
       "fps": 50.0
     }
   ],
+  "total_frames": 24210,
   "sampling": "equal probability per episode reset",
-  "sway": {
-    "tilted_side": "left",
-    "tilt_deg": 15.0,
-    "stance_widen_m": 0.02,
-    "com_sway_m": 0.02,
-    "torso_roll_deg": 2.4,
-    "period_s": 4.0,
-    "duration_s": 10.0
-  },
-  "note": "Reference motions only. Manual force schedules are not used as labels. Update this directory and manifest when the requested training selection changes; synchronize it to the training machine before starting a run.",
-  "purpose": "Active user-selected training motions. Keep all requested training references directly in this directory and keep training commands pointed here.",
-  "total_frames": 6491,
+  "purpose": "Contact-focused references selected for FORCE2; every original has a sagittal mirror, including walking.",
+  "note": "Reference motions only; no manual force labels. New motions are kinematically prepared, not demonstrated policy successes.",
+  "selection_config": "configs/contact_training_sources.json",
+  "selection_config_sha256": "d5647222093351c7afbfa4febd52dfcfadc4809f1281a47fec1b500eac49be77",
+  "removed": [
+    "04_narrow_sway.npz",
+    "04_narrow_sway_mirrored.npz"
+  ],
   "mirroring": {
     "generator": "scripts/mirror_training_motions.py",
     "plane": "world XZ (y = 0)",
-    "excluded": [
-      "01_walk.npz"
-    ],
-    "mirrored_clips": 7,
+    "excluded": [],
+    "mirrored_clips": 35,
     "transform": "Swap left/right limbs and reflect poses, velocities and directional metadata."
   }
 }

@@ -26,7 +26,7 @@ class WBCForceRewardsCfg:
     # Sum over eight corners: one-quarter the old mean weight gives twice its cost.
     swing_force = RewardTermCfg(func=SwingForcePenalty, weight=-.125,
                                params={'clearance_start': .001, 'clearance_full': .005, 'unload_lead_time': 0.})
-    action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.5)
+    action_change = RewardTermCfg(func=ForceActionChangePenalty, weight=-.6)
     # Like swing_force, sum with one-quarter the old mean weight doubles its cost.
     false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.1,
                               params={'clearance_start': .001, 'clearance_full': .005})

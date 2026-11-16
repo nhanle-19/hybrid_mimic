@@ -1,6 +1,7 @@
 """Mixed motion boundaries, independent normalization, and balanced sampling."""
 import ast
 import importlib.util
+import json
 import math
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -95,17 +96,21 @@ def test_equal_clip_sampling_survives_length_and_failure_imbalance(tmp_path):
 
 def test_bundled_motions_have_expected_identity_and_order():
     motion = library.MotionLibrary(ROOT/'retargeted_motion/training_list')
-    assert motion.clip_names == [
-        '01_walk', '02_tilted_sway', '02_tilted_sway_mirrored',
-        '03_standing', '03_standing_mirrored', '04_narrow_sway', '04_narrow_sway_mirrored',
-        '05_slide', '05_slide_mirrored', '06_sole_rotation', '06_sole_rotation_mirrored',
-        '07_toe_rotation', '07_toe_rotation_mirrored', '09_front_kick', '09_front_kick_mirrored',
-    ]
-    assert motion.clip_lengths.tolist() == [261] + [500]*12 + [115]*2
-    assert motion.time_step_total == 6491
-    with np.load(motion.clip_paths[1]) as sway:
+    config = json.loads((ROOT/'configs/contact_training_sources.json').read_text())
+    originals = config['retained_originals'] + [r['name'] for r in config['sources']]
+    expected = sorted(name+suffix for name in originals for suffix in ('', '_mirrored'))
+    assert motion.clip_names == expected
+    assert len(expected) == 70
+    assert not any('narrow_sway' in name for name in expected)
+    manifest = json.loads((ROOT/'retargeted_motion/training_list/manifest.json').read_text())
+    assert motion.clip_lengths.tolist() == [r['frames'] for r in manifest['motions']]
+    assert motion.time_step_total == manifest['total_frames']
+    for stem in originals:
+        left, right = (motion.clip_names.index(stem+suffix) for suffix in ('', '_mirrored'))
+        assert motion.clip_lengths[left] == motion.clip_lengths[right]
+    with np.load(motion.clip_paths[motion.clip_names.index('02_tilted_sway')]) as sway:
         assert sway['tilted_side'].item() == 'left'
         assert sway['tilt_deg'].item() == 15.
-    with np.load(motion.clip_paths[2]) as sway:
+    with np.load(motion.clip_paths[motion.clip_names.index('02_tilted_sway_mirrored')]) as sway:
         assert sway['tilted_side'].item() == 'right'
         assert sway['tilt_deg'].item() == 15.

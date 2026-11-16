@@ -13,6 +13,8 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0'),
+                    default='Tracking-WBC-FORCE-T1-v0')
 parser.add_argument('--checkpoint', required=True, type=Path)
 parser.add_argument('--motion_file', required=True, type=Path)
 parser.add_argument('--output', required=True, type=Path)
@@ -52,6 +54,8 @@ def normalized(value):
         return {k: normalized(v) for k, v in value.items()}
     if isinstance(value, (tuple, list)):
         return [normalized(v) for v in value]
+    if callable(value):
+        return f'{value.__module__}:{value.__name__}'
     if isinstance(value, str):
         if value.lower() in ('true', 'false', 'null', 'none'):
             return {'true': True, 'false': False, 'null': None, 'none': None}[value.lower()]
@@ -63,7 +67,7 @@ def normalized(value):
 
 
 def main():
-    task = 'Tracking-WBC-FORCE-T1-v0'
+    task = args.task
     cfg = load_cfg_from_registry(task, 'env_cfg_entry_point')
     agent = load_cfg_from_registry(task, 'rsl_rl_cfg_entry_point')
     checkpoint = args.checkpoint.resolve()
@@ -79,6 +83,9 @@ def main():
             args.manual_labels, args.motion_file, frame_count, fps, action_dim=8)
     # Refuse silent controller/network drift from the downloaded training run.
     saved = yaml.load((checkpoint.parent/'params/env.yaml').read_text(), Loader=yaml.BaseLoader)
+    for group in ('policy', 'critic'):
+        if normalized(saved['observations'][group]) != normalized(getattr(cfg.observations, group).to_dict()):
+            raise ValueError(f'Training/evaluation observations differ: {group}')
     current_action = cfg.actions.wbc_force.to_dict()
     for key in ('controller', 'friction', 'batched_max_iterations', 'batched_tolerance', 'residual_tolerance'):
         if normalized(saved['actions']['wbc_force'][key]) != normalized(current_action[key]):
@@ -176,7 +183,8 @@ def main():
         reason = f'{type(error).__name__}: {error}'
         raise
     finally:
-        metadata = dict(checkpoint=str(checkpoint), checkpoint_sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+        metadata = dict(task=task, training_observations_match=True,
+            checkpoint=str(checkpoint), checkpoint_sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
             motion_file=str(args.motion_file.resolve()), motion_sha256=hashlib.sha256(args.motion_file.read_bytes()).hexdigest(),
             expected_frames=frame_count, attempted_frames=len(records), completed=completed,
             failure_reason=reason, terminations=terminations, seed=args.seed,

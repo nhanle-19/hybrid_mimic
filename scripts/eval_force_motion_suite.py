@@ -22,6 +22,8 @@ def newest_checkpoint(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0'),
+                        default='Tracking-WBC-FORCE-T1-v0')
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--motions', type=Path, default=ROOT/'retargeted_motion/training_list')
     parser.add_argument('--output', type=Path, required=True)
@@ -35,7 +37,8 @@ def main():
         ('posture_position_gain', args.posture_kp), ('posture_velocity_gain', args.posture_kd)) if value is not None}
     if any(not math.isfinite(value) or value <= 0 for value in overrides.values()):
         parser.error('Posture gains must be finite and positive')
-    checkpoint = (args.checkpoint or newest_checkpoint(ROOT/'logs/rsl_rl/t1_wbc_force')).resolve()
+    experiment = 't1_wbc_force2' if 'FORCE2' in args.task else 't1_wbc_force'
+    checkpoint = (args.checkpoint or newest_checkpoint(ROOT/'logs/rsl_rl'/experiment)).resolve()
     motions = args.motions.resolve()
     manifest = json.loads((motions/'manifest.json').read_text())
     listed = {m['file'] for m in manifest['motions']}
@@ -52,6 +55,7 @@ def main():
         output = args.output.resolve()/path.stem
         output.mkdir(exist_ok=True)
         cmd = [sys.executable, str(ROOT/'scripts/rsl_rl/eval_force_contacts.py'),
+               '--task', args.task,
                '--checkpoint', str(checkpoint), '--motion_file', str(path),
                '--output', str(output), '--device', args.device, '--headless']
         for flag in ('posture_kp', 'posture_kd'):
@@ -67,6 +71,8 @@ def main():
             raise FileExistsError(f'{output}: choose a new output or explicitly use --skip_existing')
         if args.skip_existing and (output/'diagnostics.npz').exists():
             meta = json.loads((output/'run.json').read_text())
+            if meta.get('task', 'Tracking-WBC-FORCE-T1-v0') != args.task:
+                raise ValueError('Existing results belong to a different task')
             if meta['checkpoint_sha256'] != checkpoint_hash or meta['motion_sha256'] != digest:
                 raise ValueError('Existing results belong to a different checkpoint or reference')
             if meta.get('controller_overrides', {}) != overrides:
@@ -87,7 +93,7 @@ def main():
             entry.update(exit_code=status.returncode, elapsed_s=time.monotonic()-started)
         entry['diagnostics_present'] = (output/'diagnostics.npz').exists()
         runs.append(entry)
-        (args.output/'suite.json').write_text(json.dumps(dict(checkpoint=str(checkpoint),
+        (args.output/'suite.json').write_text(json.dumps(dict(task=args.task, checkpoint=str(checkpoint),
             checkpoint_sha256=checkpoint_hash, controller_overrides=overrides,
             policy_source='manual_labels' if args.manual_labels_root else 'learned_policy',
             qp_contact_model='sole_corners',

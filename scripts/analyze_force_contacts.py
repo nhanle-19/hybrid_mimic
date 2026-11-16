@@ -302,11 +302,14 @@ def main():
         + (f'<p>Individual corner outputs and predicted forces: <a href="{r["motion"]}/corner_policy.csv">download CSV</a>.</p>'
            f'<img src="{r["motion"]}/corner_policy.png" style="max-width:1200px;width:100%">'
            if (args.directory/r['motion']/'corner_policy.png').exists() else '') for r in results)
-    page = '<!doctype html><meta charset="utf-8"><title>FORCE contact evaluation</title><style>body{font:15px system-ui;margin:30px;max-width:1400px}td,th{padding:8px;border:1px solid #ccc}table{border-collapse:collapse}th{background:#eee}</style>'
+    task = results[0]['metadata'].get('task', 'Tracking-WBC-FORCE-T1-v0')
+    family = 'FORCE2' if 'FORCE2' in task else 'FORCE'
+    page = f'<!doctype html><meta charset="utf-8"><title>{family} contact evaluation</title><style>body{{font:15px system-ui;margin:30px;max-width:1400px}}td,th{{padding:8px;border:1px solid #ccc}}table{{border-collapse:collapse}}th{{background:#eee}}</style>'
     checkpoint_name = Path(results[0]['metadata']['checkpoint']).name
     manual = results[0]['metadata'].get('policy_source') == 'manual_labels'
     title = 'Manual caps with current training PD' if manual else checkpoint_name
     page += f'<h1>{html.escape(title)}: contact evaluation</h1><p>{sum(r["completed"] for r in results)}/{len(results)} motions completed.</p>'
+    page += f'<p>Task: {html.escape(task)}<br>Checkpoint: {html.escape(results[0]["metadata"]["checkpoint"])}</p>'
     if manual:
         cfg = results[0]['metadata']['evaluation_controller']
         page += (f'<p>Posture Kp={cfg["posture_position_gain"]:g}, Kd={cfg["posture_velocity_gain"]:g}; '
@@ -348,7 +351,7 @@ def main():
                 value = subset[i, j]
                 ax.text(j, i, '—' if np.isnan(value) else f'{value:.1f}', ha='center', va='center',
                         color='white' if value > vmax*.6 else 'black', fontsize=9)
-    fig.suptitle('Contact preservation per motion | deterministic FORCE evaluation', fontsize=12)
+    fig.suptitle(f'Contact preservation per motion | deterministic {family} evaluation', fontsize=12)
     fig.text(.5, .01, 'Touch: lowest sole <=1 mm in reference contact (penetration >30 mm excluded). Swing: sole >=5 mm and Fz <=5 N.\nTouch does not imply load; zero policy cap does not imply lost contact. Metrics cover attempted prefixes; — = no evaluated reference swing.', ha='center', fontsize=8)
     fig.tight_layout(rect=(0, .09, 1, .93))
     fig.savefig(args.directory/'overview.png', dpi=160)

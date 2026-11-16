@@ -1,4 +1,4 @@
-"""Add sagittal (left/right) mirrors of the active T1 clips, except walking.
+"""Add sagittal (left/right) mirrors of every active T1 clip, including walking.
 
 Run with NumPy only: python scripts/mirror_training_motions.py
 Original references remain byte-for-byte intact; reruns verify existing mirrors.
@@ -16,7 +16,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DIRECTORY = ROOT / 'retargeted_motion/training_list'
 MODEL_PATH = ROOT / 'source/whole_body_tracking/whole_body_tracking/assets/booster/t1/wbc_acc_dynamics.json'
-EXCLUDED = {'01_walk.npz'}
+EXCLUDED = set()
 SUFFIX = '_mirrored'
 
 
@@ -76,6 +76,15 @@ def mirror_motion(values):
     for key in ('slide_displacement_m', 'yaw_angle_rad', 'support_root_shift_y_m', 'support_root_roll_deg'):
         if key in result:
             result[key] *= -1
+    # Walking metadata uses [left, right] ordering, independently of body_names.
+    for key in ('stance_mask', 'initial_stance_blend', 'final_stance_blend'):
+        if key in result:
+            result[key] = result[key][:, [1, 0]]
+    if 'target_foot_position_w' in result:
+        result['target_foot_position_w'] = result['target_foot_position_w'][:, [1, 0]] * np.asarray([1, -1, 1])
+    if 'target_foot_rotation_w' in result:
+        reflection = np.diag([1, -1, 1])
+        result['target_foot_rotation_w'] = reflection @ result['target_foot_rotation_w'][:, [1, 0]] @ reflection
     return result
 
 
@@ -131,4 +140,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     result = generate(args.directory)
     print(f"Training selection: {len(result['motions'])} clips, {result['total_frames']} frames; "
-          f"{result['mirroring']['mirrored_clips']} non-walking mirrors verified.")
+          f"{result['mirroring']['mirrored_clips']} mirrors verified (including walking).")
