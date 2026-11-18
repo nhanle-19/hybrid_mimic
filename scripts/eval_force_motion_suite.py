@@ -22,7 +22,8 @@ def newest_checkpoint(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0'),
+    parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0',
+                                          'Tracking-WBC-FORCE2-DR-T1-v0'),
                         default='Tracking-WBC-FORCE-T1-v0')
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--motions', type=Path, default=ROOT/'retargeted_motion/training_list')
@@ -38,6 +39,8 @@ def main():
     if any(not math.isfinite(value) or value <= 0 for value in overrides.values()):
         parser.error('Posture gains must be finite and positive')
     experiment = 't1_wbc_force2' if 'FORCE2' in args.task else 't1_wbc_force'
+    if '-DR-' in args.task:
+        experiment = 't1_wbc_force2_dr'
     checkpoint = (args.checkpoint or newest_checkpoint(ROOT/'logs/rsl_rl'/experiment)).resolve()
     motions = args.motions.resolve()
     manifest = json.loads((motions/'manifest.json').read_text())

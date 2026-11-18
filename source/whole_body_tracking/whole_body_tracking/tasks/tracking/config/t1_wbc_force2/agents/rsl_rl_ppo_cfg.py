@@ -16,3 +16,8 @@ class T1WBCForcePPORunnerCfg(T1WBCACCPPORunnerCfg):
     experiment_name = 't1_wbc_force2'
     policy = T1WBCACCPPORunnerCfg().policy.replace(
         class_name='rsl_rl.modules.FixedStdActorCritic', init_noise_std=1.0, noise_std_type='scalar')
+
+
+@configclass
+class T1WBCForceDRPPORunnerCfg(T1WBCForcePPORunnerCfg):
+    experiment_name = 't1_wbc_force2_dr'

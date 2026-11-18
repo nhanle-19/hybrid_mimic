@@ -83,10 +83,14 @@ def test_invalid_gain_rejected_before_starting_evaluation(tmp_path, monkeypatch,
         suite.main()
 
 
-def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monkeypatch):
+@pytest.mark.parametrize('task,experiment', [
+    ('Tracking-WBC-FORCE2-T1-v0', 't1_wbc_force2'),
+    ('Tracking-WBC-FORCE2-DR-T1-v0', 't1_wbc_force2_dr'),
+])
+def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monkeypatch, task, experiment):
     suite = load('eval_force_motion_suite')
     monkeypatch.setattr(suite, 'ROOT', tmp_path)
-    checkpoint = tmp_path/'logs/rsl_rl/t1_wbc_force2/2026-11-14/model_6999.pt'
+    checkpoint = tmp_path/'logs/rsl_rl'/experiment/'2026-11-14/model_6999.pt'
     checkpoint.parent.mkdir(parents=True)
     checkpoint.write_bytes(b'force2')
     motions = tmp_path/'motions'
@@ -96,7 +100,6 @@ def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monke
     (motions/'manifest.json').write_text(json.dumps({
         'motions': [{'file': 'motion.npz', 'sha256': motion_hash}]}))
     output = tmp_path/'results'
-    task = 'Tracking-WBC-FORCE2-T1-v0'
     arguments = ['suite', '--task', task, '--motions', str(motions), '--output', str(output)]
     monkeypatch.setattr(sys, 'argv', arguments)
     calls = []

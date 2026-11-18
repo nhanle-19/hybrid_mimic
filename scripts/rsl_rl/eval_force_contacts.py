@@ -13,7 +13,8 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0'),
+parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0',
+                                      'Tracking-WBC-FORCE2-DR-T1-v0'),
                     default='Tracking-WBC-FORCE-T1-v0')
 parser.add_argument('--checkpoint', required=True, type=Path)
 parser.add_argument('--motion_file', required=True, type=Path)
@@ -107,6 +108,18 @@ def main():
     agent_config = agent.to_dict()
     for key in ('policy', 'empirical_normalization', 'algorithm'):
         agent_config[key] = saved_agent[key]
+    if '-DR-' in task:
+        # Verify the training observation layout above, then evaluate against
+        # the same nominal benchmark as FORCE2. Record this scope explicitly.
+        nominal = load_cfg_from_registry('Tracking-WBC-FORCE2-T1-v0', 'env_cfg_entry_point')
+        cfg.events = nominal.events
+        cfg.scene.robot = nominal.scene.robot
+        cfg.scene.terrain = nominal.scene.terrain
+        cfg.actions.wbc_force.domain_randomization = False
+        cfg.commands.motion.pose_range = {}
+        cfg.commands.motion.velocity_range = {}
+        cfg.commands.motion.joint_position_range = (0., 0.)
+        cfg.observations.policy.actual_state.noise = None
     cfg.seed = args.seed
     cfg.sim.device = args.device
     cfg.scene.num_envs = 1
@@ -184,6 +197,8 @@ def main():
         raise
     finally:
         metadata = dict(task=task, training_observations_match=True,
+            domain_randomization_training=bool(normalized(saved['actions']['wbc_force'].get('domain_randomization', False))),
+            domain_randomization_evaluation=False,
             checkpoint=str(checkpoint), checkpoint_sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
             motion_file=str(args.motion_file.resolve()), motion_sha256=hashlib.sha256(args.motion_file.read_bytes()).hexdigest(),
             expected_frames=frame_count, attempted_frames=len(records), completed=completed,

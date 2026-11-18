@@ -33,6 +33,8 @@ class MotionOnPolicyRunner(OnPolicyRunner):
         if metrics is None:
             return super().log(locs, width, pad)
         values = metrics.drain()
+        for name, value in getattr(self.env.unwrapped, '_force2_domain_randomization_metrics', {}).items():
+            values['DomainRandomization/'+name] = value
         policy = self.alg.policy
         std = policy.std if hasattr(policy, 'std') else policy.log_std.exp()
         per_foot = std.reshape(2, -1)

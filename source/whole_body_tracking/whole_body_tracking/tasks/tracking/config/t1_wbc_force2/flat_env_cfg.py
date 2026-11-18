@@ -78,6 +78,16 @@ class T1WBCForceEnvCfg(T1WBCACCEnvCfg):
 
 
 @configclass
+class T1WBCForceRandomizedEnvCfg(T1WBCForceEnvCfg):
+    """Small physical, reset, sensor and latency variations for robust FORCE2 training."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        from .domain_randomization import configure_randomization
+        configure_randomization(self)
+
+
+@configclass
 class T1WBCForceEnvEvalCfg(T1WBCACCEnvEvalCfg):
     def __post_init__(self):
         super().__post_init__()

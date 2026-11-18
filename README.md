@@ -438,6 +438,64 @@ previous runs with the 10-second timeout truncated clips longer than 500 frames.
 Clip completion still uses the framework's `time_out=True` flag for PPO
 bootstrapping; that flag marks a successful reference boundary, not a time limit.
 
+#### Mild FORCE2 domain randomization
+
+Use `Tracking-WBC-FORCE2-DR-T1-v0` for the randomized training variant. Its
+settings are in
+[`domain_randomization.py`](source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_wbc_force2/domain_randomization.py).
+Actuator PD gains stay zero. The original FORCE2 task retains its nominal setup.
+
+| Quantity | Default variation |
+| --- | --- |
+| Static/dynamic contact friction | 0.55–0.65; dynamic never exceeds static |
+| Contact restitution | 0–0.02; DR floor uses max combination so this variation takes effect |
+| Body mass / inertia | Mass ±3%; inertia tensor scaled ±5%, independently per body/environment |
+| Trunk center of mass | ±3 mm per axis |
+| Initial root pose | XY ±5 mm, Z +0–3 mm; roll/pitch ±0.01 rad, yaw ±0.02 rad |
+| Initial root velocity | XY ±0.03 m/s, Z ±0.01 m/s; angular velocity ±0.03 rad/s |
+| Initial joint position | ±0.005 rad, clipped to joint limits |
+| Actor joint observation noise | Position ±0.005 rad; velocity ±0.05 rad/s |
+| Actor root observation noise | Position ±2 mm; orientation up to 0.005 rad; linear/angular velocity ±0.02 m/s or rad/s |
+| Actuation delay | 0–2 physics steps (0–4 ms), sampled per actuator group/environment at reset |
+| Velocity pushes | XY ±0.1 m/s and yaw ±0.1 rad/s, every 4–8 s |
+| External wrench pulses | ±5 N and ±0.5 Nm per trunk-local axis for 0.1 s, every 6–10 s |
+| Joint static friction / armature | Coefficient 0–0.005; armature 0–0.0005 kg·m² |
+
+Physical parameters are sampled at startup, while reset perturbations and delays
+are resampled each episode. Observation noise affects the actor's measured state
+before history stacking; references, critic observations and QP state inputs stay
+clean. Orientation noise preserves unit quaternions. The QP retains nominal
+inertias and friction 0.6, so the policy experiences small model errors. Startup
+validation checks the nominal asset before sampling, then verifies the exact
+sampled parameters and kinematic frames before applying torque. It does not
+disable model checks or change the solver's feasibility tolerances.
+
+From the repository root with `hybridmimic` active and W&B logged in:
+
+```bash
+CUDA_VISIBLE_DEVICES=7 WANDB_MODE=online python -u scripts/rsl_rl/train.py \
+  --task Tracking-WBC-FORCE2-DR-T1-v0 \
+  --motion_dir retargeted_motion/training_spider \
+  --device cuda:0 --num_envs 1024 --max_iterations 30000 --headless \
+  --logger wandb --log_project_name hybrid_mimic \
+  --run_name force2_spider_dr --seed 42 \
+  agent.resume=false
+```
+
+Checkpoints go to `logs/rsl_rl/t1_wbc_force2_dr/`. W&B receives sampled parameter
+ranges and disturbance counts under `DomainRandomization/*`; the full settings
+are saved in each run's `params/env.yaml`. Hydra overrides can adjust individual
+fields, for example
+`env.events.model_parameters.params.mass_scale_range=[0.98,1.02]` or
+`env.observations.policy.actual_state.noise.joint_position=0.003`.
+
+For the contact evaluation suite, pass `--task Tracking-WBC-FORCE2-DR-T1-v0`
+and `--motions retargeted_motion/training_spider`. It selects the DR checkpoint
+folder and evaluates nominal physics without observation noise or disturbances,
+recording that scope in the report metadata. The `Tracking-WBC-FORCE2-DR-T1-Eval-v0`
+task also uses nominal evaluation physics. These are baseline evaluations, not
+randomized robustness sweeps.
+
 The sway reference does not enforce a positive action floor or prescribe cap
 variation; it supplies no manual action labels. ONNX exports include clip
 boundaries in `motion_clips_json`; their `time_step` input uses the global
