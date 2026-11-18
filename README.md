@@ -22,6 +22,12 @@ cost or authority-dependent force/moment bounds. Physical contact constraints
 and fixed normal-force caps remain, with separate training and evaluation tasks.
 The original PD and centroidal-hybrid tasks remain available.
 
+Local evaluation artifacts are listed in [the output index](outputs/index.html).
+It links the latest retained evaluations, videos, retargeting results and
+diagnostics. The [cleanup manifest](outputs/cleanup_manifest_20261117.json)
+records removed experiments and retained artifact hashes. These local outputs
+are ignored by Git and are not included in a fresh clone.
+
 ## Setup
 
 Use a dedicated Conda environment named `hybridmimic` with the following stack:
@@ -261,10 +267,10 @@ in this folder and its `manifest.json`; do not redirect training to a different
 collection directory. The loader reads all `.npz` files directly in this folder.
 Copy the updated folder to the training machine before starting a remote run.
 
-The current selection contains **70 clips, totaling 24,210 frames at 50 Hz**:
-35 originals and a left/right mirror of every original, including all walking
-clips. Narrow sway and its mirror are removed. The set retains walk-in-place,
-wide tilted sway, standing, sliding, sole/toe rotation, and the G3 front kick,
+The current selection contains **68 clips, totaling 23,210 frames at 50 Hz**:
+34 originals and a left/right mirror of every original, including all walking
+clips. Static standing (`03_standing`), narrow sway, and their mirrors are removed.
+The set retains walk-in-place, wide tilted sway, sliding, sole/toe rotation, and the G3 front kick,
 and adds the 28 contact-focused sources in `configs/contact_training_sources.json`:
 turns, stance changes, bounce, cross punches, natural sway, walking starts/stops,
 side steps, advance/retreat, dodges, crouch transitions, backward walking,
@@ -322,7 +328,7 @@ iteration budget limits each replan, not the duration of the output clip.
 # One-time setup; the cloned shooting-for-contact directory must be present.
 conda env create --prefix .venvs/dsms --file configs/dsms_environment.yml
 
-# All 70 clips; CPU optimization can take substantial time.
+# All active clips; CPU optimization can take substantial time.
 .venvs/dsms/bin/python scripts/retarget_force2_dsms.py \
   --output outputs/force2_dsms_full70 --workers 8 --threads 2
 
@@ -337,7 +343,7 @@ joint frames, collision shapes and torque limits come from the project model.
 SPIDER optimizes bounded position-servo targets; this does not run the FORCE2
 policy or its QP. The upstream clone is unchanged.
 
-The adapter processes all 70 current references, including mirrors. It keeps
+The adapter processes all 68 current references, including mirrors. It keeps
 their exact durations and 50 Hz output frame counts. Planning uses a 2 ms
 simulation step, quaternion-aware reference interpolation and a shorter final
 control interval when necessary. Penetration, tracking error and falls do not
@@ -346,7 +352,7 @@ exceptions are logged, and the batch moves on to the next motion.
 
 ```bash
 # From hybrid_mimic/; the prepared Python 3.12 environment is .venvs/spider.
-# All 70 clips, one clip at a time with 2,048 parallel GPU samples per plan.
+# All active clips, one clip at a time with 2,048 parallel GPU samples per plan.
 .venvs/spider/bin/python -u scripts/retarget_force2_spider.py \
   --device cuda:0 --output outputs/force2_spider_full70
 
@@ -365,7 +371,7 @@ inputs are not replaced. GPU kernels compile on the first run and are cached.
 `--smoke-test` explicitly checks only 0.04 seconds and does not export a full
 training clip. Runtime dependencies are in `configs/spider_runtime.txt`.
 
-For an H100 server, build a portable bundle containing all 70 references,
+For an H100 server, build a portable bundle containing all active references,
 the project T1 USD layers and limits, the adapter, and the exact SPIDER Python
 source revision. It excludes environments, training logs and GPU caches.
 
@@ -546,7 +552,7 @@ server command above.
 
 | Setting | Default server training value |
 | --- | --- |
-| Reference | `retargeted_motion/training_list/` (70 clips, 24,210 frames) |
+| Reference | `retargeted_motion/training_list/` (68 clips, 23,210 frames) |
 | Environments / iterations | 1,024 / 30,000 |
 | Rollout / PPO minibatch | 24 steps per environment; 24,576 transitions per rollout; 6,144 per minibatch |
 | PPO epochs / minibatches | 5 / 4 |
@@ -738,8 +744,9 @@ error 6.73 cm, touchdown 0.82 s late, and final sole corner height 6.09 mm. Stri
 tracking does not fully pass. `force/validation.json`, `force/verification.json`
 and `force/short_reanchor_audit.json` report these separately. The current input,
 video, diagnostics and replay command are together in `force/`; no partial-video
-or alternate-method folder remains. Obsolete results and the old label generator
-are archived under `outputs/turn_reanchor_cpu_tuning_20261023/`.
+or alternate-method folder remains. The selected trial, final independent replay,
+inputs and rendered video remain under `outputs/turn_reanchor_cpu_tuning_20261023/`;
+superseded trials and backups were removed during output cleanup.
 
 The ACCAD Female1 A11 **forward crawl** case is
 `eval_data/reference_crawl_forward/`, with shared `reference.npz` and
@@ -786,11 +793,12 @@ and `force/verification.json` record the current scope and comparison.
 
 `force/` contains full planned/executed labels, diagnostics, validation, plots,
 `video.mp4`, `preview.gif`, and the exact replay command. `case.json` and
-`reproduction.json` describe the case and its provenance. Raw tuning trials
-remain outside `eval_data`, in `outputs/crawl_smooth_tuning_20261023/` and
-`outputs/crawl_soft_landing_20261023/`.
-Earlier work is retained in `outputs/crawl_force_archive_20261023/` and
-`outputs/crawl_preliminary_20261023/`. See the [diagnosis and limitations](docs/crawl_force_diagnosis.md)
+`reproduction.json` describe the case and its provenance. Selected solver audits,
+comparison summaries and the soft-landing replay remain outside `eval_data`, in
+`outputs/crawl_smooth_tuning_20261023/` and `outputs/crawl_soft_landing_20261023/`.
+Superseded tuning trials and case backups were removed; the
+[output index](outputs/index.html) lists retained evidence.
+See the [diagnosis and limitations](docs/crawl_force_diagnosis.md)
 for contact evidence and solver-check scope. Existing two-foot Gym tasks remain separate.
 
 The [crawl overlay video](eval_data/reference_crawl_forward/force/overlay/video.mp4)

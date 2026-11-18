@@ -31,8 +31,9 @@ and `force/verification.json` record the current scope and comparison.
 
 The earlier vertical-weight and friction comparisons in `force/bounce_comparison*`,
 `force/before_after*` and `force/friction_tuning.json` describe the archived table.
-The current video is `force/video.mp4`. Earlier complete runs and this correction
-are retained under `outputs/manual_contact_fix_20261023/`.
+The current video is `force/video.mp4`. The selected correction rollout, its inputs
+and comparison metrics remain under `outputs/manual_contact_fix_20261023/`;
+superseded trials and backups were removed during output cleanup.
 
 The case follows the other evaluation cases:
 

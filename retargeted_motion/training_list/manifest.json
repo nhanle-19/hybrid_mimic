@@ -35,23 +35,6 @@
       "fps": 50.0
     },
     {
-      "file": "03_standing.npz",
-      "source": "eval_data/toy_standing/reference.npz",
-      "collection_source": "retargeted_motion/labeled_force/motions/03_standing.npz",
-      "sha256": "738a0330786ccc38162d16ac0543c060ece49e792af3988d511cb62ecbbd85b2",
-      "frames": 500,
-      "fps": 50.0
-    },
-    {
-      "file": "03_standing_mirrored.npz",
-      "source": "03_standing.npz",
-      "mirrored_from": "03_standing.npz",
-      "source_sha256": "738a0330786ccc38162d16ac0543c060ece49e792af3988d511cb62ecbbd85b2",
-      "sha256": "ad550f7dca7a0a03a25289c936b2e594d3ce0275aa7a18c4c6833c4c141218e2",
-      "frames": 500,
-      "fps": 50.0
-    },
-    {
       "file": "05_slide.npz",
       "source": "eval_data/toy_left_foot_slide/reference.npz",
       "collection_source": "retargeted_motion/labeled_force/motions/05_slide.npz",
@@ -1040,13 +1023,15 @@
       "fps": 50.0
     }
   ],
-  "total_frames": 24210,
+  "total_frames": 23210,
   "sampling": "equal probability per episode reset",
   "purpose": "Contact-focused references selected for FORCE2; every original has a sagittal mirror, including walking.",
   "note": "Reference motions only; no manual force labels. New motions are kinematically prepared, not demonstrated policy successes.",
   "selection_config": "configs/contact_training_sources.json",
-  "selection_config_sha256": "d5647222093351c7afbfa4febd52dfcfadc4809f1281a47fec1b500eac49be77",
+  "selection_config_sha256": "bb989dde63571ea84671ef50e7ab73de6b103e03bcb326c6f49e61a1ca78d05c",
   "removed": [
+    "03_standing.npz",
+    "03_standing_mirrored.npz",
     "04_narrow_sway.npz",
     "04_narrow_sway_mirrored.npz"
   ],
@@ -1054,7 +1039,7 @@
     "generator": "scripts/mirror_training_motions.py",
     "plane": "world XZ (y = 0)",
     "excluded": [],
-    "mirrored_clips": 35,
+    "mirrored_clips": 34,
     "transform": "Swap left/right limbs and reflect poses, velocities and directional metadata."
   }
 }

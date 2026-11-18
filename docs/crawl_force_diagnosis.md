@@ -23,8 +23,10 @@ table's exact-repeat evidence is historical. `force/manual_weight_fix.json`
 and `force/verification.json` record the current scope and comparison.
 
 The following sections preserve the earlier tuning investigation. Their numerical
-results and exact-repeat claims refer to the pre-correction table archived in
-`outputs/manual_contact_fix_20261023/before/crawl_force/`.
+results and exact-repeat claims refer to the pre-correction table. Its comparison
+metrics remain in `outputs/manual_contact_fix_20261023/comparison.json`; the old
+case backup was removed during output cleanup. The [output index](../outputs/index.html)
+lists retained evidence.
 
 ## Softer hand-contact transitions
 
@@ -52,7 +54,7 @@ physics steps are now recorded through `--record-contact-substeps`. Each of
 the three full-rate reruns exactly matches its original trajectory, torques
 and QP-rate force samples, proving that added measurement did not change
 control. `force/friction_tuning.json` contains all seven comparisons and full-rate
-checks; raw trials and analysis scripts are in
+checks; the three full-rate reruns, summary metrics and analysis scripts are in
 `outputs/crawl_friction_tuning_20261023/`.
 
 The previous full-duration run rose 3.87 cm above the reference and dropped at
@@ -81,9 +83,10 @@ priority as the main contributor to the observed bounce; lowering hand limits
 alone did not remove it. The body remains physically torque-driven, with no
 pose resets, external support, or altered collision restitution.
 
-Evidence and all three candidates are in `outputs/crawl_soft_landing_20261023/`.
-The preceding complete case is backed up in `before_tuning/case/`. The standard
-case contains the new actual video and a synchronized previous/tuned comparison.
+Comparison metrics and the selected independent replay remain in
+`outputs/crawl_soft_landing_20261023/`. Superseded candidate rollouts and the
+preceding case backup were removed. The standard case contains the actual video
+and a synchronized previous/tuned comparison.
 These comparisons used the archived crawl-specific gains. Current runtime
 defaults share all gains and weights with FORCE training; see
 [replay instructions](crawl_force_qp.md#replay-and-verification) for explicit
@@ -210,8 +213,9 @@ subset of the earlier 69-test run, not 42 additional distinct tests.
 
 The selected case is `eval_data/reference_crawl_forward/`. Its `validation.json`
 links geometry, dynamic feasibility, replay, gates and numerical audits;
-`reproduction.json` records inputs and commands. All raw new trials and before/
-after contact evidence are in `outputs/crawl_smooth_tuning_20261023/`.
+`reproduction.json` records inputs and commands. Selected anchoring and solver
+audits, comparison summaries and contact evidence remain in
+`outputs/crawl_smooth_tuning_20261023/`; superseded raw trials were removed.
 
 Earlier investigations are historical, using the unsmoothed reference:
 
@@ -224,6 +228,5 @@ Earlier investigations are historical, using the unsmoothed reference:
 - With the preliminary 0.5 m cutoff, friction 0.6 / 0.2 / 0.1 reached
   5.857 / 7.618 / 8.068 seconds. These are superseded by the current mu=0.2 run.
 
-Those trials are in `outputs/crawl_force_archive_20261023/` and
-`outputs/crawl_preliminary_20261023/`. The earlier detailed diagnosis is retained
+Those superseded raw trials were removed during output cleanup. The earlier detailed diagnosis is retained
 in `outputs/crawl_smooth_tuning_20261023/before_smoothing/docs/`.

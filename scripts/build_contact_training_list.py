@@ -180,7 +180,8 @@ def assemble(config, work):
                     note='Reference motions only; no manual force labels. New motions are kinematically prepared, not demonstrated policy successes.',
                     selection_config='configs/contact_training_sources.json',
                     selection_config_sha256=sha(ROOT/'configs/contact_training_sources.json'),
-                    removed=['04_narrow_sway.npz', '04_narrow_sway_mirrored.npz'])
+                    removed=[stem+suffix+'.npz' for stem in config['removed_originals']
+                             for suffix in ('', '_mirrored')])
     (stage/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     manifest = generate(stage)
     (work/'preparation.json').write_text(json.dumps(reports, indent=2)+'\n')

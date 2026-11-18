@@ -1,4 +1,4 @@
-"""Package the 70 input motions and exact T1 dependencies for a GPU server."""
+"""Package the active input motions and exact T1 dependencies for a GPU server."""
 import argparse
 import hashlib
 import io

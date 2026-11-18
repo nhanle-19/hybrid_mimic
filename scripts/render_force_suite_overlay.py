@@ -2,7 +2,7 @@
 
 Uses recorded PhysX poses in their original world frame; never reruns dynamics.
 Example: MUJOCO_GL=egl python scripts/render_force_suite_overlay.py \
-    outputs/force_full_contact_eval_20261101 --output outputs/force_full_contact_eval_20261101/overlay
+    outputs/force_full_contact_eval_20261113 --output outputs/force_full_contact_eval_20261113/overlay
 """
 import argparse
 import hashlib

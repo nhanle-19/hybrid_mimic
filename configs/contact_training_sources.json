@@ -5,13 +5,13 @@
   "retained_originals": [
     "01_walk",
     "02_tilted_sway",
-    "03_standing",
     "05_slide",
     "06_sole_rotation",
     "07_toe_rotation",
     "09_front_kick"
   ],
   "removed_originals": [
+    "03_standing",
     "04_narrow_sway"
   ],
   "mirror_all": true,

@@ -1,0 +1,1238 @@
+{
+  "motions": [
+    {
+      "file": "01_walk.npz",
+      "sha256": "528ff09bf13741ddc6f8acc7172b3432f198021c044ad80e4738a7fbf1f812e4",
+      "frames": 261,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/01_walk.npz",
+      "reference": "retargeted_motion/training_list/01_walk.npz",
+      "reference_sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79",
+      "assessment": {
+        "complete": true,
+        "source_frames": 261,
+        "root_rmse_m": 0.7648799752875534,
+        "wall_seconds": 102.80696139100473,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "01_walk_mirrored.npz",
+      "sha256": "fdf819f2a929cbba035b5f626b163040231a9c2f8bda366ec700d2f82d93845d",
+      "frames": 261,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/01_walk_mirrored.npz",
+      "reference": "retargeted_motion/training_list/01_walk_mirrored.npz",
+      "reference_sha256": "f741ccf8e10b554a97d77a055c51e3bfee420eecadecd6be1e2036fc38e3b461",
+      "assessment": {
+        "complete": true,
+        "source_frames": 261,
+        "root_rmse_m": 0.8173857094735922,
+        "wall_seconds": 99.19353626499651,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "01_walk.npz"
+    },
+    {
+      "file": "02_tilted_sway.npz",
+      "sha256": "6a43245ad689ee009d648df426ccbb5abdd6a4fa1dd74edf42f8967443b795de",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/02_tilted_sway.npz",
+      "reference": "retargeted_motion/training_list/02_tilted_sway.npz",
+      "reference_sha256": "35cececc299976aced21b09a766242bfca8ceb1ba6883ae4deb7b1f727dddeea",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.9221539419045923,
+        "wall_seconds": 71.47453857195796,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "02_tilted_sway_mirrored.npz",
+      "sha256": "7894dab0dae414f10f82d99ab36e3cfe5089589e1be31b03b32adafb3c5e74ab",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/02_tilted_sway_mirrored.npz",
+      "reference": "retargeted_motion/training_list/02_tilted_sway_mirrored.npz",
+      "reference_sha256": "82126b7187c46651f8c8e453ee22c5e452cd434ed4d1a3a87ac266c91d33c336",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.9311936964658305,
+        "wall_seconds": 70.83458592800889,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "02_tilted_sway.npz"
+    },
+    {
+      "file": "05_slide.npz",
+      "sha256": "2a857cf31544f5d1f054c12c61ffd3a34a02f3b7fbc55480706bc4e21f8dbcde",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/05_slide.npz",
+      "reference": "retargeted_motion/training_list/05_slide.npz",
+      "reference_sha256": "ef53d4b3569419d76bad77c8f221d15b7e5a11bec40d64ad839ea830abeaf177",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.9059582495496873,
+        "wall_seconds": 125.67688240902498,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "05_slide_mirrored.npz",
+      "sha256": "09619ef20e4b8aeb3ea8f5e16fdf147e8126e80a3ff7389771807c95a234659b",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/05_slide_mirrored.npz",
+      "reference": "retargeted_motion/training_list/05_slide_mirrored.npz",
+      "reference_sha256": "df368d6a543f03558764b733381825a607d3acf31165d939effbe00cc9103303",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.8913687690929566,
+        "wall_seconds": 128.60328169702552,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "05_slide.npz"
+    },
+    {
+      "file": "06_sole_rotation.npz",
+      "sha256": "0bb82b5c601184d0da71a0ac9b147d5ddf6755f942f8b2ceeb271b3654ad36c1",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/06_sole_rotation.npz",
+      "reference": "retargeted_motion/training_list/06_sole_rotation.npz",
+      "reference_sha256": "d6cd5b0985ec6543680bab5f29a12ee82369d4a2e54c64065056aa6786580812",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.8986285429517513,
+        "wall_seconds": 82.76690279803006,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "06_sole_rotation_mirrored.npz",
+      "sha256": "3cff98038bb4222d93dd19f694a002f1eb12aeec519bb833d03999a82f10430e",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/06_sole_rotation_mirrored.npz",
+      "reference": "retargeted_motion/training_list/06_sole_rotation_mirrored.npz",
+      "reference_sha256": "c51d6836f8b34eb11058e693436b07f18b689c85fd630e14418a55e179f00296",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.8998396697479261,
+        "wall_seconds": 132.26497159304563,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "06_sole_rotation.npz"
+    },
+    {
+      "file": "07_toe_rotation.npz",
+      "sha256": "87190596591cfe50d8107e1a7c2c4d51b70771ae94d52d3345b7f2f8dccc64da",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/07_toe_rotation.npz",
+      "reference": "retargeted_motion/training_list/07_toe_rotation.npz",
+      "reference_sha256": "c7c5055bfecfafdca0c0bacc9fef831ccc40a800eb3aefc3399aca5c3fac7e80",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.8573362427175918,
+        "wall_seconds": 114.443021943036,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "07_toe_rotation_mirrored.npz",
+      "sha256": "325f6c039b09b722716b6eb87c52374ef22545c41e33d00ad562bfa2e313d10d",
+      "frames": 500,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/07_toe_rotation_mirrored.npz",
+      "reference": "retargeted_motion/training_list/07_toe_rotation_mirrored.npz",
+      "reference_sha256": "7812e13ebc89564211e6f704e93f6b4b5cc7f6741feb1fa578bb68eac66217df",
+      "assessment": {
+        "complete": true,
+        "source_frames": 500,
+        "root_rmse_m": 0.8312830541663039,
+        "wall_seconds": 110.38981741300086,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "07_toe_rotation.npz"
+    },
+    {
+      "file": "08_turn_right.npz",
+      "sha256": "f05abe43abfbdb08a7a315ba92370da47bc9403c041b47b87edf8526bb139f18",
+      "frames": 661,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/08_turn_right.npz",
+      "reference": "retargeted_motion/training_list/08_turn_right.npz",
+      "reference_sha256": "10d01f81a65cb48b64db1c9e3fff534b03b0c92fd5d4c159fbd3ab805b349b79",
+      "assessment": {
+        "complete": true,
+        "source_frames": 661,
+        "root_rmse_m": 0.8475013908749777,
+        "wall_seconds": 257.59773394296644,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "08_turn_right_mirrored.npz",
+      "sha256": "c15c847772e17f8226d136f7860b70a0ad03a1a51d37a4f3d9a9c60107dbdce3",
+      "frames": 661,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/08_turn_right_mirrored.npz",
+      "reference": "retargeted_motion/training_list/08_turn_right_mirrored.npz",
+      "reference_sha256": "234dc77aa670ef729f9f6087302f0fffd73f8c551880bde75060a92e40a336bf",
+      "assessment": {
+        "complete": true,
+        "source_frames": 661,
+        "root_rmse_m": 0.8359563367022139,
+        "wall_seconds": 116.45313939399784,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "08_turn_right.npz"
+    },
+    {
+      "file": "09_front_kick.npz",
+      "sha256": "5b92b85bc694d9b3d00d71fb583bc6cec5b6b30a6c73b2646d7229898eca3604",
+      "frames": 115,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/09_front_kick.npz",
+      "reference": "retargeted_motion/training_list/09_front_kick.npz",
+      "reference_sha256": "17be89fe87d12b02823033dae34d6fe58b09f4071ede451a509222c4faaaf58e",
+      "assessment": {
+        "complete": true,
+        "source_frames": 115,
+        "root_rmse_m": 0.686032865198847,
+        "wall_seconds": 49.48094419401605,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "09_front_kick_mirrored.npz",
+      "sha256": "8c81069e9db847697996cb7bc5270f862db27d9aee01abc611df98218c1997b5",
+      "frames": 115,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/09_front_kick_mirrored.npz",
+      "reference": "retargeted_motion/training_list/09_front_kick_mirrored.npz",
+      "reference_sha256": "952469cbe66ec681c1d02a3565c433ea8e9f822af56df304ec14f2207185bf83",
+      "assessment": {
+        "complete": true,
+        "source_frames": 115,
+        "root_rmse_m": 0.6480303177544651,
+        "wall_seconds": 48.20535256201401,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "09_front_kick.npz"
+    },
+    {
+      "file": "10_turn_left.npz",
+      "sha256": "42d747596cddafd5b7d163b39fce5690cf556070f91ea3c9238b1352e3e47657",
+      "frames": 654,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/10_turn_left.npz",
+      "reference": "retargeted_motion/training_list/10_turn_left.npz",
+      "reference_sha256": "b77ff6304a2102bb8de60b60e8c4acbb09a2041768f47f1ef3ede7a56b6681f8",
+      "assessment": {
+        "complete": true,
+        "source_frames": 654,
+        "root_rmse_m": 0.6922786176355618,
+        "wall_seconds": 198.78458157600835,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "10_turn_left_mirrored.npz",
+      "sha256": "e0b59f2e6dde8414b346c84ac279b086eefc11d22e664df6e8ed0e1339c36073",
+      "frames": 654,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/10_turn_left_mirrored.npz",
+      "reference": "retargeted_motion/training_list/10_turn_left_mirrored.npz",
+      "reference_sha256": "185d34549ee33250ea090da9ff9b2b807ed863cfb4651f3653b3ad2d0713007c",
+      "assessment": {
+        "complete": true,
+        "source_frames": 654,
+        "root_rmse_m": 0.695771329382072,
+        "wall_seconds": 197.94569119100925,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "10_turn_left.npz"
+    },
+    {
+      "file": "11_switch_stance.npz",
+      "sha256": "762a5a8aebae7d73ad227a50e070bfd77b33d970dd9cdd853524dae0ec5f349b",
+      "frames": 152,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/11_switch_stance.npz",
+      "reference": "retargeted_motion/training_list/11_switch_stance.npz",
+      "reference_sha256": "9fcad35e9366268307c08b946604d05985bbb54b34c78d893c257cb2b4424f52",
+      "assessment": {
+        "complete": true,
+        "source_frames": 152,
+        "root_rmse_m": 0.6073010078815203,
+        "wall_seconds": 47.84544679801911,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "11_switch_stance_mirrored.npz",
+      "sha256": "a48b3e53bf31043e58b53c9eda8f7af2ac82664f75af0ccd735593eae5bc29f0",
+      "frames": 152,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/11_switch_stance_mirrored.npz",
+      "reference": "retargeted_motion/training_list/11_switch_stance_mirrored.npz",
+      "reference_sha256": "c7791b88eba5d8c31f3832d33f133c7f9245bdc209b84b9e2fbef361cd67be58",
+      "assessment": {
+        "complete": true,
+        "source_frames": 152,
+        "root_rmse_m": 0.6359081679388887,
+        "wall_seconds": 53.355799229000695,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "11_switch_stance.npz"
+    },
+    {
+      "file": "12_stand_to_ready.npz",
+      "sha256": "b2770a82e64e13f82a56734bff53d90ba810bc5cb80d16d844c2cac3e50a92a2",
+      "frames": 147,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/12_stand_to_ready.npz",
+      "reference": "retargeted_motion/training_list/12_stand_to_ready.npz",
+      "reference_sha256": "1d4a78db9eb60d59ff4db96bbaa219d78409ac4bf8418c3b49e32e21d7a9675b",
+      "assessment": {
+        "complete": true,
+        "source_frames": 147,
+        "root_rmse_m": 0.7164323209327829,
+        "wall_seconds": 45.70491576002678,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "12_stand_to_ready_mirrored.npz",
+      "sha256": "acad0c3030eecefb00d1bbe4df31003b5b6162d312a1d01a57a4d660c6de2bb3",
+      "frames": 147,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/12_stand_to_ready_mirrored.npz",
+      "reference": "retargeted_motion/training_list/12_stand_to_ready_mirrored.npz",
+      "reference_sha256": "9eee96a41c2e2d195939d9694b13103d13c43960e9b327a86aeeaa6a0bc16574",
+      "assessment": {
+        "complete": true,
+        "source_frames": 147,
+        "root_rmse_m": 0.6946721292165597,
+        "wall_seconds": 45.43524535704637,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "12_stand_to_ready.npz"
+    },
+    {
+      "file": "13_bounce.npz",
+      "sha256": "13794022d6ed5fc803522bc78051a0867509d43a4a323afca6ef6c4032ab309f",
+      "frames": 377,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/13_bounce.npz",
+      "reference": "retargeted_motion/training_list/13_bounce.npz",
+      "reference_sha256": "ba64178f90875cf8b51dfaaf3b0f3e28bb6f30a49f1e90b4fc109d2007da9f40",
+      "assessment": {
+        "complete": true,
+        "source_frames": 377,
+        "root_rmse_m": 0.8398222259414834,
+        "wall_seconds": 102.4253977049957,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "13_bounce_mirrored.npz",
+      "sha256": "1aa7b0b8222463ef2e850bafce8d1d47327b931fd392791af5038c13642985b1",
+      "frames": 377,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/13_bounce_mirrored.npz",
+      "reference": "retargeted_motion/training_list/13_bounce_mirrored.npz",
+      "reference_sha256": "6ae45b566aebe420af14285298b73a2e80e9a910a47b002c74f3679757699ac4",
+      "assessment": {
+        "complete": true,
+        "source_frames": 377,
+        "root_rmse_m": 0.8427404117940898,
+        "wall_seconds": 102.83905561396386,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "13_bounce.npz"
+    },
+    {
+      "file": "14_cross_punch_left.npz",
+      "sha256": "8d81e2ff8a576ac0f58a5f72c8c01f0905f84ede5a3897c0f4577055158742ab",
+      "frames": 162,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/14_cross_punch_left.npz",
+      "reference": "retargeted_motion/training_list/14_cross_punch_left.npz",
+      "reference_sha256": "db9fd222421ef2641ebb8d87ab14b8be6eafeb32aa32ca8c58d90d58699567ef",
+      "assessment": {
+        "complete": true,
+        "source_frames": 162,
+        "root_rmse_m": 0.7532220899672024,
+        "wall_seconds": 63.672696246998385,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "14_cross_punch_left_mirrored.npz",
+      "sha256": "6316fb47d176560183419b4ba90a71d5414df5f82b2464c758b35d0420d7af1a",
+      "frames": 162,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/14_cross_punch_left_mirrored.npz",
+      "reference": "retargeted_motion/training_list/14_cross_punch_left_mirrored.npz",
+      "reference_sha256": "ea9401d8313ac936f74c981d4b4a38a3f1a714784a5f676b47490700f4a34572",
+      "assessment": {
+        "complete": true,
+        "source_frames": 162,
+        "root_rmse_m": 0.7113374898852144,
+        "wall_seconds": 59.73954555304954,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "14_cross_punch_left.npz"
+    },
+    {
+      "file": "15_cross_punch_right.npz",
+      "sha256": "f334fa8b3109c8126427f91de9105be34a5f82201e7188a2ee843479343ef711",
+      "frames": 122,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/15_cross_punch_right.npz",
+      "reference": "retargeted_motion/training_list/15_cross_punch_right.npz",
+      "reference_sha256": "37e512f1098bfb34200486810d109b0e859ab9d98850b6a243b8e4e6efb1a437",
+      "assessment": {
+        "complete": true,
+        "source_frames": 122,
+        "root_rmse_m": 0.6326347442176046,
+        "wall_seconds": 43.75139380199835,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "15_cross_punch_right_mirrored.npz",
+      "sha256": "d39803252d32cfa431745de07f95036f8e86f05a01e5fc0a5d416dc098eafc31",
+      "frames": 122,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/15_cross_punch_right_mirrored.npz",
+      "reference": "retargeted_motion/training_list/15_cross_punch_right_mirrored.npz",
+      "reference_sha256": "5e95df6343b7c6c4abded8d6b050951e390f0b22d65c4a38ed2f0e8351881403",
+      "assessment": {
+        "complete": true,
+        "source_frames": 122,
+        "root_rmse_m": 0.5908714793010318,
+        "wall_seconds": 49.901045565027744,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "15_cross_punch_right.npz"
+    },
+    {
+      "file": "16_natural_sway_female.npz",
+      "sha256": "6d6dd404613b1ccf165dc9c86d21a1c3f7c29e4c50e04e98093efe601652e361",
+      "frames": 601,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/16_natural_sway_female.npz",
+      "reference": "retargeted_motion/training_list/16_natural_sway_female.npz",
+      "reference_sha256": "6a4d87a69792ce2b832ae04c4d70d483e7aa6b5bbce2d2048dd987b75f2273b4",
+      "assessment": {
+        "complete": true,
+        "source_frames": 601,
+        "root_rmse_m": 0.7525215705554907,
+        "wall_seconds": 223.8796721700346,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "16_natural_sway_female_mirrored.npz",
+      "sha256": "3771e47acb8d524d6d4c2366c2373a6be3b07f6813246e081fffabe3dda3854a",
+      "frames": 601,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/16_natural_sway_female_mirrored.npz",
+      "reference": "retargeted_motion/training_list/16_natural_sway_female_mirrored.npz",
+      "reference_sha256": "c253e888df9c8d6cfb5b9fbb6db03d2ce8c362a9df3978c3bea1b01869caa6fc",
+      "assessment": {
+        "complete": true,
+        "source_frames": 601,
+        "root_rmse_m": 0.855189008455784,
+        "wall_seconds": 214.29889080498833,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "16_natural_sway_female.npz"
+    },
+    {
+      "file": "17_natural_sway_male.npz",
+      "sha256": "33625a776b0375c449758a61fc73525b7b7cfea9b586fb85fdb7b9cb7030718b",
+      "frames": 532,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/17_natural_sway_male.npz",
+      "reference": "retargeted_motion/training_list/17_natural_sway_male.npz",
+      "reference_sha256": "d97a29bfd3195e0e3934397370f35690e6a73bfc4cfe049fe4a272b82cbd7e7e",
+      "assessment": {
+        "complete": true,
+        "source_frames": 532,
+        "root_rmse_m": 0.6452137283306387,
+        "wall_seconds": 156.7573493810487,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "17_natural_sway_male_mirrored.npz",
+      "sha256": "b975d49d920c5f944b286201bbaeb6e919caa0e0901fc823180e2ce4617a30df",
+      "frames": 532,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/17_natural_sway_male_mirrored.npz",
+      "reference": "retargeted_motion/training_list/17_natural_sway_male_mirrored.npz",
+      "reference_sha256": "a114db4e0713cd227714f969c88963b8d7a3ad68ef5ccb32e39f90ab7c0b0804",
+      "assessment": {
+        "complete": true,
+        "source_frames": 532,
+        "root_rmse_m": 0.5785569524898059,
+        "wall_seconds": 165.5177280830103,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "17_natural_sway_male.npz"
+    },
+    {
+      "file": "18_stand_to_walk.npz",
+      "sha256": "9f6b077203fb33dec32aebce2cd24270ecabe4391e752f075898d35ca8bceed2",
+      "frames": 311,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/18_stand_to_walk.npz",
+      "reference": "retargeted_motion/training_list/18_stand_to_walk.npz",
+      "reference_sha256": "efbfc2c5b78e400124aedc9b9cfd3c41b6cc307dd7dfd03a452635082cea28dd",
+      "assessment": {
+        "complete": true,
+        "source_frames": 311,
+        "root_rmse_m": 0.5905503014785074,
+        "wall_seconds": 61.912367010023445,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "18_stand_to_walk_mirrored.npz",
+      "sha256": "4e484bccf4aedb4a761ca395af52feec2fdf940bcc313ef2d893a32f54317f9d",
+      "frames": 311,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/18_stand_to_walk_mirrored.npz",
+      "reference": "retargeted_motion/training_list/18_stand_to_walk_mirrored.npz",
+      "reference_sha256": "803079e6487eb5a59c4e6bcf8f73a6bb32f527068840ba8de672a802263fb012",
+      "assessment": {
+        "complete": true,
+        "source_frames": 311,
+        "root_rmse_m": 0.617767318708585,
+        "wall_seconds": 68.07969564199448,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "18_stand_to_walk.npz"
+    },
+    {
+      "file": "19_walk_to_stand.npz",
+      "sha256": "8ee718073c6a983b68da6069fc69998dad9196df0a87f82e86557da4366da579",
+      "frames": 284,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/19_walk_to_stand.npz",
+      "reference": "retargeted_motion/training_list/19_walk_to_stand.npz",
+      "reference_sha256": "003bd66a42e2f9fc1058f169507a506b26cc97bbcf51990103738f79481ddd04",
+      "assessment": {
+        "complete": true,
+        "source_frames": 284,
+        "root_rmse_m": 0.7241908195536022,
+        "wall_seconds": 54.552682559005916,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "19_walk_to_stand_mirrored.npz",
+      "sha256": "0a7b4e8790affe2c27304d41ee7a2e9a27eb6a5a42fbaef64b177a8ed0918fea",
+      "frames": 284,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/19_walk_to_stand_mirrored.npz",
+      "reference": "retargeted_motion/training_list/19_walk_to_stand_mirrored.npz",
+      "reference_sha256": "9eac1c7289dc5af3f0f19c87d5bff02adee0616e615a2c78e97992165cd0e7b4",
+      "assessment": {
+        "complete": true,
+        "source_frames": 284,
+        "root_rmse_m": 0.7135301775561336,
+        "wall_seconds": 57.68609503499465,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "19_walk_to_stand.npz"
+    },
+    {
+      "file": "20_side_step_left.npz",
+      "sha256": "d63854fef840eae923df15b1e3a0519438e215736a53d5aa779d8b90ff6cf1ca",
+      "frames": 457,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/20_side_step_left.npz",
+      "reference": "retargeted_motion/training_list/20_side_step_left.npz",
+      "reference_sha256": "25ea143f046f2a8f9bb32d20cfac11d7d59131d3ae3c7a5eab3a6ea3fbd1862c",
+      "assessment": {
+        "complete": true,
+        "source_frames": 457,
+        "root_rmse_m": 1.4765171116318039,
+        "wall_seconds": 113.16542710602516,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "20_side_step_left_mirrored.npz",
+      "sha256": "df389322047b994d84d8303ae7ccc08583d3a9ace50f51006d765ab517927080",
+      "frames": 457,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/20_side_step_left_mirrored.npz",
+      "reference": "retargeted_motion/training_list/20_side_step_left_mirrored.npz",
+      "reference_sha256": "6d49fda77e7b71620e423d894141bdf119545e691fc16d1be7a20b8e95d2ed8a",
+      "assessment": {
+        "complete": true,
+        "source_frames": 457,
+        "root_rmse_m": 1.4235472861771719,
+        "wall_seconds": 121.99172086798353,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "20_side_step_left.npz"
+    },
+    {
+      "file": "21_side_step_right.npz",
+      "sha256": "9fefca406c16922172987cc3b4b6e0cd62aae2f96a4851d7a87dca7295476be3",
+      "frames": 416,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/21_side_step_right.npz",
+      "reference": "retargeted_motion/training_list/21_side_step_right.npz",
+      "reference_sha256": "7ed6415d9257213f06ecff02f439244d2e32e832fc815422afed64f23c5bc511",
+      "assessment": {
+        "complete": true,
+        "source_frames": 416,
+        "root_rmse_m": 1.9584347806098508,
+        "wall_seconds": 113.2468853170285,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "21_side_step_right_mirrored.npz",
+      "sha256": "833f988235ebef599d35f8198937c94fbd6c705ae1ee10674f636c51f9d51726",
+      "frames": 416,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/21_side_step_right_mirrored.npz",
+      "reference": "retargeted_motion/training_list/21_side_step_right_mirrored.npz",
+      "reference_sha256": "fee0568d2734d30637c11c513e44af6bcfc28092bec882ed6553d81dd1f9c2d3",
+      "assessment": {
+        "complete": true,
+        "source_frames": 416,
+        "root_rmse_m": 1.925548377481782,
+        "wall_seconds": 170.94677402602974,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "21_side_step_right.npz"
+    },
+    {
+      "file": "22_advance.npz",
+      "sha256": "a2891d2f9cd7c4d88f1706ce35ed4d37e9846e08c243d3028e268eb9e172315b",
+      "frames": 317,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/22_advance.npz",
+      "reference": "retargeted_motion/training_list/22_advance.npz",
+      "reference_sha256": "752102eb3859e55771369e740cc653ce2cec9c0a1e2202dbf35d3a1ffb204e98",
+      "assessment": {
+        "complete": true,
+        "source_frames": 317,
+        "root_rmse_m": 1.056199051335634,
+        "wall_seconds": 102.40658437198726,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "22_advance_mirrored.npz",
+      "sha256": "a00725127ac8ed7b6221b2ffc155af23d62c5c9cdedb318f6e791156ad6cbec7",
+      "frames": 317,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/22_advance_mirrored.npz",
+      "reference": "retargeted_motion/training_list/22_advance_mirrored.npz",
+      "reference_sha256": "92e2ee314f775fc4accc1ea5aee9a7e0676748b44621956acc655336b6abd3c3",
+      "assessment": {
+        "complete": true,
+        "source_frames": 317,
+        "root_rmse_m": 0.9943256344829626,
+        "wall_seconds": 108.92526195803657,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "22_advance.npz"
+    },
+    {
+      "file": "23_retreat.npz",
+      "sha256": "12e7555708f232d679a46dbbaecbae271302dc83f74821f8fb1edfd115ebd732",
+      "frames": 386,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/23_retreat.npz",
+      "reference": "retargeted_motion/training_list/23_retreat.npz",
+      "reference_sha256": "738967c3f62fda255a22bf1a6f84063f9fe5bf5b6833d724fdb02cfc122eca83",
+      "assessment": {
+        "complete": true,
+        "source_frames": 386,
+        "root_rmse_m": 1.2106562688249511,
+        "wall_seconds": 115.52337555296253,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "23_retreat_mirrored.npz",
+      "sha256": "406cb0b5f7aeb4e2cdc3ae58ed1465365fcaa936a1e25b4de18cb3e5e8e14e8c",
+      "frames": 386,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/23_retreat_mirrored.npz",
+      "reference": "retargeted_motion/training_list/23_retreat_mirrored.npz",
+      "reference_sha256": "4a69ba4cb93a821dfc9a3a628f271994e41bbdc52da1763ed10869866a42d10c",
+      "assessment": {
+        "complete": true,
+        "source_frames": 386,
+        "root_rmse_m": 1.2230494975618393,
+        "wall_seconds": 109.61978144501336,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "23_retreat.npz"
+    },
+    {
+      "file": "24_dodge_left.npz",
+      "sha256": "fc31825f19c4425cd7c8b75f67ea7c62c72995cf7ed96bce6ae6718ddf557a4c",
+      "frames": 111,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/24_dodge_left.npz",
+      "reference": "retargeted_motion/training_list/24_dodge_left.npz",
+      "reference_sha256": "ec3a33aee2655c3679ff2c67e8a59701196863396756ae112986b07faa3a24b7",
+      "assessment": {
+        "complete": true,
+        "source_frames": 111,
+        "root_rmse_m": 0.13522478068970037,
+        "wall_seconds": 44.761598151992075,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "24_dodge_left_mirrored.npz",
+      "sha256": "be203a10496271151ef1d62da77104fbe383f572e63081851a4a20fbbb962da5",
+      "frames": 111,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/24_dodge_left_mirrored.npz",
+      "reference": "retargeted_motion/training_list/24_dodge_left_mirrored.npz",
+      "reference_sha256": "243aee850a90da52db59bf37c8e86a4cb0e243dab91b33082b3ba2c57148fd91",
+      "assessment": {
+        "complete": true,
+        "source_frames": 111,
+        "root_rmse_m": 0.16445663381488893,
+        "wall_seconds": 44.91603677201783,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "24_dodge_left.npz"
+    },
+    {
+      "file": "25_dodge_right.npz",
+      "sha256": "59faa713953ce1190b084bf7e630ff8564882e99f2efc55c162e4d519fc87351",
+      "frames": 139,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/25_dodge_right.npz",
+      "reference": "retargeted_motion/training_list/25_dodge_right.npz",
+      "reference_sha256": "691c13fb74329a2aa0e39d22d2b6197629ef35d6514ce3c0d9c3fb74c5d65994",
+      "assessment": {
+        "complete": true,
+        "source_frames": 139,
+        "root_rmse_m": 0.6106372269569815,
+        "wall_seconds": 49.5031817840063,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "25_dodge_right_mirrored.npz",
+      "sha256": "e5f40a122178b137eccb6194a98753ff85a52e41ff139c01d550a2106defe221",
+      "frames": 139,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/25_dodge_right_mirrored.npz",
+      "reference": "retargeted_motion/training_list/25_dodge_right_mirrored.npz",
+      "reference_sha256": "c4f244f05234dcc5830d566a974c5f32607c75466b6e8b3803f7a741827d9c92",
+      "assessment": {
+        "complete": true,
+        "source_frames": 139,
+        "root_rmse_m": 0.6454214520325695,
+        "wall_seconds": 50.54321814602008,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "25_dodge_right.npz"
+    },
+    {
+      "file": "26_walk_to_crouch.npz",
+      "sha256": "8d9585eac171b367a1ebc86a6117e414ddffe1070aa046c4e066ba66a21ba21f",
+      "frames": 354,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/26_walk_to_crouch.npz",
+      "reference": "retargeted_motion/training_list/26_walk_to_crouch.npz",
+      "reference_sha256": "f3f6517bb29809b8cec9e33453beb777ea26eba0bd6a8488f71b37a42ebe7f9f",
+      "assessment": {
+        "complete": true,
+        "source_frames": 354,
+        "root_rmse_m": 0.5545555415091129,
+        "wall_seconds": 75.78542435297277,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "26_walk_to_crouch_mirrored.npz",
+      "sha256": "7f28a6d51babdf2fc661cd06675a2221fe669b194093f4e268a5863c0c8a89d8",
+      "frames": 354,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/26_walk_to_crouch_mirrored.npz",
+      "reference": "retargeted_motion/training_list/26_walk_to_crouch_mirrored.npz",
+      "reference_sha256": "eb0eeeaad0f93119f08bce1d553a5a4ae1ef8fbecb79984215d11bceb2648ced",
+      "assessment": {
+        "complete": true,
+        "source_frames": 354,
+        "root_rmse_m": 0.546243465403785,
+        "wall_seconds": 88.95178840303561,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "26_walk_to_crouch.npz"
+    },
+    {
+      "file": "27_crouch_to_walk.npz",
+      "sha256": "59f173ae3d949457c536d4a792fc925948428a4e74ffa04834b9cd1b96b75c2a",
+      "frames": 296,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/27_crouch_to_walk.npz",
+      "reference": "retargeted_motion/training_list/27_crouch_to_walk.npz",
+      "reference_sha256": "b3a34d2464efa2ed5c441f0e3000d026d615398ee7ede5814d7b1c6bab45633f",
+      "assessment": {
+        "complete": true,
+        "source_frames": 296,
+        "root_rmse_m": 0.8364501528869601,
+        "wall_seconds": 63.67404741200153,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "27_crouch_to_walk_mirrored.npz",
+      "sha256": "458b45ecf0605e7f17b1984f8509fe67542d2cb82d385a197c1028f9454c2c62",
+      "frames": 296,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/27_crouch_to_walk_mirrored.npz",
+      "reference": "retargeted_motion/training_list/27_crouch_to_walk_mirrored.npz",
+      "reference_sha256": "2384b8b57ac913072ec2acc2a4b83cfa6bd5bea69f6164e99b233d40da3a026b",
+      "assessment": {
+        "complete": true,
+        "source_frames": 296,
+        "root_rmse_m": 0.83010940018755,
+        "wall_seconds": 62.2264212059672,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "27_crouch_to_walk.npz"
+    },
+    {
+      "file": "28_stand_to_walk_back.npz",
+      "sha256": "a6c84b83ac7c8050ebe901986472d4afc337d0b942d590ffd7affc96a4e0f0b3",
+      "frames": 377,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/28_stand_to_walk_back.npz",
+      "reference": "retargeted_motion/training_list/28_stand_to_walk_back.npz",
+      "reference_sha256": "68a1717ec9ec496e9a27d853dc165130e0c589456289bf4925cdfaf7ac5c12bc",
+      "assessment": {
+        "complete": true,
+        "source_frames": 377,
+        "root_rmse_m": 0.7793390766035381,
+        "wall_seconds": 72.34308855602285,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "28_stand_to_walk_back_mirrored.npz",
+      "sha256": "4bb8cbe4bc5aebb53e90e816745855f1acdf757ec20ae715585825359908a6f0",
+      "frames": 377,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/28_stand_to_walk_back_mirrored.npz",
+      "reference": "retargeted_motion/training_list/28_stand_to_walk_back_mirrored.npz",
+      "reference_sha256": "ed867dafcb1ccefb311a19067d3136b59d07b2e68fce92ab5ca48757d828986c",
+      "assessment": {
+        "complete": true,
+        "source_frames": 377,
+        "root_rmse_m": 0.8019802916657175,
+        "wall_seconds": 71.07442556403112,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "28_stand_to_walk_back.npz"
+    },
+    {
+      "file": "29_walk_back_to_stand.npz",
+      "sha256": "5f42d42195685c84114027243c2450570d9be71b58a9b1377a321cf01903207b",
+      "frames": 409,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/29_walk_back_to_stand.npz",
+      "reference": "retargeted_motion/training_list/29_walk_back_to_stand.npz",
+      "reference_sha256": "9617caae18455179faeaf905b16bc7daa534ab3ba8fd06b2c327ccdb7920a5e7",
+      "assessment": {
+        "complete": true,
+        "source_frames": 409,
+        "root_rmse_m": 0.9593742123527946,
+        "wall_seconds": 82.53409681597259,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "29_walk_back_to_stand_mirrored.npz",
+      "sha256": "30880caab7f4dcc4473581fcd53a8614effb2325e5ecbfbb00c78f0d04d57741",
+      "frames": 409,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/29_walk_back_to_stand_mirrored.npz",
+      "reference": "retargeted_motion/training_list/29_walk_back_to_stand_mirrored.npz",
+      "reference_sha256": "43bf4dd2bb7709b93f2b300d12cd8bb23a2c90adbbda96431673bfdc237255a6",
+      "assessment": {
+        "complete": true,
+        "source_frames": 409,
+        "root_rmse_m": 0.9621260235146447,
+        "wall_seconds": 77.10524162900401,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "29_walk_back_to_stand.npz"
+    },
+    {
+      "file": "30_push_kick_left.npz",
+      "sha256": "6801468afa118426fae2a4066df0b6cf8452af9604f6e5c53c2143477e3410ab",
+      "frames": 227,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/30_push_kick_left.npz",
+      "reference": "retargeted_motion/training_list/30_push_kick_left.npz",
+      "reference_sha256": "57483b69a0932cc8ae3b2fe3cdc1a52f1aaccf0d884294e191672d5acf74486d",
+      "assessment": {
+        "complete": true,
+        "source_frames": 227,
+        "root_rmse_m": 0.7160008992541415,
+        "wall_seconds": 65.97927078197245,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "30_push_kick_left_mirrored.npz",
+      "sha256": "0d883643b288ad9b0afac3385d512c1b9a719f93e3127073d36576df7d932de3",
+      "frames": 227,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/30_push_kick_left_mirrored.npz",
+      "reference": "retargeted_motion/training_list/30_push_kick_left_mirrored.npz",
+      "reference_sha256": "03ad115a83e4bf065cc73e7973a16186363154ef47a607daa9858a2fed8a16ec",
+      "assessment": {
+        "complete": true,
+        "source_frames": 227,
+        "root_rmse_m": 0.7246561027380339,
+        "wall_seconds": 69.09350132296095,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "30_push_kick_left.npz"
+    },
+    {
+      "file": "31_push_kick_right.npz",
+      "sha256": "9ef37903e5d5c473f58d6b317bc15382fdc06c2fd21c2f01d1bb479afe968f7e",
+      "frames": 142,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/31_push_kick_right.npz",
+      "reference": "retargeted_motion/training_list/31_push_kick_right.npz",
+      "reference_sha256": "cee09547d14eae0f35c0fb87162ef34dae1e44757473fb476915510867611c05",
+      "assessment": {
+        "complete": true,
+        "source_frames": 142,
+        "root_rmse_m": 0.7582604880075693,
+        "wall_seconds": 49.720893271965906,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "31_push_kick_right_mirrored.npz",
+      "sha256": "cda731549c940c8055d9a8d39218a44aebb7e84f1babfbc7fc343f54629cec3f",
+      "frames": 142,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/31_push_kick_right_mirrored.npz",
+      "reference": "retargeted_motion/training_list/31_push_kick_right_mirrored.npz",
+      "reference_sha256": "abb681ea8c81598443912270178534afa3b430f9fef76a58e3d220cfeaefcbd8",
+      "assessment": {
+        "complete": true,
+        "source_frames": 142,
+        "root_rmse_m": 0.7348732156556294,
+        "wall_seconds": 50.94518016499933,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "31_push_kick_right.npz"
+    },
+    {
+      "file": "32_forward_walk_bk.npz",
+      "sha256": "c5994dba5c6398b369008ad4d9054ddf41b524ae2da8abe7f20000c42de7e316",
+      "frames": 249,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/32_forward_walk_bk.npz",
+      "reference": "retargeted_motion/training_list/32_forward_walk_bk.npz",
+      "reference_sha256": "0e8f2fd1027027133a4c411ecdad68b6baa310564e6aef831720493d9d2c8bed",
+      "assessment": {
+        "complete": true,
+        "source_frames": 249,
+        "root_rmse_m": 0.6563732505375385,
+        "wall_seconds": 76.9449630479794,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "32_forward_walk_bk_mirrored.npz",
+      "sha256": "19f0179b5f5e7d5626b1bca78aa7567bcb79521a69353dfd92a801c9db564759",
+      "frames": 249,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/32_forward_walk_bk_mirrored.npz",
+      "reference": "retargeted_motion/training_list/32_forward_walk_bk_mirrored.npz",
+      "reference_sha256": "3c30952936cbc0ffc0d2365bde7a45f80e4dd440870d645733d6e06ce569dbd8",
+      "assessment": {
+        "complete": true,
+        "source_frames": 249,
+        "root_rmse_m": 0.6677558590906565,
+        "wall_seconds": 68.19206131401006,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "32_forward_walk_bk.npz"
+    },
+    {
+      "file": "33_walk_dg.npz",
+      "sha256": "ebfac1e525174e0c68c3c8feca6a14ecf128751a938c9781574eda2aefa8fbc8",
+      "frames": 399,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/33_walk_dg.npz",
+      "reference": "retargeted_motion/training_list/33_walk_dg.npz",
+      "reference_sha256": "6da9f60f16062264cb4165c6f17cedd7d9880dc9385f201b0145055dac688aa3",
+      "assessment": {
+        "complete": true,
+        "source_frames": 399,
+        "root_rmse_m": 0.8135657518576787,
+        "wall_seconds": 131.6663640519837,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "33_walk_dg_mirrored.npz",
+      "sha256": "035d0c8349b4e8aaf738f59ed938376b14f9141b82311ffd9f516156147b12e6",
+      "frames": 399,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/33_walk_dg_mirrored.npz",
+      "reference": "retargeted_motion/training_list/33_walk_dg_mirrored.npz",
+      "reference_sha256": "9d1f24dc41169dc24052fc99cb0a8e0035fc83283872d37495f046e9bfb12972",
+      "assessment": {
+        "complete": true,
+        "source_frames": 399,
+        "root_rmse_m": 0.8185828767919948,
+        "wall_seconds": 130.36079154297477,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "33_walk_dg.npz"
+    },
+    {
+      "file": "34_dance_mm.npz",
+      "sha256": "c46e3648f4190330ab58ebcb1720fe5d89dacdd6af7fd6addb2522563c8d8901",
+      "frames": 399,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/34_dance_mm.npz",
+      "reference": "retargeted_motion/training_list/34_dance_mm.npz",
+      "reference_sha256": "3d7e6b8f72513c847b28ee3795ed52c76ee2d0774fd0880abf5859dc27498504",
+      "assessment": {
+        "complete": true,
+        "source_frames": 399,
+        "root_rmse_m": 0.9220076618631586,
+        "wall_seconds": 110.75576724100392,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "34_dance_mm_mirrored.npz",
+      "sha256": "7d0a9d860c057916e4ad77facdbc48263539fb4aea4c10dd003e398053c9f8c3",
+      "frames": 399,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/34_dance_mm_mirrored.npz",
+      "reference": "retargeted_motion/training_list/34_dance_mm_mirrored.npz",
+      "reference_sha256": "87310938e3d8b0863299db7468307edae7f4557a19b76ffce4e93ee91b43dd55",
+      "assessment": {
+        "complete": true,
+        "source_frames": 399,
+        "root_rmse_m": 0.8518204960857637,
+        "wall_seconds": 123.87978744402062,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "34_dance_mm.npz"
+    },
+    {
+      "file": "35_dance_tr.npz",
+      "sha256": "a034408ca15d3eb9e37b62b4fa67cd7854a8e320f56ee8b325484ab5dc84e5cb",
+      "frames": 399,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/35_dance_tr.npz",
+      "reference": "retargeted_motion/training_list/35_dance_tr.npz",
+      "reference_sha256": "e75bf42246d7bc48393293317896548cc5007deea31c9e4d7e02969c5efa288f",
+      "assessment": {
+        "complete": true,
+        "source_frames": 399,
+        "root_rmse_m": 0.8994871357628099,
+        "wall_seconds": 95.36365583899897,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "35_dance_tr_mirrored.npz",
+      "sha256": "ae9feb35e628026e540b7d482f445396e72a3e680e65f88ea4f9dbba39cf734a",
+      "frames": 399,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/35_dance_tr_mirrored.npz",
+      "reference": "retargeted_motion/training_list/35_dance_tr_mirrored.npz",
+      "reference_sha256": "1a586d05464c588bd967662210865f635e8a7f69960762315a7c5411e8fad526",
+      "assessment": {
+        "complete": true,
+        "source_frames": 399,
+        "root_rmse_m": 0.8909684398331407,
+        "wall_seconds": 86.0384394840803,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "35_dance_tr.npz"
+    },
+    {
+      "file": "36_natural_standing.npz",
+      "sha256": "30f5f2d3a8cc5410a7edfcc4b2bbe3c5d20a7d1ef13ef91ce0bddfa1fb52d125",
+      "frames": 149,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/36_natural_standing.npz",
+      "reference": "retargeted_motion/training_list/36_natural_standing.npz",
+      "reference_sha256": "92301295991a4c4473a5568855495005fa7266d43060ab00a5d1e82bfc29aea9",
+      "assessment": {
+        "complete": true,
+        "source_frames": 149,
+        "root_rmse_m": 0.4278049370450396,
+        "wall_seconds": 36.2650023160968,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      }
+    },
+    {
+      "file": "36_natural_standing_mirrored.npz",
+      "sha256": "b78fbc694e6dd48fc2cd5918bdba68136dbfc79a0b208ce8a280fe39612a0315",
+      "frames": 149,
+      "fps": 50.0,
+      "source": "outputs/force2_spider_light/motions/36_natural_standing_mirrored.npz",
+      "reference": "retargeted_motion/training_list/36_natural_standing_mirrored.npz",
+      "reference_sha256": "e92f2a0ea14e637f243c1dedc0aaf412ef2d43858562444c2988ebb2d468070b",
+      "assessment": {
+        "complete": true,
+        "source_frames": 149,
+        "root_rmse_m": 0.41724552831044526,
+        "wall_seconds": 34.53235726908315,
+        "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2",
+        "gpu": "NVIDIA H100 80GB HBM3"
+      },
+      "mirrored_reference_from": "36_natural_standing.npz"
+    }
+  ],
+  "total_frames": 23210,
+  "sampling": "equal probability per episode reset",
+  "purpose": "Separate SPIDER rollout reference set matching the active FORCE2 training-list selection.",
+  "note": "Unchanged copies of completed SPIDER outputs. No quality filtering or trajectory postprocessing. Mirrored-reference clips were optimized separately and need not be exact mirrors. Feasibility is not established by file validation.",
+  "source_directory": "outputs/force2_spider_light/motions",
+  "source_summary_sha256": "1829f1529ce0c169ff6019e753390301163be4d6b330147681d498cd227b3f25",
+  "selection_manifest": "retargeted_motion/training_list/manifest.json",
+  "selection_manifest_sha256": "e98bf66dbe112e565e593e26a095b00a78637e203444ddb1af39cb5255fbe13e",
+  "generation_source_manifest_sha256": "ddac96f7507130ed9d47312ccb33ff81f7a180a062309674d7ad71b97329074e",
+  "excluded_from_download": [
+    {
+      "file": "03_standing.npz",
+      "reason": "Static-standing clip removed from the active training selection."
+    },
+    {
+      "file": "03_standing_mirrored.npz",
+      "reason": "Static-standing clip removed from the active training selection."
+    }
+  ],
+  "spider": {
+    "settings": {
+      "samples": 512,
+      "iterations": 4,
+      "horizon": 0.4,
+      "sim_dt": 0.002,
+      "no_compile": false
+    },
+    "upstream_commit": "44717007de41cbef7565dff7ff9f4453557a2d3d",
+    "model": "Project Booster T1 USD physics, including inertias, joint geometry, colliders and torque limits",
+    "model_sha256": "0015d4924909cc4237c14396fcde4ec9ff0c7cc50d2caede8fa8c02fd539ffa2"
+  },
+  "copied_utc": "2026-11-18T04:02:20.399913+00:00",
+  "validation": {
+    "byte_identical_to_download": true,
+    "complete_frames": true,
+    "finite_arrays": true,
+    "matches_reference_shapes_and_ordering": true,
+    "unit_quaternions": true,
+    "motion_library_load_passed": true,
+    "clips": 68,
+    "total_frames": 23210,
+    "fps": 50.0,
+    "dynamic_feasibility_checked": false
+  }
+}

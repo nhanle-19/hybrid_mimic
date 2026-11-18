@@ -26,6 +26,7 @@ def validate(directory):
     assert len(names) == len(set(names))
     assert set(names) == {p.name for p in directory.glob('*.npz')}
     assert not any('narrow_sway' in name for name in names)
+    assert not {'03_standing.npz', '03_standing_mirrored.npz'} & set(names)
     originals = [name for name in names if not name.endswith('_mirrored.npz')]
     assert len(names) == 2*len(originals)
     assert all(Path(name).stem+'_mirrored.npz' in names for name in originals)
@@ -94,7 +95,7 @@ def validate(directory):
             grounded_rotating_foot_frames=int((grounded & (yaw_speed > .2)).sum()))
         print(f'Checked {path.name}', flush=True)
     report['checks'] = ['Exact manifest/file set and SHA256', '50 Hz MotionLibrary load with consistent joint/body ordering',
-                        'Every original has a mirror, including walks; narrow sway absent',
+                        'Every original has a mirror, including walks; narrow sway and static standing absent',
                         'All saved mirror arrays equal reflection; reflection twice restores all arrays',
                         'All body poses agree with independent T1 forward kinematics within 2 micrometres',
                         'Unit quaternions and finite training arrays',

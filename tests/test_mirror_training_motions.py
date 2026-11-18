@@ -106,12 +106,14 @@ def test_generator_preserves_originals_includes_walk_and_is_repeatable(tmp_path)
         shutil.copyfile(source, tmp_path / source.name)
     (tmp_path / 'manifest.json').write_text(json.dumps(manifest))
     generated = mirror.generate(tmp_path)
-    assert len(generated['motions']) == 70
+    assert len(generated['motions']) == 68
     assert generated['total_frames'] == 2*sum(r['frames'] for r in manifest['motions'])
     assert generated['mirroring']['excluded'] == []
     for record in manifest['motions']:
         assert (tmp_path / (Path(record['file']).stem+'_mirrored.npz')).exists()
     assert not (tmp_path / '04_narrow_sway.npz').exists()
+    assert not (tmp_path / '03_standing.npz').exists()
+    assert not (tmp_path / '03_standing_mirrored.npz').exists()
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     mirror.generate(tmp_path)
     assert before == {path.name: path.read_bytes() for path in tmp_path.iterdir()}

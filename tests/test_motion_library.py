@@ -100,8 +100,9 @@ def test_bundled_motions_have_expected_identity_and_order():
     originals = config['retained_originals'] + [r['name'] for r in config['sources']]
     expected = sorted(name+suffix for name in originals for suffix in ('', '_mirrored'))
     assert motion.clip_names == expected
-    assert len(expected) == 70
+    assert len(expected) == 68
     assert not any('narrow_sway' in name for name in expected)
+    assert not {'03_standing', '03_standing_mirrored'} & set(expected)
     manifest = json.loads((ROOT/'retargeted_motion/training_list/manifest.json').read_text())
     assert motion.clip_lengths.tolist() == [r['frames'] for r in manifest['motions']]
     assert motion.time_step_total == manifest['total_frames']

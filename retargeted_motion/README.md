@@ -3,6 +3,15 @@
 This directory holds versioned robot motion NPZ files. The source ACCAD dataset
 and SMPL-X body models remain local and ignored by Git.
 
+`training_list/` contains the 68 selected training references. The separate
+`training_spider/` set contains the matching 68 NPZs copied unchanged from
+`outputs/force2_spider_light/motions/`, with the static-standing pair excluded.
+Both use the training array format at 50 Hz, totaling 23,210 frames. The SPIDER
+set's `manifest.json` records hashes, source references, optimizer settings and
+per-clip assessments. File/loader validation does not establish dynamic feasibility.
+Mirrored-reference clips were optimized separately, so their SPIDER outputs need
+not be exact reflections. Select either directory as the motion source.
+
 Generate the G18 right push kick from the repository root in the GMR environment:
 
 ```bash
@@ -15,7 +24,7 @@ python scripts/retarget_smplx.py \
 The exporter requires GMR and SMPL-X body models. Reading the exported arrays
 requires only NumPy, using `np.load(path, allow_pickle=False)`.
 
-Files contain `fps`, `root_pos` (world XYZ), `root_rot` (quaternion XYZW), and
+Raw retarget exports contain `fps`, `root_pos` (world XYZ), `root_rot` (quaternion XYZW), and
 `dof_pos` (GMR robot joint order). G18 uses the 23-joint `booster_t1` model.
 These are inputs to `scripts/csv_to_npz.py`; training requires that additional
 Isaac Lab conversion to produce joint velocities and body transforms.

@@ -42,7 +42,7 @@ def test_training_pose_and_body_velocity_roundtrip(model, tmp_path):
 
 
 def test_independent_replay_rejects_stitched_or_modified_states(model):
-    _, reference, _ = load_reference(ROOT / 'retargeted_motion/training_list/03_standing.npz', model)
+    _, reference, _ = load_reference(ROOT / 'retargeted_motion/labeled_force/motions/03_standing.npz', model)
     d = mujoco.MjData(model)
     d.qpos[:], d.qvel[:] = reference[0, :model.nq], reference[0, model.nq:]
     u = d.qpos[model.jnt_qposadr[model.actuator_trnid[:, 0]]].copy()
