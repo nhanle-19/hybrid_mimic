@@ -71,6 +71,9 @@ class T1WBCForceEnvCfg(T1WBCACCEnvCfg):
         self.commands.motion.class_type = WBCForceTrainingMotion
         # End a training attempt before MotionCommand silently resamples the
         # robot at the clip boundary. Adaptive phase starts remain enabled.
+        # Clip lengths vary: the inherited fixed-duration timeout can truncate
+        # valid references before that boundary. Keep only clip/failure ends.
+        self.terminations.time_out = None
         self.terminations.motion_complete = TerminationTermCfg(func=reference_motion_complete, time_out=True)
 
 

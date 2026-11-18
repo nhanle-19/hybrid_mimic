@@ -1,0 +1,6 @@
+[submodule "shooting-for-contact"]
+	path = shooting-for-contact
+	url = https://github.com/sesteban951/shooting-for-contact.git
+[submodule "spider"]
+	path = spider
+	url = https://github.com/facebookresearch/spider.git

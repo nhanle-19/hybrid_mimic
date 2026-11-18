@@ -1,0 +1,10 @@
+# Python 3.12. Runtime for our headless SPIDER adapter, not the dataset/viewer tools.
+torch==2.9.0
+mujoco==3.7.0
+mujoco-warp==3.7.0.1
+warp-lang==1.12.1
+numpy
+scipy
+hydra-core
+loguru
+usd-core

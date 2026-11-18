@@ -235,3 +235,38 @@ def test_force2_reward_configuration_replaces_joint_tracking(rewards):
     assert config.action_change.weight == -.6
     assert config.false_zero.weight == -.1
     assert config.force_cap_gap.weight == -.08
+
+
+def test_force2_long_clip_reaches_its_boundary_without_fixed_timeout(rewards):
+    tree = ast.parse((SOURCE/'tasks/tracking/config/t1_wbc_force2/flat_env_cfg.py').read_text())
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'T1WBCForceEnvCfg')
+    guards = {name: object() for name in ('anchor_pos', 'anchor_ori', 'qp_infeasible')}
+
+    class BaseConfig:
+        def __post_init__(self):
+            self.episode_length_s = 10.
+            self.terminations = NS(time_out=NS(func=lambda env: env.episode_length_buf >= 500), **guards)
+            self.commands = NS(motion=NS())
+
+    namespace = dict(T1WBCACCEnvCfg=BaseConfig, configclass=lambda cls: cls,
+                     configure_wbc_force=lambda cfg: None, WBCForceTrainingMotion=object(),
+                     TerminationTermCfg=NS, reference_motion_complete=rewards.reference_motion_complete)
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), '<force2_episode_cfg>', 'exec'), namespace)
+    config = namespace['T1WBCForceEnvCfg']()
+    config.__post_init__()
+    assert config.terminations.time_out is None
+    assert all(getattr(config.terminations, name) is guard for name, guard in guards.items())
+    # Mixed clips use their own boundaries, including a 13.22-second clip.
+    # Its final frame must remain reachable beyond the inherited 500-step limit.
+    env = make_env(frames=922, steps=(500, 761))
+    command = env.command_manager.get_term('motion')
+    command.motion.clip_bounds = lambda frame: (torch.where(frame < 661, 0, 661),
+                                               torch.where(frame < 661, 661, 261))
+    env.episode_length_buf = torch.tensor([501, 101])
+    end = config.terminations.motion_complete
+    assert end.func(env).tolist() == [False, False]
+    command.time_steps[:] = torch.tensor([659, 921])
+    assert end.func(env).tolist() == [False, True]
+    command.time_steps[0] = 660
+    assert end.func(env).tolist() == [True, True]
+    assert end.time_out is True  # Successful clip boundaries retain PPO bootstrap semantics.

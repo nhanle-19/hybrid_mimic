@@ -283,6 +283,125 @@ Validate the installed selection with
 The rebuild workflow is `scripts/build_contact_training_list.py`: `retarget`
 uses the GMR environment, `assemble` uses the training environment, and `install`
 requires a passing staging validation and preserves the previous folder as a backup.
+
+For simulation-based refinement with the locally cloned `shooting-for-contact/`
+repository, use `scripts/retarget_force2_dsms.py` in the isolated `.venvs/dsms`
+environment. This uses the existing T1 references as optimization targets;
+the upstream repo takes robot trajectories rather than raw human SMPL-X files.
+This checkout uses CPU MuJoCo and IPOPT, with parallel workers and CPU
+finite-difference threads. It has no CUDA/GPU optimization backend; selecting
+a GPU or setting `CUDA_VISIBLE_DEVICES` will not accelerate this solver.
+`scripts/dsms_t1_model.py` imports the training USD inertias, joint frames,
+collision shapes and actuator limits. It verifies all reference body poses
+against the resulting MuJoCo model before processing the collection. Every
+original and mirror is optimized independently, with friction 0.6 and bounded
+joint torques. The upstream position-servo tracking mode is used by default;
+`--actuator-mode torque` selects its direct-torque variant.
+
+Outputs go under a separate `--output` directory. Each clip records the
+executed continuous simulation, controls, optimizer statuses and residuals,
+independent replay error, tracking error, joint-speed/position violations and
+contact penetration. By default every clip runs to its full source duration;
+penetration, tracking error, joint-limit violations and torso orientation do
+not stop generation. Screening runs afterward. Finite, bounded optimizer
+controls are executed even when IPOPT has not converged, with every status
+recorded. Unusable controls, nonfinite simulation or exceptions can still
+end an attempt early; no missing frames are padded or replaced.
+`candidate.npz` contains the actual simulated motion at 50 Hz without
+post-hoc floor lifting or joint clamping. Check `complete` in its accompanying
+assessment: numerical failures can leave a partial clip.
+`summary.json` and `index.html`
+distinguish completion from passing the physical/tracking screen. A capped
+IPOPT solve is not reported as convergence, and a MuJoCo result is not a
+PhysX or hardware feasibility certificate. No active references are replaced.
+`--resume` reuses completed assessments only when their input hashes and
+settings match. There is no wall-clock timeout per clip. The optimizer's
+iteration budget limits each replan, not the duration of the output clip.
+
+```bash
+# One-time setup; the cloned shooting-for-contact directory must be present.
+conda env create --prefix .venvs/dsms --file configs/dsms_environment.yml
+
+# All 70 clips; CPU optimization can take substantial time.
+.venvs/dsms/bin/python scripts/retarget_force2_dsms.py \
+  --output outputs/force2_dsms_full70 --workers 8 --threads 2
+
+# Adapter checks in the same environment.
+.venvs/dsms/bin/python -m pytest -q tests/test_dsms_t1_adapter.py
+```
+
+For GPU refinement with the cloned `spider/` repository, use
+`scripts/retarget_force2_spider.py`. It runs SPIDER's sampling optimizer and
+MuJoCo Warp backend with **our Booster T1 USD physics**: masses, inertias,
+joint frames, collision shapes and torque limits come from the project model.
+SPIDER optimizes bounded position-servo targets; this does not run the FORCE2
+policy or its QP. The upstream clone is unchanged.
+
+The adapter processes all 70 current references, including mirrors. It keeps
+their exact durations and 50 Hz output frame counts. Planning uses a 2 ms
+simulation step, quaternion-aware reference interpolation and a shorter final
+control interval when necessary. Penetration, tracking error and falls do not
+terminate a clip; there is no wall-clock clip timeout. Numerical/runtime
+exceptions are logged, and the batch moves on to the next motion.
+
+```bash
+# From hybrid_mimic/; the prepared Python 3.12 environment is .venvs/spider.
+# All 70 clips, one clip at a time with 2,048 parallel GPU samples per plan.
+.venvs/spider/bin/python -u scripts/retarget_force2_spider.py \
+  --device cuda:0 --output outputs/force2_spider_full70
+
+# Continue an interrupted batch.
+.venvs/spider/bin/python -u scripts/retarget_force2_spider.py \
+  --device cuda:0 --output outputs/force2_spider_full70 --resume
+```
+
+Outputs: `motions/<name>.npz` contains full-duration clips in our training
+format; `clips/<name>/run.log`, `progress.json`, `rollout.npz` and
+`assessment.json` contain progress and diagnostics. `summary.json` tracks the
+batch. Generation completion is separate from motion quality; active training
+inputs are not replaced. GPU kernels compile on the first run and are cached.
+`--samples` and `--iterations` adjust sampling effort (defaults 2048 and 16).
+`--prepare-only` builds inputs without starting GPU optimization;
+`--smoke-test` explicitly checks only 0.04 seconds and does not export a full
+training clip. Runtime dependencies are in `configs/spider_runtime.txt`.
+
+For an H100 server, build a portable bundle containing all 70 references,
+the project T1 USD layers and limits, the adapter, and the exact SPIDER Python
+source revision. It excludes environments, training logs and GPU caches.
+
+```bash
+# On the laptop, from hybrid_mimic/. Replace USER@SERVER with your SSH destination.
+python3 scripts/package_force2_spider.py
+scp outputs/force2_spider_h100.tar.gz USER@SERVER:~/
+
+# On the server; Python 3.12 with venv, or Conda, must be available.
+cd ~
+tar -xzf force2_spider_h100.tar.gz
+cd force2_spider
+bash scripts/setup_force2_spider.sh
+
+# Run in a shell with an allocated GPU. On Slurm, use a GPU job allocation.
+nvidia-smi
+.venvs/spider/bin/python -u scripts/retarget_force2_spider.py \
+  --device cuda:0 --output outputs/force2_spider_full70 --resume
+```
+
+The setup script installs the tested Torch 2.9.0 CUDA 12.8 build and the pinned
+MuJoCo/Warp versions. It can install on a login node, but GPU execution requires
+a compute allocation. `cuda:0` means the first GPU visible to the job; preserve
+the scheduler's `CUDA_VISIBLE_DEVICES`. For a direct SSH GPU server, prefix the
+run command with `nohup` and append `> spider.log 2>&1 &` to survive disconnects.
+Keep the default sample count and iteration budget initially so timings compare
+with the laptop. H100 performance must be measured on the actual workload.
+The bundled `spider/UPSTREAM_COMMIT` preserves provenance without Git history.
+
+To retrieve results to a separate local output directory:
+
+```bash
+rsync -avP USER@SERVER:~/force2_spider/outputs/force2_spider_full70/ \
+  outputs/force2_spider_h100/
+```
+
 Use:
 
 ```bash
@@ -304,6 +423,15 @@ normalization remain within that clip. `WBCForce/Motion/<clip_name>/*` reports
 separate sampling, completion and cap statistics. Inputs are 590/867 (the
 critic includes all eight previous actions), and the six FORCE reward terms
 are shared across clips.
+
+`Tracking-WBC-FORCE2-T1-v0` disables the inherited fixed-duration termination:
+training attempts end at their selected clip's boundary or on a torso/QP
+failure. Long clips can therefore finish from frame zero without an
+`env.episode_length_s` override. This change applies to future training;
+previous runs with the 10-second timeout truncated clips longer than 500 frames.
+Clip completion still uses the framework's `time_out=True` flag for PPO
+bootstrapping; that flag marks a successful reference boundary, not a time limit.
+
 The sway reference does not enforce a positive action floor or prescribe cap
 variation; it supplies no manual action labels. ONNX exports include clip
 boundaries in `motion_clips_json`; their `time_step` input uses the global

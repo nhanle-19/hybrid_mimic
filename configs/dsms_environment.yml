@@ -1,0 +1,16 @@
+name: dsms-t1
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy>=2.0
+  - scipy>=1.15
+  - cyipopt>=1.5
+  - mujoco>=3.8
+  - matplotlib>=3.8
+  - pillow
+  - pytest
+  - pip
+  - pip:
+      - usd-core
+      - imageio-ffmpeg
