@@ -10,7 +10,7 @@ from .motion import WBCForceTrainingMotion
 from .reward_terms import (
     MotionCompletionReward, SwingForcePenalty,
     ForceActionChangePenalty, FalseZeroPenalty, ForceCapGapPenalty,
-    SolePointTrackingPenalty, COMTrackingPenalty, reference_motion_complete,
+    SolePointTrackingPenalty, COMTrackingPenalty, TrackingGainDeviationPenalty, reference_motion_complete,
 )
 
 
@@ -31,6 +31,8 @@ class WBCForceRewardsCfg:
     false_zero = RewardTermCfg(func=FalseZeroPenalty, weight=-.1,
                               params={'clearance_start': .001, 'clearance_full': .005})
     force_cap_gap = RewardTermCfg(func=ForceCapGapPenalty, weight=-.08)
+    # A sustained 50% deviation of both gains costs 5 of 100 completion points.
+    tracking_gain_deviation = RewardTermCfg(func=TrackingGainDeviationPenalty, weight=-.2)
     # Split the former tracking penalty budget between geometry and balance.
     # Sum standardized squared errors, then bound each cost with 1-exp(-error).
     sole_point_tracking = RewardTermCfg(func=SolePointTrackingPenalty, weight=-.25, params={'error_scale': .05})

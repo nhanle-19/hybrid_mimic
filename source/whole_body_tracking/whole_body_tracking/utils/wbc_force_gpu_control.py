@@ -5,9 +5,11 @@ import torch
 try:
     from .wbc_acc_gpu_control import WBCACCGPUQP
     from .wbc_contact_mapping import decode_force_values, encode_force_values, contact_action_transform, force_action_transform
+    from .wbc_contact_mapping import decode_tracking_gain_scales
 except ImportError:
     from wbc_acc_gpu_control import WBCACCGPUQP
     from wbc_contact_mapping import decode_force_values, encode_force_values, contact_action_transform, force_action_transform
+    from wbc_contact_mapping import decode_tracking_gain_scales
 
 
 def decode_force_actions(actions, contact_count=2):
@@ -69,3 +71,37 @@ class WBCCornerForceGPUQP(WBCACCGPUQP):
 
     def decode_policy(self, actions):
         return decode_force_actions(actions, 8).reshape(-1, 2, 4), None
+
+
+class WBCCornerForcePDGPUQP(WBCCornerForceGPUQP):
+    """FORCE2: eight corner caps followed by shared posture Kp/Kd adjustments."""
+
+    def __init__(self, cfg, *args, **kwargs):
+        super().__init__(cfg, *args, **kwargs)
+        self.learned_gains = cfg.learned_posture_gains
+        self.action_dim = 10 if self.learned_gains else 8
+        if self.learned_gains:
+            if (not math.isfinite(cfg.posture_gain_relative_range)
+                    or not 0 < cfg.posture_gain_relative_range < 1):
+                raise ValueError('posture_gain_relative_range must be finite and strictly between 0 and 1')
+            if not all(math.isfinite(g) and g > 0 for g in
+                       (cfg.posture_position_gain, cfg.posture_velocity_gain)):
+                raise ValueError('Learned posture gains require finite positive default Kp and Kd')
+            self.action_names = (*self.action_names, 'posture_kp', 'posture_kd')
+            self.action_transform = dict(type='force_caps_and_posture_gains',
+                force_caps=dict(indices=list(range(8)), **force_action_transform()),
+                posture_gains=dict(indices=[8, 9], type='relative_tanh',
+                    formula='gain=default*(1+relative_range*tanh(raw_action))',
+                    defaults=[cfg.posture_position_gain, cfg.posture_velocity_gain],
+                    relative_range=cfg.posture_gain_relative_range))
+
+    def decode_policy(self, actions):
+        if actions.ndim != 2 or actions.shape[1] != self.action_dim or not bool(torch.isfinite(actions).all()):
+            raise ValueError(f'FORCE2 expects {self.action_dim} finite policy actions per environment')
+        return super().decode_policy(actions[:, :8])
+
+    def posture_gains(self, actions):
+        if not self.learned_gains:
+            return None
+        defaults = actions.new_tensor([self.cfg.posture_position_gain, self.cfg.posture_velocity_gain])
+        return defaults*decode_tracking_gain_scales(actions[:, 8:], self.cfg.posture_gain_relative_range)

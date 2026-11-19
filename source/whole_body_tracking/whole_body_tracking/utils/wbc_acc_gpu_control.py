@@ -47,15 +47,17 @@ def rotation_log(r):
     return torch.where((cosine < -0.999999)[..., None], axis*angle[..., None], regular)
 
 
-def reference_tasks(state, ref, action, cfg, active):
+def reference_tasks(state, ref, action, cfg, active, posture_gains=None):
     nj = state['M'].shape[-1]-6
     desired_linear = ref['momentum'][:, :3]
     desired_angular = ref['momentum'][:, 3:]
     rate = torch.cat((state['mass']*cfg.com_position_gain*(ref['com']-state['com'])+
                       cfg.linear_momentum_gain*(desired_linear-state['momentum'][:, :3]),
                       cfg.angular_momentum_gain*(desired_angular-state['momentum'][:, 3:])), -1)
-    target = cfg.posture_position_gain*(ref['q'][:, 7:]-state['q'][:, 7:])
-    target += cfg.posture_velocity_gain*(ref['v'][:, 6:]-state['v'][:, 6:])
+    kp = cfg.posture_position_gain if posture_gains is None else posture_gains[:, 0:1]
+    kd = cfg.posture_velocity_gain if posture_gains is None else posture_gains[:, 1:2]
+    target = kp*(ref['q'][:, 7:]-state['q'][:, 7:])
+    target += kd*(ref['v'][:, 6:]-state['v'][:, 6:])
     identity = torch.eye(nj+6, device=action.device, dtype=action.dtype)[6:].expand(len(action), -1, -1)
     tasks = [(identity, target, cfg.posture_weight)]
     pelvis, desired = state['frames']['Trunk'], ref['frames']['Trunk']
@@ -82,6 +84,9 @@ class WBCACCGPUQP:
 
     def decode_policy(self, actions):
         return decode_actions(actions, self.cfg)
+
+    def posture_gains(self, actions):
+        return None
 
     def contact_points(self, device, dtype):
         """Fixed force application points in each foot's link frame."""
@@ -121,13 +126,16 @@ class WBCACCGPUQP:
         if activation.ndim == 3 and activation.shape != masks.shape:
             raise ValueError('Point force activations must match the contact-point layout')
         point_masks = masks & ((activation > 0) if activation.ndim == 3 else (activation > 0)[:, :, None])
-        rate, tasks = reference_tasks(state, reference, actions, self.cfg, point_masks.any(-1))
+        gains = self.posture_gains(actions)
+        rate, tasks = reference_tasks(state, reference, actions, self.cfg, point_masks.any(-1), gains)
         result = self._solve_fixed(state, rate, tasks, limits, external, weights, activation, point_masks,
                                    reference, actions, contact_geometry)
         result.update(desired_rate=rate, activation=activation, available=point_masks,
                       normal_force_limits=self.force_capacities(state, activation))
         if weights is not None:
             result['contact_weights'] = weights
+        if gains is not None:
+            result['posture_gains'] = gains
         return result
 
     def _solve_fixed(self, s, rate, tasks, limits, external, weights, activation, point_masks, ref, actions,

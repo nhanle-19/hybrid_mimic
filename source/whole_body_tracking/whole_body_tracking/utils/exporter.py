@@ -182,6 +182,18 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
             "actor_actual_state_history_reset": "repeat_first_state_of_new_episode",
             "actor_state_sample_dt": float(env.step_dt),
         })
+        if getattr(controller, 'learned_posture_gains', False):
+            metadata.update({
+                'action_type': 'wbc_force_corner_force_limit_and_posture_gain_policy',
+                'policy_action_dim': 10,
+                'action_layout': metadata['action_layout']+',posture_kp,posture_kd',
+                'action_transform': metadata['action_transform']+';posture_gain=default*(1+relative_range*tanh(u))',
+                'posture_gain_action_indices': [8, 9],
+                'posture_gain_defaults': [controller.posture_position_gain, controller.posture_velocity_gain],
+                'posture_gain_relative_range': controller.posture_gain_relative_range,
+                'posture_gain_scope': 'shared_across_all_joints;QP_posture_acceleration_target',
+                'policy_action_transform_json': json.dumps(force_action.solver.action_transform),
+            })
         reference_func = getattr(env.observation_manager.cfg.policy.reference, 'func', None)
         reference_metadata = getattr(reference_func, 'export_metadata', None)
         if reference_metadata is not None:

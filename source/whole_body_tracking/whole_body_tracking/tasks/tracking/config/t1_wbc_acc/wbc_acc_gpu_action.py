@@ -257,7 +257,7 @@ class WBCACCGPUAction(WBCACCAction):
                 reference_foot_position_w=torch.stack([ref['frames'][f]['position'] for f in FEET], 1),
                 foot_rotation_w=torch.stack([state['frames'][f]['rotation'] for f in FEET], 1),
                 reference_foot_rotation_w=torch.stack([ref['frames'][f]['rotation'] for f in FEET], 1))
-            for key in ('contact_weights', 'contact_authority', 'wrench_limits',
+            for key in ('contact_weights', 'contact_authority', 'wrench_limits', 'posture_gains',
                         'solver_converged', 'solver_optimality_residual', 'solver_complementarity'):
                 if key in result:
                     self.last_prediction[key] = result[key]

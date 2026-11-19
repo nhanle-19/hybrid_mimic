@@ -8,7 +8,7 @@ import math
 import torch
 from isaaclab.managers import ManagerTermBase
 
-from whole_body_tracking.utils.wbc_contact_mapping import decode_force_values
+from whole_body_tracking.utils.wbc_contact_mapping import decode_force_values, decode_tracking_gain_scales
 from whole_body_tracking.utils.wbc_acc_contact_policy import FEET, sole_vertices
 from whole_body_tracking.utils.wbc_acc_torch_model import rotation_xyzw
 from whole_body_tracking.utils.wbc_force_learning import (
@@ -35,7 +35,7 @@ def _reference_clearance(env):
         heights = vertices[..., 2]+position[..., None, 2]-controller.ground_height
         # Reference geometry supplies reward weights only. For the eight-output
         # policy, a grounded heel must not label the elevated toe as contacting.
-        heights = heights.flatten(1) if env.action_manager.action.shape[-1] == 8 else heights.amin(-1)
+        heights = heights.flatten(1) if env.action_manager.action.shape[-1] in (8, 10) else heights.amin(-1)
         env._wbc_force_reference_clearance = (heights, body_ids, controller.ground_height)
     return env._wbc_force_reference_clearance
 
@@ -240,10 +240,10 @@ class ForceCapGapPenalty(_MotionScaledTerm):
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         self.action = env.action_manager.get_term('wbc_force')
-        self.point_caps = env.action_manager.action.shape[-1] == 8
+        self.point_caps = env.action_manager.action.shape[-1] in (8, 10)
         maximum = self.action.normal_force_max if self.point_caps else self.action.cfg.controller.contact_force_max
         self.force_max = torch.as_tensor(maximum, device=env.action_manager.action.device, dtype=env.action_manager.action.dtype)
-        if (self.force_max.shape != (env.action_manager.action.shape[-1],) or
+        if (self.force_max.shape != (8 if self.point_caps else env.action_manager.action.shape[-1],) or
                 not bool(torch.isfinite(self.force_max).all() & (self.force_max > 0).all())):
             raise ValueError('Force cap gap requires finite positive maxima matching the actions')
 
@@ -264,6 +264,29 @@ class ForceCapGapPenalty(_MotionScaledTerm):
         for i, side in enumerate(('left', 'right')):
             metrics.mean(f'Caps/{side}_unused_force_N', unused[:, i])
         metrics.mean('Reward/force_cap_gap_points_per_step', value*env.step_dt*self.cfg.weight)
+        return value
+
+
+class TrackingGainDeviationPenalty(_MotionScaledTerm):
+    """Mean squared relative Kp/Kd deviation, in the clip's 100-point units."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self.controller = env.action_manager.get_term('wbc_force').cfg.controller
+
+    def __call__(self, env, command_name='motion'):
+        actions = env.action_manager.action
+        if not self.controller.learned_posture_gains:
+            return actions.new_zeros(env.num_envs)
+        scales = decode_tracking_gain_scales(actions[:, 8:], self.controller.posture_gain_relative_range)
+        deviation = (scales-1.).square().mean(-1)
+        value = deviation*self.scale
+        metrics = _metrics(env)
+        for i, (name, default) in enumerate((('kp', self.controller.posture_position_gain),
+                                            ('kd', self.controller.posture_velocity_gain))):
+            metrics.mean(f'TrackingGains/{name}', scales[:, i]*default)
+            metrics.mean(f'TrackingGains/{name}_relative_deviation', (scales[:, i]-1.).abs())
+        metrics.mean('Reward/tracking_gain_deviation_points_per_step', value*env.step_dt*self.cfg.weight)
         return value
 
 
@@ -390,7 +413,7 @@ class ForceActionChangePenalty(_MotionScaledTerm):
     """Squared decoded-cap changes, excluding the first action after reset."""
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        self.previous = torch.zeros_like(env.action_manager.action)
+        self.previous = torch.zeros_like(decode_force_values(env.action_manager.action))
         self.valid = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
 
     def __call__(self, env, command_name='motion'):

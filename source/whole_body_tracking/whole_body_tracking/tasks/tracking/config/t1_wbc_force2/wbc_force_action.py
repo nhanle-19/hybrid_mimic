@@ -1,17 +1,17 @@
-"""Eight policy outputs set independent normal-force bounds on sole corners."""
+"""Eight sole-corner caps plus two shared posture tracking gain outputs."""
 import torch
 
 from isaaclab.utils import configclass
 from ..t1_wbc_acc.wbc_acc_action import WBCACCActionCfg
 from ..t1_wbc_acc.wbc_acc_gpu_action import WBCACCGPUAction
 from .controller_cfg import T1WBCForceControllerCfg
-from whole_body_tracking.utils.wbc_force_gpu_control import WBCCornerForceGPUQP
+from whole_body_tracking.utils.wbc_force_gpu_control import WBCCornerForcePDGPUQP
 from whole_body_tracking.utils.wbc_force_randomization import WrenchPulses
 from whole_body_tracking.utils.wbc_acc_torch_model import rotation_xyzw, mv
 
 
 class WBCForceAction(WBCACCGPUAction):
-    solver_type = WBCCornerForceGPUQP
+    solver_type = WBCCornerForcePDGPUQP
     action_name = 'wbc_force'
     log_prefix = 'WBCForce'
     contact_gating = 'learned_force_caps'
@@ -57,7 +57,7 @@ class WBCForceAction(WBCACCGPUAction):
 
     @property
     def action_dim(self):
-        return 8
+        return 10 if self.cfg.controller.learned_posture_gains else 8
 
     def _contact_masks(self, state):
         # Fixed model corners supply force moment arms, not contact labels.

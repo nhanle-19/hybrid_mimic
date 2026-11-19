@@ -1,4 +1,4 @@
-"""Shared FORCE gains for two-foot training and eight-region crawl replay."""
+"""FORCE2 posture defaults and bounded policy gain adjustments."""
 from isaaclab.utils import configclass
 from ..t1_wbc_acc.controller_cfg import T1WBCACCControllerCfg
 
@@ -7,6 +7,8 @@ from ..t1_wbc_acc.controller_cfg import T1WBCACCControllerCfg
 class T1WBCForceControllerCfg(T1WBCACCControllerCfg):
     posture_position_gain: float = 1600.
     posture_velocity_gain: float = 40.
+    learned_posture_gains: bool = True
+    posture_gain_relative_range: float = .5
     contact_force_max: tuple = (600., 600.)
     # Two-foot policy: each of eight corner caps can reach one robot body weight.
     # contact_force_max remains the region-total setting for legacy crawl replay.

@@ -37,7 +37,10 @@ class MotionOnPolicyRunner(OnPolicyRunner):
             values['DomainRandomization/'+name] = value
         policy = self.alg.policy
         std = policy.std if hasattr(policy, 'std') else policy.log_std.exp()
-        per_foot = std.reshape(2, -1)
+        per_foot = std[:8].reshape(2, -1)
+        if std.numel() == 10:
+            for i, name in enumerate(('kp', 'kd')):
+                values[f'WBCForce/Policy/posture_{name}_noise_std'] = float(std[8+i].detach())
         for i, side in enumerate(('left', 'right')):
             values[f'WBCForce/Policy/{side}_noise_std'] = float(per_foot[i].mean().detach())
             if per_foot.shape[1] == 4:

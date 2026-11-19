@@ -319,7 +319,7 @@ def main(env_cfg, agent_cfg):
             elif force_only:
                 from whole_body_tracking.utils.wbc_force_gpu_control import encode_force_capacities
                 fractions = args.manual_point_caps or [args.manual_support[0]]*4+[args.manual_support[1]]*4
-                actions[:] = encode_force_capacities(actions.new_tensor([fractions]), contact_count=8)
+                actions[:, :8] = encode_force_capacities(actions.new_tensor([fractions]), contact_count=8)
             else:
                 actions[:, 0], actions[:, 7] = args.manual_support
                 probability = (args.manual_weight-controller.contact_weight_min)/(controller.contact_weight_max-controller.contact_weight_min)

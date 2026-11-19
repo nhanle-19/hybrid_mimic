@@ -438,6 +438,41 @@ previous runs with the 10-second timeout truncated clips longer than 500 frames.
 Clip completion still uses the framework's `time_out=True` flag for PPO
 bootstrapping; that flag marks a successful reference boundary, not a time limit.
 
+#### FORCE2 policy tracking gains
+
+FORCE2 and FORCE2-DR now use **10 policy outputs**: the existing eight sole-corner
+force caps, followed by two independent posture-tracking actions, `u_kp, u_kd`.
+Each gain is shared across all joints and updates at the policy/QP frequency:
+
+```text
+Kp = 1600 * (1 + 0.5 * tanh(u_kp))   # range 800–2400
+Kd =   40 * (1 + 0.5 * tanh(u_kd))   # range 20–60
+qdd_target = Kp * (q_ref - q) + Kd * (qd_ref - qd)
+```
+
+Zero gain actions recover the configured defaults exactly. These are the WBC
+posture acceleration-target gains; actuator stiffness and damping remain zero.
+The defaults come from `posture_position_gain` and `posture_velocity_gain`, and
+`env.actions.wbc_force.controller.posture_gain_relative_range` sets the fractional
+range (default `0.5`, strictly between zero and one).
+
+`tracking_gain_deviation` penalizes
+`mean(((Kp/Kp_default)-1)^2, ((Kd/Kd_default)-1)^2)` with weight **-0.2** and the
+same `100 / clip_frame_count` per-step scaling as the other FORCE2 rewards.
+Holding both gains at a 50% deviation for a full clip costs 5 completion points;
+25% costs 1.25 points. Override `env.rewards.tracking_gain_deviation.weight` to
+adjust this preference. Logs report Kp, Kd, relative deviations and penalty points;
+diagnostics and ONNX metadata include the decoded gains or their mapping.
+
+Train a **fresh policy**: the actor output and critic previous-action input have
+grown by two. Both nominal and DR tasks enable this by default. FORCE, ACC,
+AUTHORITY and the manual crawl controller keep their existing interfaces.
+To replay an archived eight-output FORCE2 checkpoint with `eval_wbc.py` or
+`play.py`, append `env.actions.wbc_force.controller.learned_posture_gains=false`.
+`eval_force_contacts.py` restores this setting from the saved run automatically,
+including the fixed-gain setting for runs created before this option existed.
+Manual corner caps use zero gain actions and therefore the default PD gains.
+
 #### Mild FORCE2 domain randomization
 
 Use `Tracking-WBC-FORCE2-DR-T1-v0` for the randomized training variant. Its

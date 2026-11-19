@@ -87,16 +87,24 @@ def main():
     for group in ('policy', 'critic'):
         if normalized(saved['observations'][group]) != normalized(getattr(cfg.observations, group).to_dict()):
             raise ValueError(f'Training/evaluation observations differ: {group}')
+    # Archived eight-output FORCE2 runs predate gain control. Restore their
+    # interface explicitly; modern runs may also configure a different range.
+    saved_controller = normalized(saved['actions']['wbc_force']['controller'])
+    if hasattr(cfg.actions.wbc_force.controller, 'learned_posture_gains'):
+        for name, default in (('learned_posture_gains', False), ('posture_gain_relative_range', .5)):
+            value = saved_controller.setdefault(name, default)
+            setattr(cfg.actions.wbc_force.controller, name, value)
     current_action = cfg.actions.wbc_force.to_dict()
     for key in ('controller', 'friction', 'batched_max_iterations', 'batched_tolerance', 'residual_tolerance'):
-        if normalized(saved['actions']['wbc_force'][key]) != normalized(current_action[key]):
+        expected = saved_controller if key == 'controller' else normalized(saved['actions']['wbc_force'][key])
+        if expected != normalized(current_action[key]):
             raise ValueError(f'Training/evaluation action setting differs: {key}')
     for actual, expected, name in ((cfg.sim.dt, saved['sim']['dt'], 'physics dt'),
                                   (cfg.decimation, saved['decimation'], 'decimation')):
         if normalized(actual) != normalized(expected):
             raise ValueError(f'Training/evaluation setting differs: {name}')
     # Validate the baseline first, then apply only explicitly requested gains.
-    training_controller = normalized(saved['actions']['wbc_force']['controller'])
+    training_controller = saved_controller.copy()
     for key, value in controller_overrides.items():
         setattr(cfg.actions.wbc_force.controller, key, value)
     evaluation_controller = normalized(cfg.actions.wbc_force.controller.to_dict())
@@ -151,6 +159,8 @@ def main():
             policy = runner.get_inference_policy(device=base.device)
         else:
             manual_actions = torch.as_tensor(manual_actions, device=base.device)
+            if term.action_dim == 10:
+                manual_actions = torch.cat((manual_actions, manual_actions.new_zeros((len(manual_actions), 2))), -1)
         with torch.inference_mode():
             term._reference_states()
             for field in ('position', 'rotation', 'velocity'):

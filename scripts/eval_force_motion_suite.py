@@ -95,12 +95,15 @@ def main():
                     env=dict(os.environ, PYTHONNOUSERSITE='1', OMP_NUM_THREADS='4'))
             entry.update(exit_code=status.returncode, elapsed_s=time.monotonic()-started)
         entry['diagnostics_present'] = (output/'diagnostics.npz').exists()
+        if (output/'run.json').exists():
+            entry['policy_action_dim'] = json.loads((output/'run.json').read_text()).get('policy_action_dim')
         runs.append(entry)
         (args.output/'suite.json').write_text(json.dumps(dict(task=args.task, checkpoint=str(checkpoint),
             checkpoint_sha256=checkpoint_hash, controller_overrides=overrides,
             policy_source='manual_labels' if args.manual_labels_root else 'learned_policy',
             qp_contact_model='sole_corners',
-            force_cap_scope='per_sole_vertex', policy_action_dim=8,
+            force_cap_scope='per_sole_vertex',
+            policy_action_dim=next((r['policy_action_dim'] for r in runs if r.get('policy_action_dim') is not None), None),
             manifest=manifest, runs=runs), indent=2)+'\n')
         print('[SUITE] '+json.dumps(entry), flush=True)
     subprocess.run([sys.executable, str(ROOT/'scripts/analyze_force_contacts.py'), str(args.output.resolve())], check=True)

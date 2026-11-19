@@ -28,10 +28,11 @@ def exporter(monkeypatch):
     return module
 
 
-@pytest.mark.parametrize("hybrid", [False, True, "wbc_acc", "wbc_force", "wbc_force2", "wbc_authority"])
+@pytest.mark.parametrize("hybrid", [False, True, "wbc_acc", "wbc_force", "wbc_force2", "wbc_force2_pd", "wbc_authority"])
 @pytest.mark.parametrize("nominal", [False, True])
 def test_metadata_export(exporter, tmp_path, hybrid, nominal):
-    force2 = hybrid == 'wbc_force2'
+    learned_gains = hybrid == 'wbc_force2_pd'
+    force2 = hybrid in ('wbc_force2', 'wbc_force2_pd')
     if force2:
         hybrid = 'wbc_force'
     joints = [f"joint_{i}" for i in range(23)]
@@ -58,6 +59,13 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
             terms[hybrid].normal_force_max = torch.full((8,), 310.)
             terms[hybrid].cfg.controller.point_force_max_body_weights = 1.
             terms[hybrid].solver = NS(contact_points=sole_vertices)
+            if learned_gains:
+                from wbc_force_gpu_control import WBCCornerForcePDGPUQP
+                controller = terms[hybrid].cfg.controller
+                controller.learned_posture_gains = True
+                controller.posture_position_gain, controller.posture_velocity_gain = 1600., 40.
+                controller.posture_gain_relative_range, controller.swing_weight = .5, 0.
+                terms[hybrid].solver = WBCCornerForcePDGPUQP(controller)
             env.step_dt = .02
             reference = NS(params={"root_only": True, "offsets": (0, 1, 3, 5, 10)}, history_length=0)
             if force2:
@@ -95,10 +103,23 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
         assert "action_scale" not in metadata
         return
     if hybrid == "wbc_force":
-        assert metadata["action_type"] == "wbc_force_corner_force_limit_policy"
-        assert metadata["policy_action_dim"] == "8"
-        assert metadata["action_layout"].split(',') == [f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]
-        assert metadata["action_transform"] == "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-epsilon),0,1)"
+        assert metadata["action_type"] == ("wbc_force_corner_force_limit_and_posture_gain_policy" if learned_gains
+                                           else "wbc_force_corner_force_limit_policy")
+        assert metadata["policy_action_dim"] == ("10" if learned_gains else "8")
+        assert metadata["action_layout"].split(',') == (
+            [f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]
+            + (['posture_kp', 'posture_kd'] if learned_gains else []))
+        assert metadata["action_transform"] == (
+            "normal_force_limit=contact_force_max*clip((sigmoid(u)-epsilon)/(1-epsilon),0,1)"
+            + (';posture_gain=default*(1+relative_range*tanh(u))' if learned_gains else ''))
+        if learned_gains:
+            import json
+            assert [float(v) for v in metadata['posture_gain_defaults'].split(',')] == [1600., 40.]
+            assert float(metadata['posture_gain_relative_range']) == .5
+            assert [float(v) for v in metadata['posture_gain_action_indices'].split(',')] == [8, 9]
+            transform = json.loads(metadata['policy_action_transform_json'])
+            assert transform['posture_gains']['indices'] == [8, 9]
+            assert transform['force_caps']['indices'] == list(range(8))
         assert float(metadata["action_denominator"]) == .9
         assert float(metadata["action_dead_zone_epsilon"]) == .10
         assert metadata["normal_force_axis"] == "world_z"

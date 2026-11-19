@@ -53,6 +53,8 @@ def force_action_transform():
 
 def decode_force_values(actions):
     """Eight corner caps use /0.9; archived region policies retain their mapping."""
+    if actions.shape[-1] == 10:
+        actions = actions[..., :8]  # FORCE2 appends posture Kp/Kd actions.
     if actions.shape[-1] != 8:
         return decode_contact_values(actions)
     return ((actions.sigmoid()-CONTACT_DEAD_ZONE)/FORCE_CAP_DENOMINATOR).clamp(0., 1.)
@@ -70,7 +72,16 @@ def encode_force_values(capacities):
 
 def decode_force_values_numpy(actions):
     actions = np.asarray(actions, dtype=np.float64)
+    if actions.shape[-1] == 10:
+        actions = actions[..., :8]
     if actions.shape[-1] != 8:
         return decode_contact_values_numpy(actions)
     probability = np.exp(-np.logaddexp(0., -actions))
     return np.clip((probability-CONTACT_DEAD_ZONE)/FORCE_CAP_DENOMINATOR, 0., 1.)
+
+
+def decode_tracking_gain_scales(actions, relative_range):
+    """Two independent bounded gains; raw zero preserves the configured PD."""
+    if actions.shape[-1] != 2:
+        raise ValueError('Expected two tracking gain actions: Kp, Kd')
+    return 1.+relative_range*actions.tanh()

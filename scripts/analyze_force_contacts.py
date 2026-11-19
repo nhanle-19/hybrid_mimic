@@ -19,10 +19,11 @@ def plot_corner_policy(directory, data, meta):
     """Keep raw actor values, decoded bounds, and QP-selected forces distinct."""
     n = meta['attempted_frames']
     t = np.arange(n)*meta['policy_dt_s']
-    raw = data['audit_raw_action'].reshape(n, 2, 4)
+    raw = data['audit_raw_action'][:, :8].reshape(n, 2, 4)
     caps = data['audit_cap']
     forces = data['predicted_point_forces'][..., 2]
     transform = json.loads(str(data['policy_action_transform_json']))
+    transform = transform.get('force_caps', transform)
     epsilon = transform['epsilon']
     boundary = np.log((1.-epsilon)/epsilon)
     denominator = transform.get('denominator', 1.-2.*epsilon)
@@ -257,7 +258,7 @@ def main():
         contact_patch='Patch overlap is a geometric proxy using lowest collision vertices within 1 mm of floor and of the lowest vertex. Physical load is measured separately, not inferred per vertex.',
         scope='One deterministic frame-zero attempt per motion. Contact percentages describe executed prefixes; full-clip coverage also penalizes unreached frames. Completion does not establish imitation quality.',
         sampling='Contact wrenches sampled 2 ms after each policy action, not averaged across the 20 ms control interval.',
-        cap_plots='Eight-output policies show four decoded caps per foot. The corner-policy plot separates raw actions, decoded cap fractions, and QP-predicted corner forces. Coincident curves overlap; measured corner forces are not recorded.',
+        cap_plots='Corner-cap policies show four decoded caps per foot. The corner-policy plot separates the first eight raw actions, decoded cap fractions, and QP-predicted corner forces. Coincident curves overlap; measured corner forces are not recorded.',
         cap_summaries='Foot-level cap statistics and left_cap/right_cap in timeseries.csv average the four decoded corner caps. A foot zero-cap sample requires all four corners to be zero. corner_policy.csv preserves each raw action, fraction, bound in N, and predicted corner Fz.')
     process_notes = []
     if (args.directory/'suite.json').exists():
