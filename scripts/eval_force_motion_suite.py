@@ -14,18 +14,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def newest_checkpoint(root):
     # Download/copy mtimes do not indicate training order.
+    if not root.is_dir():
+        raise ValueError(f'No checkpoints in {root}; select --history or an explicit --checkpoint path')
     runs = sorted(p for p in root.iterdir() if p.is_dir() and list(p.glob('model_*.pt')))
     if not runs:
-        raise ValueError(f'No checkpoints in {root}')
+        raise ValueError(f'No checkpoints in {root}; select --history or an explicit --checkpoint path')
     return max(runs[-1].glob('model_*.pt'), key=lambda p: int(p.stem.split('_')[-1]))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0',
-                                          'Tracking-WBC-FORCE2-DR-T1-v0'),
+    experiments = {
+        'Tracking-WBC-FORCE-T1-v0': 'force',
+        'Tracking-WBC-FORCE-LEGACY-T1-v0': 't1_wbc_force',
+        'Tracking-WBC-FORCE2-T1-v0': 't1_wbc_force2',
+        'Tracking-WBC-FORCE2-DR-T1-v0': 't1_wbc_force2_dr',
+    }
+    parser.add_argument('--task', choices=tuple(experiments),
                         default='Tracking-WBC-FORCE-T1-v0')
     parser.add_argument('--checkpoint', type=Path)
+    parser.add_argument('--history', action='store_true',
+                        help='Select the newest checkpoint from logs/history instead of active logs/rsl_rl.')
     parser.add_argument('--motions', type=Path, default=ROOT/'retargeted_motion/training_list')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--device', default='cuda:0')
@@ -38,10 +47,9 @@ def main():
         ('posture_position_gain', args.posture_kp), ('posture_velocity_gain', args.posture_kd)) if value is not None}
     if any(not math.isfinite(value) or value <= 0 for value in overrides.values()):
         parser.error('Posture gains must be finite and positive')
-    experiment = 't1_wbc_force2' if 'FORCE2' in args.task else 't1_wbc_force'
-    if '-DR-' in args.task:
-        experiment = 't1_wbc_force2_dr'
-    checkpoint = (args.checkpoint or newest_checkpoint(ROOT/'logs/rsl_rl'/experiment)).resolve()
+    experiment = experiments[args.task]
+    checkpoint_root = ROOT/'logs'/('history' if args.history else 'rsl_rl')/experiment
+    checkpoint = (args.checkpoint or newest_checkpoint(checkpoint_root)).resolve()
     motions = args.motions.resolve()
     manifest = json.loads((motions/'manifest.json').read_text())
     listed = {m['file'] for m in manifest['motions']}
@@ -74,7 +82,7 @@ def main():
             raise FileExistsError(f'{output}: choose a new output or explicitly use --skip_existing')
         if args.skip_existing and (output/'diagnostics.npz').exists():
             meta = json.loads((output/'run.json').read_text())
-            if meta.get('task', 'Tracking-WBC-FORCE-T1-v0') != args.task:
+            if meta.get('task', 'Tracking-WBC-FORCE-LEGACY-T1-v0') != args.task:
                 raise ValueError('Existing results belong to a different task')
             if meta['checkpoint_sha256'] != checkpoint_hash or meta['motion_sha256'] != digest:
                 raise ValueError('Existing results belong to a different checkpoint or reference')

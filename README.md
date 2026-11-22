@@ -2,16 +2,29 @@
 
 Two Booster T1 tasks learn reference-conditioned settings for a whole-body QP
 controller. WBC-ACC learns force caps and foot-acceleration tracking weights;
-WBC-FORCE learns only force caps and removes the foot-acceleration objectives.
+WBC-FORCE learns force caps and posture gains and removes the foot-acceleration objectives.
 
 | Use | Task |
 | --- | --- |
-| Training | `Tracking-WBC-ACC-T1-v0` |
-| Evaluation | `Tracking-WBC-ACC-T1-Eval-v0` |
+| ACC training | `Tracking-WBC-ACC-T1-v0` |
+| ACC evaluation | `Tracking-WBC-ACC-T1-Eval-v0` |
 | Standing controller test | `Standing-WBC-ACC-T1-v0` |
-| Force-cap training | `Tracking-WBC-FORCE-T1-v0` |
-| Force-cap evaluation | `Tracking-WBC-FORCE-T1-Eval-v0` |
-| Force-cap standing test | `Standing-WBC-FORCE-T1-v0` |
+| Default FORCE training (FORCE2-DR settings) | `Tracking-WBC-FORCE-T1-v0` |
+| FORCE evaluation (nominal physics) | `Tracking-WBC-FORCE-T1-Eval-v0` |
+| Legacy force-cap standing test | `Standing-WBC-FORCE-T1-v0` |
+
+`train.py` defaults to `Tracking-WBC-FORCE-T1-v0`: full domain randomization,
+sole-point/COM tracking, and ten policy outputs (eight caps plus posture Kp/Kd).
+With `hybridmimic` active, `bash scripts/train_force.sh` starts a fresh run on
+the normal retargeted motions in `retargeted_motion/training_list/` and saves
+checkpoints to `logs/rsl_rl/force/`. `--task` can be omitted when calling
+`train.py` directly; a motion source is still required.
+
+Explicit `FORCE2` (nominal) and `FORCE2-DR` task names retain their settings and
+log folders. Archived pre-consolidation FORCE policies use
+`Tracking-WBC-FORCE-LEGACY-T1-v0` or `Tracking-WBC-FORCE-LEGACY-T1-Eval-v0`,
+with `logs/history/t1_wbc_force/`. Standing/toy FORCE fixtures retain their
+legacy controller. Retained checkpoints and saved run configs keep their original contents.
 
 See [the controller formulation and validation commands](docs/wbc_acc_controller.md).
 See [WBC-FORCE's learned force inequalities and commands](docs/wbc_force_controller.md).
@@ -27,6 +40,14 @@ It links the latest retained evaluations, videos, retargeting results and
 diagnostics. The [cleanup manifest](outputs/cleanup_manifest_20261117.json)
 records removed experiments and retained artifact hashes. These local outputs
 are ignored by Git and are not included in a fresh clone.
+The [training log index](logs/index.html) lists retained checkpoint interfaces,
+motion sources and DR settings. The [log retention manifest](logs/retention_manifest_20261121.json)
+records the November 21 checkpoint pruning and archived validation provenance.
+All FORCE2 and FORCE2-DR runs remain in `logs/rsl_rl/`, regardless of motion
+source, DR setting or eight/ten-output variant. Older flat, momentum, ACC,
+AUTHORITY and legacy FORCE types are in [training history](logs/history/index.html).
+The [relocation manifest](logs/history_manifest_20261121.json) maps historical
+paths to their current locations; saved run metadata retains its original text.
 
 ## Setup
 
@@ -192,8 +213,9 @@ tracking limitations and evaluation commands.
 
 ### Train WBC-FORCE
 
-The NN outputs **eight raw force-cap actions**: left sole corners 0–3, then
-right sole corners 0–3, in the stored `sole_vertices` order. Decode each with
+The NN outputs **ten actions**: eight raw force caps (left sole corners 0–3,
+then right sole corners 0–3, in the stored `sole_vertices` order), followed by
+posture Kp/Kd adjustments. Decode each force cap with
 `c_i = clip((sigmoid(action_i)-0.1)/0.9, 0, 1)`; the QP enforces
 `0 <= Fz_i <= robot_mass * 9.81 * c_i` N independently at each corner.
 The Gaussian mean is the unrestricted linear actor output in training,
@@ -221,7 +243,8 @@ are absent. ACC, AUTHORITY, and the separate manual crawl controller retain
 their existing contact handling.
 
 Start a **fresh run**: older two-output FORCE checkpoints and manual tables
-are incompatible. Existing gains remain **1600/40**. Swing and false-zero
+are incompatible. Nominal posture gains are **1600/40**, with learned adjustments
+described below. Swing and false-zero
 rewards now evaluate each reference corner separately; reference geometry
 still supplies only reward weights and never gates the QP.
 
@@ -248,14 +271,15 @@ python scripts/rsl_rl/train.py \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
-  --run_name force_corner_caps \
+  --run_name force \
   agent.resume=false
 ```
 
 The task defaults to **1,024 environments and 30,000 iterations**, saving
 checkpoints every 500 iterations and at completion. Controller gains and
-weights come directly from `T1WBCForceControllerCfg`, including the fixed
-posture gains **Kp=1600, Kd=40**. Force limits use their configured defaults;
+weights come from the FORCE2 controller, including nominal posture gains
+**Kp=1600, Kd=40** and learned gain adjustments. Domain randomization is enabled.
+Checkpoints go to `logs/rsl_rl/force/`. Force limits use their configured defaults;
 contact-height tolerances do not gate two-foot FORCE. To change the training
 selection, update `retargeted_motion/training_list/` as described below and set
 `--run_name` for the new run.
@@ -417,7 +441,6 @@ python scripts/rsl_rl/train.py \
   --device cuda:0 --headless \
   --logger wandb --log_project_name hybrid_mimic \
   --run_name training_list \
-  env.episode_length_s=15.0 \
   agent.resume=false
 ```
 
@@ -426,11 +449,14 @@ equal probability, then samples its phase adaptively; 20% of starts are at that
 clip's frame zero. Each episode ends at its own clip boundary. Reference
 lookahead, derivative calculations, unloading lead-in and 100-point reward
 normalization remain within that clip. `WBCForce/Motion/<clip_name>/*` reports
-separate sampling, completion and cap statistics. Inputs are 590/867 (the
-critic includes all eight previous actions), and the six FORCE reward terms
-are shared across clips.
+separate sampling, completion and cap statistics. The actor receives 546 values:
+59 current reference values, four future sole-corner frames of 48 values each,
+and five measured-state frames of 59 values each. The critic also receives its
+privileged inputs and all ten previous actions. The eight FORCE reward terms
+are shared across clips: completion, swing force, action change, false zero,
+unused cap, gain deviation, sole-point tracking, and COM tracking.
 
-`Tracking-WBC-FORCE2-T1-v0` disables the inherited fixed-duration termination:
+FORCE and both FORCE2 training variants disable the inherited fixed-duration termination:
 training attempts end at their selected clip's boundary or on a torso/QP
 failure. Long clips can therefore finish from frame zero without an
 `env.episode_length_s` override. This change applies to future training;
@@ -438,9 +464,9 @@ previous runs with the 10-second timeout truncated clips longer than 500 frames.
 Clip completion still uses the framework's `time_out=True` flag for PPO
 bootstrapping; that flag marks a successful reference boundary, not a time limit.
 
-#### FORCE2 policy tracking gains
+#### FORCE policy tracking gains
 
-FORCE2 and FORCE2-DR now use **10 policy outputs**: the existing eight sole-corner
+FORCE, FORCE2 and FORCE2-DR use **10 policy outputs**: the existing eight sole-corner
 force caps, followed by two independent posture-tracking actions, `u_kp, u_kd`.
 Each gain is shared across all joints and updates at the policy/QP frequency:
 
@@ -465,7 +491,7 @@ adjust this preference. Logs report Kp, Kd, relative deviations and penalty poin
 diagnostics and ONNX metadata include the decoded gains or their mapping.
 
 Train a **fresh policy**: the actor output and critic previous-action input have
-grown by two. Both nominal and DR tasks enable this by default. FORCE, ACC,
+grown by two. Both nominal and DR tasks enable this by default. Legacy FORCE, ACC,
 AUTHORITY and the manual crawl controller keep their existing interfaces.
 To replay an archived eight-output FORCE2 checkpoint with `eval_wbc.py` or
 `play.py`, append `env.actions.wbc_force.controller.learned_posture_gains=false`.
@@ -473,12 +499,15 @@ To replay an archived eight-output FORCE2 checkpoint with `eval_wbc.py` or
 including the fixed-gain setting for runs created before this option existed.
 Manual corner caps use zero gain actions and therefore the default PD gains.
 
-#### Mild FORCE2 domain randomization
+#### Default FORCE domain randomization
 
-Use `Tracking-WBC-FORCE2-DR-T1-v0` for the randomized training variant. Its
+`Tracking-WBC-FORCE-T1-v0` enables the full FORCE2-DR configuration by default. Its
 settings are in
 [`domain_randomization.py`](source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/t1_wbc_force2/domain_randomization.py).
-Actuator PD gains stay zero. The original FORCE2 task retains its nominal setup.
+Actuator PD gains stay zero. `Tracking-WBC-FORCE2-DR-T1-v0` remains an explicit
+alias with its original log folder; `Tracking-WBC-FORCE2-T1-v0` remains nominal.
+Use the task selection to enable DR: changing only the action's
+`domain_randomization` field does not configure the physics, noise and delays.
 
 | Quantity | Default variation |
 | --- | --- |
@@ -509,26 +538,26 @@ From the repository root with `hybridmimic` active and W&B logged in:
 
 ```bash
 CUDA_VISIBLE_DEVICES=7 WANDB_MODE=online python -u scripts/rsl_rl/train.py \
-  --task Tracking-WBC-FORCE2-DR-T1-v0 \
-  --motion_dir retargeted_motion/training_spider \
+  --task Tracking-WBC-FORCE-T1-v0 \
+  --motion_dir retargeted_motion/training_list \
   --device cuda:0 --num_envs 1024 --max_iterations 30000 --headless \
   --logger wandb --log_project_name hybrid_mimic \
-  --run_name force2_spider_dr --seed 42 \
+  --run_name force --seed 42 \
   agent.resume=false
 ```
 
-Checkpoints go to `logs/rsl_rl/t1_wbc_force2_dr/`. W&B receives sampled parameter
+Checkpoints go to `logs/rsl_rl/force/`. W&B receives sampled parameter
 ranges and disturbance counts under `DomainRandomization/*`; the full settings
 are saved in each run's `params/env.yaml`. Hydra overrides can adjust individual
 fields, for example
 `env.events.model_parameters.params.mass_scale_range=[0.98,1.02]` or
 `env.observations.policy.actual_state.noise.joint_position=0.003`.
 
-For the contact evaluation suite, pass `--task Tracking-WBC-FORCE2-DR-T1-v0`
-and `--motions retargeted_motion/training_spider`. It selects the DR checkpoint
-folder and evaluates nominal physics without observation noise or disturbances,
-recording that scope in the report metadata. The `Tracking-WBC-FORCE2-DR-T1-Eval-v0`
-task also uses nominal evaluation physics. These are baseline evaluations, not
+The contact evaluation suite defaults to FORCE and
+`retargeted_motion/training_list`. It selects `logs/rsl_rl/force/` and evaluates
+nominal physics without observation noise or disturbances, recording that scope
+in the report metadata. `Tracking-WBC-FORCE-T1-Eval-v0` and
+`Tracking-WBC-FORCE2-DR-T1-Eval-v0` also use nominal evaluation physics. These are baseline evaluations, not
 randomized robustness sweeps.
 
 The sway reference does not enforce a positive action floor or prescribe cap
@@ -560,15 +589,15 @@ With the `hybridmimic` environment active, launch a fresh run with local
 TensorBoard logging:
 
 ```bash
-bash scripts/train_labeled_force.sh
+bash scripts/train_force.sh
 ```
 
 This launcher reads `retargeted_motion/training_list/` and sets
-**1,024 environments, 7,000 PPO updates**, checkpoint saving
+**1,024 environments, 30,000 PPO updates**, checkpoint saving
 every 500 updates, local TensorBoard logging, run name
-`force_corner_caps`, and `agent.resume=false`. Its 15-second episode timeout
-allows every selected motion to reach its clip boundary. It uses the current
-two-foot FORCE controller without a geometry gate. Trailing arguments can
+`force`, and `agent.resume=false`. It enables full domain randomization and ends
+episodes at the clip boundary or failure, without a fixed-duration timeout.
+`train_labeled_force.sh` forwards to this launcher. Trailing arguments can
 override launcher settings. The source archive can be recreated where all
 original local source files are available:
 
@@ -580,7 +609,11 @@ The assembler checks source hashes and motion/label alignment and refuses to
 overwrite differing existing files. It rebuilds the source archive; the active
 training selection remains the NPZ files in `retargeted_motion/training_list/`.
 
-This uses the same PPO settings as WBC-ACC, with **590 actor inputs**:
+#### Historical FORCE configuration and validation
+
+The following describes the archived eight-output controller, now selected with
+`Tracking-WBC-FORCE-LEGACY-T1-v0`. It is not the default FORCE configuration above.
+It uses the same PPO settings as WBC-ACC, with **590 actor inputs**:
 five reference frames at offsets `[0, 1, 3, 5, 10]` (295 values), followed by
 five actual-state frames at offsets `[-4, -3, -2, -1, 0]` (295 values).
 Actual history is stored oldest first and sampled at the 50 Hz policy rate,
@@ -938,7 +971,9 @@ uniform fractions for each foot's four corner caps during `--qp_only`;
 `--manual_point_caps` accepts all eight independently. `--manual_weight` does not
 apply. For either learned policy, videos go to the checkpoint run's
 `videos/play/` folder and diagnostics to its `diagnostics.npz`. WBC-FORCE runs
-are under `logs/rsl_rl/t1_wbc_force/`. Plot a run with
+are under `logs/rsl_rl/force/`; archived FORCE policies use the `FORCE-LEGACY`
+task and `logs/history/t1_wbc_force/`. Add `--history` to `eval_wbc.py` when
+loading one of these historical policies. Plot a run with
 `scripts/plot_wbc.py --input <run folder>/diagnostics.npz`.
 QP-only evaluations have no checkpoint folder and use `eval_data/<controller>/`. Discarded test directories were cleaned up on 2026-10-20;
 selected replay artifacts remain in place. `eval_data/cleanup_20261020.json`
@@ -953,9 +988,13 @@ motion in the active training manifest, run:
 python scripts/eval_force_motion_suite.py --output outputs/force_contact_evaluation
 ```
 
-For FORCE2, add `--task Tracking-WBC-FORCE2-T1-v0`; this selects the newest
+The default selects `logs/rsl_rl/force/` and evaluates its DR-trained policy
+under nominal physics. For FORCE2, add `--task Tracking-WBC-FORCE2-T1-v0`; this selects the newest
 checkpoint under `logs/rsl_rl/t1_wbc_force2/` and loads its observation layout.
-Both tasks verify the saved policy and critic observation settings before rollout.
+For archived FORCE, use `--task Tracking-WBC-FORCE-LEGACY-T1-v0 --history` to select
+`logs/history/t1_wbc_force/`. FORCE2 and FORCE2-DR remain in the active tree;
+their normal/SPIDER and eight/ten-output variants are kept together. All tasks verify the saved policy and critic
+observation settings before rollout.
 
 The suite selects the highest checkpoint iteration in the newest run, verifies
 the reference hashes and saved controller settings, and executes each clip once
@@ -1424,7 +1463,24 @@ python scripts/compare_tracking.py \
   --controller_label wbc_acc
 ```
 
-The preserved long training runs remain under `logs/rsl_rl/`. Saved parameter
-snapshots and historical metrics retain their original labels; use the current
-task ID for loading a compatible checkpoint. Runs from the removed controller
-are retained as historical artifacts when they have at least ten checkpoints.
+The active tree contains `logs/rsl_rl/force/` for new default training,
+`logs/rsl_rl/t1_wbc_force2/` for all retained FORCE2 runs, and
+`logs/rsl_rl/t1_wbc_force2_dr/` for retained FORCE2-DR runs. Older task types
+are under `logs/history/`, with one final checkpoint per substantive run plus
+checkpoints cited by retained reports.
+Saved configs, code diffs, TensorBoard histories, exports and evaluations keep
+their original contents. Short setup/validation histories are compressed in
+`logs/history/archive/validation_provenance_20261121.tar.gz`; report-referenced
+validation checkpoints moved with their complete run folders. The
+[relocation manifest](logs/history_manifest_20261121.json) records every move.
+Unreferenced intermediate checkpoints
+were removed, with their original paths and SHA-256 hashes recorded in the
+[retention manifest](logs/retention_manifest_20261121.json).
+
+Use the [log index](logs/index.html) or [CSV catalog](logs/retained_runs.csv) to
+identify a run's motion source, DR setting and policy dimensions before loading
+it. The contact suite and `eval_wbc.py` accept `--history` for explicit historical
+selection; default searches stay in the active tree. Similar run names do not imply identical policies. Historical checkpoints
+require their saved observation/action interfaces and may not load under the
+new default FORCE task. Finite-weight checks establish file integrity, not
+successful motion tracking.

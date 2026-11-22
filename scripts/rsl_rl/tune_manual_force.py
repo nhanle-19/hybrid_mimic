@@ -52,7 +52,7 @@ from manual_wbc_schedule import (load_schedule, save_schedule, reference_digest,
 @torch.inference_mode()
 def main():
     torch.set_num_threads(4)
-    cfg = parse_env_cfg('Tracking-WBC-FORCE-T1-Eval-v0', device=args.device, num_envs=1 if args.serial else args.candidates)
+    cfg = parse_env_cfg('Tracking-WBC-FORCE-LEGACY-T1-Eval-v0', device=args.device, num_envs=1 if args.serial else args.candidates)
     cfg.seed = args.seed
     cfg.commands.motion.motion_file = args.motion_file
     cfg.commands.motion.class_type = WBCACCSinglePassMotion
@@ -65,7 +65,7 @@ def main():
                              cfg.sim.dt*cfg.decimation, controller_config=cfg.actions.wbc_force.controller.to_dict())
     n, count = len(schedule['actions']), args.candidates
     cfg.episode_length_s = n*cfg.sim.dt*cfg.decimation+1.
-    env = gym.make('Tracking-WBC-FORCE-T1-Eval-v0', cfg=cfg)
+    env = gym.make('Tracking-WBC-FORCE-LEGACY-T1-Eval-v0', cfg=cfg)
     try:
         env.reset()
         motion = env.unwrapped.command_manager.get_term('motion')

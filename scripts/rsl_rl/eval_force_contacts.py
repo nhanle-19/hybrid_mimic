@@ -13,7 +13,8 @@ from pathlib import Path
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE2-T1-v0',
+parser.add_argument('--task', choices=('Tracking-WBC-FORCE-T1-v0', 'Tracking-WBC-FORCE-LEGACY-T1-v0',
+                                      'Tracking-WBC-FORCE2-T1-v0',
                                       'Tracking-WBC-FORCE2-DR-T1-v0'),
                     default='Tracking-WBC-FORCE-T1-v0')
 parser.add_argument('--checkpoint', required=True, type=Path)
@@ -67,6 +68,22 @@ def normalized(value):
     return value
 
 
+def configure_nominal_evaluation(cfg):
+    """Remove training randomization regardless of the registered task name."""
+    if not getattr(cfg.actions.wbc_force, 'domain_randomization', False):
+        return
+    nominal = load_cfg_from_registry('Tracking-WBC-FORCE2-T1-v0', 'env_cfg_entry_point')
+    cfg.events = nominal.events
+    cfg.scene.robot = nominal.scene.robot
+    cfg.scene.terrain = nominal.scene.terrain
+    cfg.actions.wbc_force.domain_randomization = False
+    cfg.commands.motion.pose_range = {}
+    cfg.commands.motion.velocity_range = {}
+    cfg.commands.motion.joint_position_range = (0., 0.)
+    cfg.observations.policy.actual_state.noise = None
+    cfg.observations.policy.enable_corruption = False
+
+
 def main():
     task = args.task
     cfg = load_cfg_from_registry(task, 'env_cfg_entry_point')
@@ -116,18 +133,8 @@ def main():
     agent_config = agent.to_dict()
     for key in ('policy', 'empirical_normalization', 'algorithm'):
         agent_config[key] = saved_agent[key]
-    if '-DR-' in task:
-        # Verify the training observation layout above, then evaluate against
-        # the same nominal benchmark as FORCE2. Record this scope explicitly.
-        nominal = load_cfg_from_registry('Tracking-WBC-FORCE2-T1-v0', 'env_cfg_entry_point')
-        cfg.events = nominal.events
-        cfg.scene.robot = nominal.scene.robot
-        cfg.scene.terrain = nominal.scene.terrain
-        cfg.actions.wbc_force.domain_randomization = False
-        cfg.commands.motion.pose_range = {}
-        cfg.commands.motion.velocity_range = {}
-        cfg.commands.motion.joint_position_range = (0., 0.)
-        cfg.observations.policy.actual_state.noise = None
+    # Verify training observations above before switching to the nominal benchmark.
+    configure_nominal_evaluation(cfg)
     cfg.seed = args.seed
     cfg.sim.device = args.device
     cfg.scene.num_envs = 1

@@ -9,6 +9,7 @@ import cli_args
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--task', default='Tracking-WBC-ACC-T1-Eval-v0')
+parser.add_argument('--history', action='store_true', help='Load a learned policy from logs/history instead of logs/rsl_rl.')
 parser.add_argument('--motion_file', required=True)
 parser.add_argument('--num_envs', type=int, default=1)
 parser.add_argument('--qp_backend', choices=('batched', 'osqp'), default='batched',
@@ -194,7 +195,7 @@ def main(env_cfg, agent_cfg):
         output_root = (Path('eval_data') / action_name).resolve()
         default_video_dir = output_root / 'videos'
     else:
-        log_root = (Path('logs/rsl_rl') / agent_cfg.experiment_name).resolve()
+        log_root = (Path('logs') / ('history' if args.history else 'rsl_rl') / agent_cfg.experiment_name).resolve()
         path = get_checkpoint_path(str(log_root), agent_cfg.load_run, agent_cfg.load_checkpoint)
         output_root = Path(path).parent
         default_video_dir = output_root / 'videos' / 'play'

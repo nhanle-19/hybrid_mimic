@@ -1,6 +1,7 @@
 """Guard contact-evaluation geometry and checkpoint selection semantics."""
-import importlib.util
+import ast
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -52,6 +53,7 @@ def test_gain_override_is_forwarded_and_old_gain_results_are_not_reused(tmp_path
             directory = output/'motion'
             (directory/'diagnostics.npz').touch()
             (directory/'run.json').write_text(json.dumps({
+                'task': 'Tracking-WBC-FORCE-T1-v0',
                 'checkpoint_sha256': hashlib.sha256(b'checkpoint').hexdigest(), 'motion_sha256': digest,
                 'qp_contact_model': 'sole_midpoint',
                 'controller_overrides': {'posture_position_gain': 3200., 'posture_velocity_gain': 80.}}))
@@ -84,15 +86,23 @@ def test_invalid_gain_rejected_before_starting_evaluation(tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize('task,experiment', [
+    (None, 'force'),
+    ('Tracking-WBC-FORCE-T1-v0', 'force'),
+    ('Tracking-WBC-FORCE-LEGACY-T1-v0', 't1_wbc_force'),
     ('Tracking-WBC-FORCE2-T1-v0', 't1_wbc_force2'),
     ('Tracking-WBC-FORCE2-DR-T1-v0', 't1_wbc_force2_dr'),
 ])
-def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monkeypatch, task, experiment):
+@pytest.mark.parametrize('history', [False, True])
+def test_task_selects_its_checkpoint_and_checks_archived_results(tmp_path, monkeypatch, task, experiment, history):
     suite = load('eval_force_motion_suite')
     monkeypatch.setattr(suite, 'ROOT', tmp_path)
-    checkpoint = tmp_path/'logs/rsl_rl'/experiment/'2026-11-14/model_6999.pt'
+    checkpoint = tmp_path/'logs'/('history' if history else 'rsl_rl')/experiment/'2026-11-14/model_6999.pt'
     checkpoint.parent.mkdir(parents=True)
     checkpoint.write_bytes(b'force2')
+    # A newer run in the other tree must not override the requested scope.
+    other = tmp_path/'logs'/('rsl_rl' if history else 'history')/experiment/'2026-11-20/model_9999.pt'
+    other.parent.mkdir(parents=True)
+    other.write_bytes(b'different checkpoint')
     motions = tmp_path/'motions'
     motions.mkdir()
     (motions/'motion.npz').write_bytes(b'motion')
@@ -100,7 +110,12 @@ def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monke
     (motions/'manifest.json').write_text(json.dumps({
         'motions': [{'file': 'motion.npz', 'sha256': motion_hash}]}))
     output = tmp_path/'results'
-    arguments = ['suite', '--task', task, '--motions', str(motions), '--output', str(output)]
+    arguments = ['suite', '--motions', str(motions), '--output', str(output)]
+    if history:
+        arguments.append('--history')
+    if task is not None:
+        arguments.extend(['--task', task])
+    task = task or 'Tracking-WBC-FORCE-T1-v0'
     monkeypatch.setattr(sys, 'argv', arguments)
     calls = []
 
@@ -128,9 +143,61 @@ def test_force2_selects_its_checkpoint_and_rejects_force_results(tmp_path, monke
     saved.pop('task')  # Historical FORCE evaluations did not record the task.
     metadata.write_text(json.dumps(saved))
     calls.clear()
-    with pytest.raises(ValueError, match='different task'):
+    if task == 'Tracking-WBC-FORCE-LEGACY-T1-v0':
         suite.main()
-    assert not calls
+        assert len(calls) == 1 and '--checkpoint' not in calls[0]
+    else:
+        with pytest.raises(ValueError, match='different task'):
+            suite.main()
+        assert not calls
+
+
+def test_default_evaluation_does_not_silently_select_history(tmp_path, monkeypatch):
+    suite = load('eval_force_motion_suite')
+    monkeypatch.setattr(suite, 'ROOT', tmp_path)
+    checkpoint = tmp_path/'logs/history/force/2026-11-14/model_6999.pt'
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.touch()
+    monkeypatch.setattr(sys, 'argv', ['suite', '--output', str(tmp_path/'evaluation')])
+    with pytest.raises(ValueError, match='No checkpoints.*logs/rsl_rl/force'):
+        suite.main()
+
+
+def test_nominal_evaluation_removes_all_dr_without_relying_on_task_name():
+    # Load the helper without launching Isaac Sim at module import.
+    tree = ast.parse((ROOT/'scripts/rsl_rl/eval_force_contacts.py').read_text())
+    helper = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                  and node.name == 'configure_nominal_evaluation')
+    nominal = SimpleNamespace(events=object(), scene=SimpleNamespace(robot=object(), terrain=object()))
+    lookups = []
+
+    def load_config(task, key):
+        lookups.append((task, key))
+        return nominal
+
+    namespace = {'load_cfg_from_registry': load_config}
+    exec(compile(ast.Module(body=[helper], type_ignores=[]), '<nominal_eval>', 'exec'), namespace)
+    configure = namespace['configure_nominal_evaluation']
+    cfg = SimpleNamespace(
+        actions=SimpleNamespace(wbc_force=SimpleNamespace(domain_randomization=True, controller=object())),
+        events=object(), scene=SimpleNamespace(robot=object(), terrain=object()),
+        commands=SimpleNamespace(motion=SimpleNamespace(pose_range={'x': (-.005, .005)},
+            velocity_range={'x': (-.03, .03)}, joint_position_range=(-.005, .005))),
+        observations=SimpleNamespace(policy=SimpleNamespace(enable_corruption=True,
+            actual_state=SimpleNamespace(noise=object()))))
+    controller = cfg.actions.wbc_force.controller
+    configure(cfg)
+    assert cfg.events is nominal.events
+    assert cfg.scene.robot is nominal.scene.robot and cfg.scene.terrain is nominal.scene.terrain
+    assert not cfg.actions.wbc_force.domain_randomization
+    assert cfg.actions.wbc_force.controller is controller
+    assert cfg.commands.motion.pose_range == cfg.commands.motion.velocity_range == {}
+    assert cfg.commands.motion.joint_position_range == (0., 0.)
+    assert cfg.observations.policy.actual_state.noise is None
+    assert not cfg.observations.policy.enable_corruption
+    configure(cfg)  # Already nominal: no further registry lookup or mutation.
+    configure(SimpleNamespace(actions=SimpleNamespace(wbc_force=SimpleNamespace())))  # Legacy.
+    assert lookups == [('Tracking-WBC-FORCE2-T1-v0', 'env_cfg_entry_point')]
 
 
 def test_contact_geometry_retains_stationary_toe_during_rotation():

@@ -21,3 +21,10 @@ class T1WBCForcePPORunnerCfg(T1WBCACCPPORunnerCfg):
 @configclass
 class T1WBCForceDRPPORunnerCfg(T1WBCForcePPORunnerCfg):
     experiment_name = 't1_wbc_force2_dr'
+
+
+@configclass
+class ForcePPORunnerCfg(T1WBCForceDRPPORunnerCfg):
+    """Canonical FORCE runs, separated from archived FORCE checkpoints."""
+
+    experiment_name = 'force'

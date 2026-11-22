@@ -1,4 +1,15 @@
-# WBC-FORCE: learned normal-force inequalities
+# Legacy WBC-FORCE: learned normal-force inequalities
+
+The default `Tracking-WBC-FORCE-T1-v0` now uses FORCE2-DR settings, with full
+domain randomization, sole-point/COM tracking and ten policy outputs.
+See [current FORCE training](../README.md#train-wbc-force) for its setup and
+`bash scripts/train_force.sh` launcher. New runs use `logs/rsl_rl/force/`.
+This document describes the archived eight-output controller, available as
+`Tracking-WBC-FORCE-LEGACY-T1-v0` and `Tracking-WBC-FORCE-LEGACY-T1-Eval-v0`,
+plus the unchanged legacy standing/toy fixtures and historical measurements.
+Retained runs are now under `logs/history/t1_wbc_force/`; use `--history` for
+learned-policy evaluation. The [history index](../logs/history/index.html) and
+[path map](../logs/history_manifest_20261121.json) locate older references.
 
 WBC-FORCE is a separate task derived from [WBC-ACC](wbc_acc_controller.md).
 It shares the robot dynamics, physical foot colliders, physics, observations and PPO
@@ -347,7 +358,8 @@ Defaults: 1,024 environments, 500 Hz physics, 50 Hz policy/QP, and 30,000 PPO
 iterations. Each QP torque is held for ten physics steps. Solver failures
 terminate the affected episode and apply bounded damping until reset.
 
-The task has its own experiment folder, `logs/rsl_rl/t1_wbc_force/`.
+The task originally used `logs/rsl_rl/t1_wbc_force/`; retained historical runs
+are now in `logs/history/t1_wbc_force/`.
 Both two-output FORCE and WBC-ACC checkpoints are incompatible with this
 eight-output policy. This layout requires fresh FORCE training: earlier reference-only checkpoints
 with 236 or 1,432 actor inputs cannot be resumed into this layout.
@@ -381,12 +393,13 @@ python scripts/rsl_rl/eval_wbc.py --task Standing-WBC-FORCE-T1-v0 \
 Evaluate a trained policy:
 
 ```bash
-python scripts/rsl_rl/eval_wbc.py --task Tracking-WBC-FORCE-T1-Eval-v0 \
+python scripts/rsl_rl/eval_wbc.py --task Tracking-WBC-FORCE-LEGACY-T1-Eval-v0 \
+  --history \
   --motion_file retargeted_motion/b22_side_step_left_female1_t1_training.npz \
   --load_run RUN_DIRECTORY --checkpoint model_29999.pt \
   --num_envs 1 --steps 500 --device cuda:0 --headless
 
-python scripts/plot_wbc.py --input logs/rsl_rl/t1_wbc_force/RUN_DIRECTORY/diagnostics.npz
+python scripts/plot_wbc.py --input logs/history/t1_wbc_force/RUN_DIRECTORY/diagnostics.npz
 ```
 
 Learned-policy evaluation saves videos to the checkpoint run's `videos/play/`
