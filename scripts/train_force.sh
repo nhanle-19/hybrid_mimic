@@ -11,7 +11,8 @@ exec "${FORCE_PYTHON:-python}" scripts/rsl_rl/train.py \
   --num_envs 1024 \
   --max_iterations 30000 \
   --device cuda:0 --headless \
-  --logger tensorboard \
+  --logger wandb \
+  --log_project_name hybrid_mimic \
   --run_name force \
   agent.resume=false \
   "$@"

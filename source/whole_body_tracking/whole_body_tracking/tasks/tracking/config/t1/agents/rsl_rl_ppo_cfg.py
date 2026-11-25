@@ -8,6 +8,8 @@ class T1FlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     max_iterations = 30000
     save_interval = 500
     experiment_name = "t1_flat"
+    logger = "wandb"
+    wandb_project = "hybrid_mimic"
     empirical_normalization = True
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,

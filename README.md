@@ -6,6 +6,8 @@ WBC-FORCE learns force caps and posture gains and removes the foot-acceleration 
 
 | Use | Task |
 | --- | --- |
+| Default baseline (flat / BeyondMimic) | `Tracking-Flat-T1-v0` |
+| Centroidal-hybrid training | `Tracking-Hybrid-T1-v0` |
 | ACC training | `Tracking-WBC-ACC-T1-v0` |
 | ACC evaluation | `Tracking-WBC-ACC-T1-Eval-v0` |
 | Standing controller test | `Standing-WBC-ACC-T1-v0` |
@@ -13,7 +15,10 @@ WBC-FORCE learns force caps and posture gains and removes the foot-acceleration 
 | FORCE evaluation (nominal physics) | `Tracking-WBC-FORCE-T1-Eval-v0` |
 | Legacy force-cap standing test | `Standing-WBC-FORCE-T1-v0` |
 
-`train.py` defaults to `Tracking-WBC-FORCE-T1-v0`: full domain randomization,
+The default baseline means `Tracking-Flat-T1-v0`; see
+[flat baseline training](#train-the-flat-beyondmimic-baseline). Always specify
+`--task` to select it. The script's current CLI default is
+`Tracking-WBC-FORCE-T1-v0`: full domain randomization,
 sole-point/COM tracking, and ten policy outputs (eight caps plus posture Kp/Kd).
 With `hybridmimic` active, `bash scripts/train_force.sh` starts a fresh run on
 the normal retargeted motions in `retargeted_motion/training_list/` and saves
@@ -145,6 +150,31 @@ W&B authentication explicitly.
 
 Run all commands below from the repository root.
 
+### Training logging, GPU selection, and server caches
+
+Use **Weights & Biases** for training, including short smoke runs, with
+`--logger wandb --log_project_name hybrid_mimic`. The PPO configurations and
+FORCE launcher default to this logger and project. Authenticate once with
+`wandb login`, or use an existing `WANDB_API_KEY` in the shell.
+
+On the server, Warp initialization can fail with
+`PermissionError: [Errno 13] Permission denied: '/ephemeral/cache'`.
+Redirect the caches to the writable repository directory before launching
+Python. Warp 1.5 supports `WARP_CACHE_PATH` directly.
+
+```bash
+conda activate hybridmimic
+# Run from the repository root.
+export XDG_CACHE_HOME="$PWD/.cache"
+export WARP_CACHE_PATH="$XDG_CACHE_HOME/warp/1.5.0"
+mkdir -p "$WARP_CACHE_PATH"
+export CUDA_VISIBLE_DEVICES=0
+```
+
+Keep these exports in the same shell as training. To expose another physical
+GPU, change `CUDA_VISIBLE_DEVICES` to its index; keep `--device cuda:0` when
+only one GPU is exposed. Generated `.cache/` contents are ignored by Git.
+
 ## Convert a retargeted motion
 
 In your Isaac Lab environment, convert the retargeted G18 kick into the training
@@ -243,7 +273,7 @@ are absent. ACC, AUTHORITY, and the separate manual crawl controller retain
 their existing contact handling.
 
 Start a **fresh run**: older two-output FORCE checkpoints and manual tables
-are incompatible. Nominal posture gains are **1600/40**, with learned adjustments
+are incompatible. Nominal posture gains are **225/30**, with learned adjustments
 described below. Swing and false-zero
 rewards now evaluate each reference corner separately; reference geometry
 still supplies only reward weights and never gates the QP.
@@ -278,7 +308,7 @@ python scripts/rsl_rl/train.py \
 The task defaults to **1,024 environments and 30,000 iterations**, saving
 checkpoints every 500 iterations and at completion. Controller gains and
 weights come from the FORCE2 controller, including nominal posture gains
-**Kp=1600, Kd=40** and learned gain adjustments. Domain randomization is enabled.
+**Kp=225, Kd=30** and learned gain adjustments. Domain randomization is enabled.
 Checkpoints go to `logs/rsl_rl/force/`. Force limits use their configured defaults;
 contact-height tolerances do not gate two-foot FORCE. To change the training
 selection, update `retargeted_motion/training_list/` as described below and set
@@ -456,6 +486,13 @@ privileged inputs and all ten previous actions. The eight FORCE reward terms
 are shared across clips: completion, swing force, action change, false zero,
 unused cap, gain deviation, sole-point tracking, and COM tracking.
 
+The sole-point position penalty compares each actual corner relative to the
+actual whole-body COM against its reference corner relative to the reference
+COM, with both expressed in world axes. Its tracking metrics use the same
+COM-relative errors. The separate COM penalty continues to track world-space
+COM motion. The sole-point error scale, weight, and per-clip normalization are
+unchanged.
+
 FORCE and both FORCE2 training variants disable the inherited fixed-duration termination:
 training attempts end at their selected clip's boundary or on a torso/QP
 failure. Long clips can therefore finish from frame zero without an
@@ -471,8 +508,8 @@ force caps, followed by two independent posture-tracking actions, `u_kp, u_kd`.
 Each gain is shared across all joints and updates at the policy/QP frequency:
 
 ```text
-Kp = 1600 * (1 + 0.5 * tanh(u_kp))   # range 800–2400
-Kd =   40 * (1 + 0.5 * tanh(u_kd))   # range 20–60
+Kp = 225 * (1 + 0.5 * tanh(u_kp))   # range 112.5–337.5
+Kd =  30 * (1 + 0.5 * tanh(u_kd))   # range 15–45
 qdd_target = Kp * (q_ref - q) + Kd * (qd_ref - qd)
 ```
 
@@ -585,8 +622,8 @@ G3 label table includes an unvalidated tail after its 52-step executed prefix.
 Crawl stays separate because it uses an eight-region controller. G18 stays
 outside the training collection because its original label tables were deleted.
 
-With the `hybridmimic` environment active, launch a fresh run with local
-TensorBoard logging:
+With the `hybridmimic` environment active and W&B authenticated, launch a fresh
+run with W&B logging to the `hybrid_mimic` project:
 
 ```bash
 bash scripts/train_force.sh
@@ -594,7 +631,7 @@ bash scripts/train_force.sh
 
 This launcher reads `retargeted_motion/training_list/` and sets
 **1,024 environments, 30,000 PPO updates**, checkpoint saving
-every 500 updates, local TensorBoard logging, run name
+every 500 updates, W&B logging to `hybrid_mimic`, run name
 `force`, and `agent.resume=false`. It enables full domain randomization and ends
 episodes at the clip boundary or failure, without a fixed-duration timeout.
 `train_labeled_force.sh` forwards to this launcher. Trailing arguments can
@@ -800,26 +837,41 @@ their original profiles. FORCE training, scheduled manual
 replay and toy-standing replay now omit the limb-height cutoff while retaining
 their torso and QP guards.
 
-### Train the PD baseline
+### Train the flat BeyondMimic baseline
 
-Use the original `Tracking-Flat-T1-v0` task with the local converted motion and
-log training metrics to the same W&B project:
+The default baseline is the original `Tracking-Flat-T1-v0` task. It learns
+joint-position actions using the robot's actuator PD gains; it has no learned
+Kp/Kd outputs. The WBC posture gains do not configure this task.
+
+Train the left side-step from the repository root:
 
 ```bash
-read -rsp "W&B API key: " WANDB_API_KEY
-echo
+conda activate hybridmimic
+export XDG_CACHE_HOME="$PWD/.cache"
+export WARP_CACHE_PATH="$XDG_CACHE_HOME/warp/1.5.0"
+mkdir -p "$WARP_CACHE_PATH"
+export CUDA_VISIBLE_DEVICES=0
+wandb login  # Once per account setup; an existing WANDB_API_KEY also works.
 
-CUDA_VISIBLE_DEVICES=0 WANDB_API_KEY="$WANDB_API_KEY" python scripts/rsl_rl/train.py \
+python scripts/rsl_rl/train.py \
   --task Tracking-Flat-T1-v0 \
-  --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
+  --motion_file retargeted_motion/training_list/20_side_step_left.npz \
   --num_envs 1024 \
+  --device cuda:0 \
   --headless \
   --logger wandb \
   --log_project_name hybrid_mimic \
-  --run_name pd_g18_push_kick_right
+  --run_name flat_side_step_left \
+  agent.resume=false
 ```
 
-This runs the full configured iteration count. For a short pipeline check, use
+This runs 30,000 iterations. For the right side-step, use
+`retargeted_motion/training_list/21_side_step_right.npz` and run name
+`flat_side_step_right`. Flat training currently accepts a single NPZ; passing
+the full `training_list/` folder requires multi-motion support to be added to
+this task.
+
+For a short pipeline check, use
 `--num_envs 64 --max_iterations 20 --run_name pd_pipeline_check` instead.
 Check that PPO iterations complete with finite losses and checkpoints are saved
 under `logs/rsl_rl/t1_flat/`.

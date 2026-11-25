@@ -19,6 +19,7 @@
 !.vscode
 
 # Outputs
+/.cache/
 **/runs/*
 **/logs/*
 **/recordings/*

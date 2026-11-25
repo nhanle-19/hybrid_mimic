@@ -5,8 +5,8 @@ from ..t1_wbc_acc.controller_cfg import T1WBCACCControllerCfg
 
 @configclass
 class T1WBCForceControllerCfg(T1WBCACCControllerCfg):
-    posture_position_gain: float = 1600.
-    posture_velocity_gain: float = 40.
+    posture_position_gain: float = 225.
+    posture_velocity_gain: float = 30.
     learned_posture_gains: bool = True
     posture_gain_relative_range: float = .5
     contact_force_max: tuple = (600., 600.)

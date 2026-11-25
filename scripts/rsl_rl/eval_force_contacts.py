@@ -111,6 +111,14 @@ def main():
         for name, default in (('learned_posture_gains', False), ('posture_gain_relative_range', .5)):
             value = saved_controller.setdefault(name, default)
             setattr(cfg.actions.wbc_force.controller, name, value)
+    # Posture gains are training configuration, including for fixed-gain runs.
+    # Restore the archived baseline before checking for unrelated config drift
+    # and before applying any explicitly requested evaluation-only override.
+    for name in ('posture_position_gain', 'posture_velocity_gain'):
+        value = saved_controller[name]
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f'Invalid training controller gain: {name}={value}')
+        setattr(cfg.actions.wbc_force.controller, name, value)
     current_action = cfg.actions.wbc_force.to_dict()
     for key in ('controller', 'friction', 'batched_max_iterations', 'batched_tolerance', 'residual_tolerance'):
         expected = saved_controller if key == 'controller' else normalized(saved['actions']['wbc_force'][key])

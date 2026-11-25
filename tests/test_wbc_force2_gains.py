@@ -20,7 +20,7 @@ from wbc_contact_mapping import decode_force_values, decode_force_values_numpy
 
 @pytest.fixture
 def gain_cfg(cfg):
-    cfg.posture_position_gain, cfg.posture_velocity_gain = 1600., 40.
+    cfg.posture_position_gain, cfg.posture_velocity_gain = 225., 30.
     cfg.learned_posture_gains, cfg.posture_gain_relative_range = True, .5
     cfg.point_force_max_body_weights = 1.
     return cfg
@@ -31,12 +31,12 @@ def test_gain_mapping_and_cap_isolation(gain_cfg):
     solver = WBCCornerForcePDGPUQP(gain_cfg)
     actions = torch.cat((torch.zeros(3, 8), raw), -1)
     gains = solver.posture_gains(actions)
-    torch.testing.assert_close(gains[:2], raw.new_tensor([[1600., 40.], [800., 60.]]))
-    assert 1600 < gains[2, 0] < 2400 and 20 < gains[2, 1] < 40
+    torch.testing.assert_close(gains[:2], raw.new_tensor([[225., 30.], [112.5, 45.]]))
+    assert 225 < gains[2, 0] < 337.5 and 15 < gains[2, 1] < 30
     torch.testing.assert_close(decode_force_values(actions), decode_force_values(actions[:, :8]))
     np.testing.assert_allclose(decode_force_values_numpy(actions.numpy()), decode_force_values(actions).numpy())
     assert solver.action_names[-2:] == ('posture_kp', 'posture_kd')
-    assert solver.action_transform['posture_gains']['defaults'] == [1600., 40.]
+    assert solver.action_transform['posture_gains']['defaults'] == [225., 30.]
     for invalid in (torch.zeros(1, 8), torch.full((1, 10), float('nan'))):
         with pytest.raises(ValueError, match='10 finite'):
             solver.decode_policy(invalid)
@@ -163,6 +163,6 @@ def test_force2_action_initializes_and_resets_gain_outputs(action_modules, monke
     torch.testing.assert_close(term.raw_actions[0], raw[0])
     assert term.raw_actions[1].count_nonzero() == 0
     if enabled:
-        torch.testing.assert_close(term.solver.posture_gains(term.raw_actions)[1], torch.tensor([1600., 40.]))
+        torch.testing.assert_close(term.solver.posture_gains(term.raw_actions)[1], torch.tensor([225., 30.]))
     with pytest.raises(ValueError, match='finite policy actions'):
         term.process_actions(torch.zeros(2, 8 if enabled else 10))

@@ -300,25 +300,40 @@ class _PositionTrackingPenalty(_MotionScaledTerm):
 
 
 class SolePointTrackingPenalty(_PositionTrackingPenalty):
-    """Track the world positions of all eight QP sole corners, including swing.
+    """Track all eight QP sole corners relative to whole-body COM, including swing.
 
-    Sum squared XYZ error over all points within each environment, then bound
-    the total cost. Rotations contribute through the rotated corner locations.
-    Caps and measured contact forces never gate this tracking reward.
+    Center actual and reference points on their respective COMs, keeping world
+    axes and the same nominal mass weighting as COMTrackingPenalty. Sum squared
+    XYZ error over all points, then bound the total cost. Rotations contribute
+    through the rotated corner locations. Caps and measured contact forces never
+    gate this reward. Sole-point tracking metrics use these COM-relative errors.
     """
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        self.body_ids = [self.command.robot.body_names.index(name) for name in FEET]
+        model = env.action_manager.get_term('wbc_force').dynamics
+        body_names = self.command.robot.body_names
+        if set(body_names) != set(model.body_names):
+            raise ValueError('Sole-point COM tracking requires matching simulator and dynamics bodies')
+        order = [model.body_names.index(name) for name in body_names]
+        self.body_ids = [body_names.index(name) for name in FEET]
         motion = self.command.motion
+        mass = model.mass[order].to(motion._body_pos_w)
+        self.mass_weights = mass/mass.sum()
+        local_com = model.com_local[order].to(motion._body_pos_w)
+        body_rotation = rotation_xyzw(motion._body_quat_w[..., [1, 2, 3, 0]])
+        reference_body_com = motion._body_pos_w+(body_rotation@local_com[..., None]).squeeze(-1)
+        self.reference_com = (self.mass_weights[None, :, None]*reference_body_com).sum(1)
         self.points = sole_vertices(motion._body_pos_w.device, motion._body_pos_w.dtype)
-        position = motion._body_pos_w[:, self.body_ids]
-        rotation = rotation_xyzw(motion._body_quat_w[:, self.body_ids][..., [1, 2, 3, 0]])
+        position = motion._body_pos_w[:, self.body_ids]-self.reference_com[:, None]
+        rotation = body_rotation[:, self.body_ids]
         self.reference_points = self.points@rotation.transpose(-1, -2)+position[:, :, None]
 
     def __call__(self, env, command_name='motion', error_scale=.05):
         # Rewards run after physics, before command advancement and reset.
         data = self.command.robot.data
-        position = data.body_link_pos_w[:, self.body_ids]-env.scene.env_origins[:, None]
+        body_com = data.body_com_pos_w-env.scene.env_origins[:, None]
+        actual_com = (self.mass_weights.to(body_com)[None, :, None]*body_com).sum(1)
+        position = data.body_link_pos_w[:, self.body_ids]-env.scene.env_origins[:, None]-actual_com[:, None]
         rotation = rotation_xyzw(data.body_link_quat_w[:, self.body_ids][..., [1, 2, 3, 0]])
         actual_points = self.points.to(position)@rotation.transpose(-1, -2)+position[:, :, None]
         squared_error = (actual_points-self.reference_points[self.command.time_steps]).square().sum((1, 2, 3))

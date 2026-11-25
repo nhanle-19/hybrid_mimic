@@ -63,6 +63,8 @@ def term_cfg(scale=.05):
 @pytest.mark.parametrize('name', ['SolePointTrackingPenalty', 'COMTrackingPenalty'])
 def test_exact_tracking_at_current_frame_and_environment_origin_invariance(rewards, name):
     env = make_env(steps=(2, 7))
+    # Frame zero differs in relative foot placement, not just global translation.
+    env.command_manager.get_term('motion').motion._body_pos_w[0, 2, 2] += .01
     term = getattr(rewards, name)(term_cfg(), env)
     torch.testing.assert_close(term(env), torch.zeros(2, dtype=torch.float64), atol=1e-15, rtol=0)
     shift = torch.tensor([[3., 7., -2.], [-4., 1., .3]], dtype=torch.float64)
@@ -74,6 +76,31 @@ def test_exact_tracking_at_current_frame_and_environment_origin_invariance(rewar
     torch.testing.assert_close(term(env), torch.zeros(2, dtype=torch.float64), atol=1e-15, rtol=0)
     term.command.time_steps.fill_(0)
     assert (term(env) > 0).all()  # Target follows the executed reference frame.
+
+
+def test_sole_tracking_ignores_whole_body_translation_but_com_tracking_retains_it(rewards):
+    env = make_env(steps=(2, 7))
+    sole = rewards.SolePointTrackingPenalty(term_cfg(), env)
+    com = rewards.COMTrackingPenalty(term_cfg(), env)
+    data = sole.command.robot.data
+    shift = torch.tensor([[.4, -.3, .2], [-.2, .5, -.1]], dtype=torch.float64)
+    # Move the robot independently of the reference and environment origins.
+    data.body_link_pos_w += shift[:, None]
+    data.body_com_pos_w += shift[:, None]
+    torch.testing.assert_close(sole(env), torch.zeros(2, dtype=torch.float64), atol=1e-15, rtol=0)
+    assert (com(env) > 0).all()
+
+
+def test_sole_tracking_centers_on_mass_weighted_com_from_current_simulator_state(rewards):
+    env = make_env()
+    term = rewards.SolePointTrackingPenalty(term_cfg(), env)
+    data = term.command.robot.data
+    # Leave the sole poses fixed; COM shifts depend on each body's mass.
+    data.body_com_pos_w[0, 1, 0] += .07  # Trunk: 4/7 mass, COM shifts .04 m.
+    data.body_com_pos_w[1, 2, 0] += .07  # Left foot: 1/7 mass, COM shifts .01 m.
+    error = torch.tensor([.04, .01], dtype=torch.float64)
+    expected = -torch.expm1(-8*error.square()/.05**2)
+    torch.testing.assert_close(term(env)/term.scale, expected)
 
 
 def test_sole_tracking_sums_all_eight_points_without_cap_or_contact_gating(rewards):
@@ -184,13 +211,12 @@ def test_tracking_clip_cost_preserves_normalization_and_bounds(rewards, name, fr
     env = make_env(frames=frames, dt=dt)
     term = getattr(rewards, name)(term_cfg(), env)
     data = term.command.robot.data
-    data.body_link_pos_w += torch.tensor([.03, .04, 0.])
+    # A COM displacement with fixed sole poses exercises both tracking terms.
     data.body_com_pos_w += torch.tensor([.03, .04, 0.])
     exponent = 8. if name == 'SolePointTrackingPenalty' else 1.
     expected = -25*(1.-torch.exp(torch.tensor(-exponent, dtype=torch.float64)))
     # Shared per-clip scaling is float32, including when geometry is float64.
     torch.testing.assert_close(term(env)*dt*term.cfg.weight*frames, expected.expand(2), atol=4e-6, rtol=1e-7)
-    data.body_link_pos_w += 100.
     data.body_com_pos_w += 100.
     env.termination_manager.terminated[:] = True
     torch.testing.assert_close(term(env)*dt*term.cfg.weight*frames,
@@ -203,9 +229,9 @@ def test_tracking_normalizes_per_clip_in_a_motion_library(rewards, name):
     term = getattr(rewards, name)(term_cfg(), env)
     term.command.motion.clip_bounds = lambda frame: (torch.where(frame < 5, 0, 5), torch.where(frame < 5, 5, 10))
     data = term.command.robot.data
-    data.body_link_pos_w += .01
     data.body_com_pos_w += .01
     values = term(env)
+    assert (values > 0).all()
     torch.testing.assert_close(values[0], 2*values[1])
 
 

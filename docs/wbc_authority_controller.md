@@ -99,7 +99,7 @@ conda activate hybridmimic
 python scripts/rsl_rl/train.py --task Tracking-WBC-AUTHORITY-T1-v0 \
   --motion_file retargeted_motion/b22_side_step_left_female1_t1_training.npz \
   --num_envs 1024 --device cuda:0 --headless \
-  --logger tensorboard --run_name wbc_authority_side_step
+  --logger wandb --log_project_name hybrid_mimic --run_name wbc_authority_side_step
 ```
 
 Start with a smoke run using `--num_envs 32 --max_iterations 2`.

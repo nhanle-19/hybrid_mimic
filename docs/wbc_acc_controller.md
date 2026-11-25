@@ -177,7 +177,7 @@ Short training smoke command:
 python scripts/rsl_rl/train.py --task Tracking-WBC-ACC-T1-v0 \
   --motion_file retargeted_motion/g18_push_kick_right_t1_training.npz \
   --num_envs 32 --max_iterations 2 --device cuda:0 --headless \
-  --logger tensorboard --run_name reference_contact_smoke
+  --logger wandb --log_project_name hybrid_mimic --run_name reference_contact_smoke
 ```
 
 The current host has no working NVIDIA driver. The smoke attempt failed during
