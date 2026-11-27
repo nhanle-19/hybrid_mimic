@@ -4,7 +4,7 @@ from isaaclab.managers import ObservationTermCfg, RewardTermCfg, TerminationTerm
 from ..t1_wbc_acc.flat_env_cfg import T1WBCACCEnvCfg, T1WBCACCEnvEvalCfg, T1WBCACCStandingEnvCfg
 from ..t1_wbc_acc.rewards import qp_failed
 from ..t1_wbc_acc.observations import actual_root_joint_state
-from .observations import reference_window
+from .observations import reference_window, reference_momentum_window
 from .wbc_force_action import WBCForceActionCfg
 from .motion import WBCForceTrainingMotion
 from .reward_terms import (
@@ -48,6 +48,7 @@ def configure_wbc_force(cfg):
     cfg.actions.wbc_force.standing_only = previous.standing_only
     # Both networks keep current joints/root and five measured-state frames;
     # future frames contain COM-relative sole-corner positions and velocities.
+    # A separate block adds whole-body momentum at the same reference offsets.
     for group in (cfg.observations.policy, cfg.observations.critic):
         # A group-level history would override the individual term lengths.
         group.history_length = None
@@ -56,6 +57,8 @@ def configure_wbc_force(cfg):
         group.reference.history_length = 0
         group.actual_state = ObservationTermCfg(func=actual_root_joint_state,
                                                 history_length=5, flatten_history_dim=True)
+        group.reference_momentum = ObservationTermCfg(func=reference_momentum_window,
+            params={'offsets': (0, 1, 3, 5, 10)}, history_length=0)
     cfg.rewards = WBCForceRewardsCfg()
     # Contact-cap learning prioritizes balance and feasible motion. Limb-height
     # tracking error alone is not a failure; retain the coarse torso guards.

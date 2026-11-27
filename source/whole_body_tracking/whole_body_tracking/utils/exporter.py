@@ -199,6 +199,15 @@ def attach_onnx_metadata(env: ManagerBasedRLEnv, run_path: str, path: str, filen
         if reference_metadata is not None:
             metadata.update(reference_metadata)
             metadata['actor_reference_body_names'] = list(robot_data.body_names)
+        momentum_term = getattr(env.observation_manager.cfg.policy, 'reference_momentum', None)
+        if momentum_term is not None:
+            metadata.update(momentum_term.func.export_metadata)
+            metadata['actor_reference_momentum_frame_offsets'] = list(momentum_term.params['offsets'])
+            # Use manager order: these blocks are concatenated independently.
+            block_names = {'reference': 'reference_window', 'actual_state': 'actual_state_history',
+                           'reference_momentum': 'reference_momentum_window'}
+            metadata['actor_inputs'] = ','.join(block_names.get(name, name)
+                for name in env.observation_manager.active_terms['policy'])
     elif "wbc_acc" in env.action_manager.active_terms:
         wbc_acc = env.action_manager.get_term("wbc_acc")
         controller = wbc_acc.cfg.controller

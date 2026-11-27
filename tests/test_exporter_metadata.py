@@ -80,6 +80,13 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
             env.observation_manager.active_terms['policy'] = ['reference', 'actual_state']
             env.observation_manager.cfg.policy = NS(history_length=None, reference=reference,
                 actual_state=actual, to_dict=lambda: {'reference': vars(reference), 'actual_state': vars(actual)})
+            if force2:
+                momentum = NS(func=observations.reference_momentum_window,
+                              params={'offsets': (0, 1, 3, 5, 10)}, history_length=0)
+                env.observation_manager.cfg.policy.reference_momentum = momentum
+                env.observation_manager.active_terms['policy'].append('reference_momentum')
+                env.observation_manager.cfg.policy.to_dict = lambda: {
+                    'reference': vars(reference), 'actual_state': vars(actual), 'reference_momentum': vars(momentum)}
     elif hybrid:
         env.hybrid_controller = NS(action_dim=57, end_effector_names=["left_foot", "right_foot", "left_hand", "right_hand"],
             desired_linear_velocity_scale=.25, desired_angular_velocity_scale=.5, torque_action_scale=.1)
@@ -137,13 +144,21 @@ def test_metadata_export(exporter, tmp_path, hybrid, nominal):
                 f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)]
             assert metadata['actor_reference_future_frame_size'] == '48'
             assert metadata['actor_reference_future_floor_clearance'] == 'False'
+            assert metadata['actor_reference_momentum_layout'] == 'frame_major:linear_momentum_xyz,angular_momentum_xyz'
+            assert [float(x) for x in metadata['actor_reference_momentum_frame_offsets'].split(',')] == [0, 1, 3, 5, 10]
+            assert metadata['actor_reference_momentum_frame_size'] == '6'
+            assert metadata['actor_reference_momentum_axes'] == 'world'
+            assert metadata['actor_reference_angular_momentum_origin'] == 'reference_whole_body_com'
+            assert metadata['actor_reference_momentum_units'] == 'linear:kg*m/s;angular:kg*m^2/s'
+            assert metadata['actor_reference_momentum_source'] == 'nominal_qp_model:Ag(q_ref)@v_ref'
         else:
             assert metadata["actor_reference_body_selection"] == "anchor_only"
             assert metadata["actor_reference_layout"] == "frame_major:joint_pos,joint_vel,body_pos_w,body_quat_w_wxyz,body_lin_vel_w,body_ang_vel_w"
-        assert metadata["actor_inputs"] == "reference_window,actual_state_history"
+        assert metadata["actor_inputs"] == ("reference_window,actual_state_history"
+            + (",reference_momentum_window" if force2 else ""))
         assert [float(x) for x in metadata["actor_reference_frame_offsets"].split(",")] == [0, 1, 3, 5, 10]
         assert [float(x) for x in metadata["actor_actual_state_frame_offsets"].split(",")] == [-4, -3, -2, -1, 0]
-        assert [float(x) for x in metadata["observation_history_lengths"].split(",")] == [1, 5]
+        assert [float(x) for x in metadata["observation_history_lengths"].split(",")] == ([1, 5, 1] if force2 else [1, 5])
         assert metadata["actor_actual_state_history_reset"] == "repeat_first_state_of_new_episode"
         assert float(metadata["actor_state_sample_dt"]) == .02
         assert [float(x) for x in metadata["contact_force_max"].split(",")] == [310.]*8

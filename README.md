@@ -479,9 +479,17 @@ equal probability, then samples its phase adaptively; 20% of starts are at that
 clip's frame zero. Each episode ends at its own clip boundary. Reference
 lookahead, derivative calculations, unloading lead-in and 100-point reward
 normalization remain within that clip. `WBCForce/Motion/<clip_name>/*` reports
-separate sampling, completion and cap statistics. The actor receives 546 values:
+separate sampling, completion and cap statistics. The actor receives 576 values:
 59 current reference values, four future sole-corner frames of 48 values each,
-and five measured-state frames of 59 values each. The critic also receives its
+five measured-state frames of 59 values each, and a separate 30-value reference
+momentum block. That block contains linear XYZ followed by angular XYZ momentum
+at offsets `(0, 1, 3, 5, 10)`, in frame order. Both vectors use world axes;
+angular momentum is about the reference whole-body COM. Units are kg*m/s and
+kg*m^2/s. The values reuse the QP's cached nominal-model reference dynamics,
+without measured robot state or randomized simulator inertials. All existing
+position and velocity inputs remain. This input change requires a new training
+run; the old 546-input checkpoints cannot be resumed directly.
+The critic receives the same reference momentum block along with its
 privileged inputs and all ten previous actions. The eight FORCE reward terms
 are shared across clips: completion, swing force, action change, false zero,
 unused cap, gain deviation, sole-point tracking, and COM tracking.

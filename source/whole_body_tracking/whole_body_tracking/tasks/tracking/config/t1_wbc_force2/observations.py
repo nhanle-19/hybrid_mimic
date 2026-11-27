@@ -1,5 +1,33 @@
-"""Current generalized reference with sole-point lookahead for FORCE2."""
+"""Current generalized reference, sole-point lookahead and momentum for FORCE2."""
 import torch
+
+
+def _reference_indices(env, offsets):
+    if any(offset < 0 for offset in offsets):
+        raise ValueError('FORCE2 reference offsets must be nonnegative')
+    command = env.command_manager.get_term('motion')
+    motion = command.motion
+    if hasattr(motion, 'window_indices'):
+        return motion.window_indices(command.time_steps, offsets)
+    return (command.time_steps[:, None]+torch.tensor(offsets, device=env.device)[None]).clamp(
+        0, motion.time_step_total-1)
+
+
+def reference_momentum_window(env, offsets=(0, 1, 3, 5, 10)):
+    """Reference whole-body linear/angular momentum, six values per frame.
+
+    Both vectors use world axes; angular momentum is about the reference
+    whole-body COM. Units are kg*m/s and kg*m^2/s, respectively. Reuse the QP's
+    nominal-model reference cache, built once from reference q/v. This needs
+    neither measured robot state nor randomized simulator masses/inertias.
+    """
+    ids = _reference_indices(env, offsets)
+    action = env.action_manager.get_term('wbc_force')
+    # Observations are evaluated before the first QP step during initialization.
+    if action.references is None:
+        action._reference_states()
+    motion = env.command_manager.get_term('motion').motion
+    return action.references['momentum'][ids].to(dtype=motion._body_pos_w.dtype).flatten(1)
 
 
 def _contact_reference(env, command, ids):
@@ -38,14 +66,9 @@ def reference_window(env, offsets=(0, 1, 3, 5, 10)):
     absolute-position, floor-clearance, or separate sole-normal fields.
     Clip endpoints clamp without changing the requested frame's layout.
     """
-    if any(offset < 0 for offset in offsets):
-        raise ValueError('FORCE2 reference offsets must be nonnegative')
     command = env.command_manager.get_term('motion')
     motion = command.motion
-    ids = (command.time_steps[:, None]+torch.tensor(offsets, device=env.device)[None]).clamp(
-        0, motion.time_step_total-1)
-    if hasattr(motion, 'window_indices'):
-        ids = motion.window_indices(command.time_steps, offsets)
+    ids = _reference_indices(env, offsets)
     future_columns = [column for column, offset in enumerate(offsets) if offset > 0]
     future = _contact_reference(env, command, ids[:, future_columns]) if future_columns else None
     future_index = 0
@@ -73,4 +96,13 @@ reference_window.export_metadata = {
         f'{side}_corner_{corner}' for side in ('left', 'right') for corner in range(4)),
     'actor_reference_future_frame_size': 48,
     'actor_reference_future_floor_clearance': False,
+}
+
+reference_momentum_window.export_metadata = {
+    'actor_reference_momentum_layout': 'frame_major:linear_momentum_xyz,angular_momentum_xyz',
+    'actor_reference_momentum_frame_size': 6,
+    'actor_reference_momentum_axes': 'world',
+    'actor_reference_angular_momentum_origin': 'reference_whole_body_com',
+    'actor_reference_momentum_units': 'linear:kg*m/s;angular:kg*m^2/s',
+    'actor_reference_momentum_source': 'nominal_qp_model:Ag(q_ref)@v_ref',
 }
