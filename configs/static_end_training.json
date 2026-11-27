@@ -1,0 +1,571 @@
+{
+  "version": 1,
+  "fps": 50,
+  "hold_seconds": 1,
+  "source_library_manifest_sha256": "e98bf66dbe112e565e593e26a095b00a78637e203444ddb1af39cb5255fbe13e",
+  "acceptance": {
+    "maximum_self_penetration_m": 0.003,
+    "minimum_sole_height_m": -2e-06,
+    "maximum_foot_ik_error_m": 0.0005,
+    "maximum_static_torque_fraction": 0.85,
+    "minimum_modified_endpoint_com_margin_m": 0.01,
+    "all_planted_settling_frames_force_feasible": true
+  },
+  "motions": [
+    {
+      "file": "01_walk.npz",
+      "input": "retargeted_motion/training_list/01_walk.npz",
+      "input_sha256": "9e7117448732115882a63d3e7575f30d091ad7ac144f523aac67fdab59158b79",
+      "method": "preserve_static",
+      "source_end_frame": 260,
+      "source_transition_seconds": 0.0,
+      "source_provenance": {
+        "source": "retargeted_motion/hdm_bk_walk_in_place_settled_t1_training.npz"
+      }
+    },
+    {
+      "file": "02_tilted_sway.npz",
+      "input": "retargeted_motion/training_list/02_tilted_sway.npz",
+      "input_sha256": "35cececc299976aced21b09a766242bfca8ceb1ba6883ae4deb7b1f727dddeea",
+      "method": "preserve_static",
+      "source_end_frame": 499,
+      "source_transition_seconds": 0.0,
+      "source_provenance": {
+        "source": "eval_data/toy_standing_sway_wide02/reference.npz"
+      }
+    },
+    {
+      "file": "05_slide.npz",
+      "input": "retargeted_motion/training_list/05_slide.npz",
+      "input_sha256": "ef53d4b3569419d76bad77c8f221d15b7e5a11bec40d64ad839ea830abeaf177",
+      "method": "preserve_static",
+      "source_end_frame": 499,
+      "source_transition_seconds": 0.0,
+      "source_provenance": {
+        "source": "eval_data/toy_left_foot_slide/reference.npz"
+      }
+    },
+    {
+      "file": "06_sole_rotation.npz",
+      "input": "retargeted_motion/training_list/06_sole_rotation.npz",
+      "input_sha256": "d6cd5b0985ec6543680bab5f29a12ee82369d4a2e54c64065056aa6786580812",
+      "method": "preserve_static",
+      "source_end_frame": 499,
+      "source_transition_seconds": 0.0,
+      "source_provenance": {
+        "source": "eval_data/toy_left_foot_rotation/reference.npz"
+      }
+    },
+    {
+      "file": "07_toe_rotation.npz",
+      "input": "retargeted_motion/training_list/07_toe_rotation.npz",
+      "input_sha256": "c7c5055bfecfafdca0c0bacc9fef831ccc40a800eb3aefc3399aca5c3fac7e80",
+      "method": "preserve_static",
+      "source_end_frame": 499,
+      "source_transition_seconds": 0.0,
+      "source_provenance": {
+        "source": "eval_data/toy_left_foot_toe_rotation/reference.npz"
+      }
+    },
+    {
+      "file": "08_turn_right.npz",
+      "input": "retargeted_motion/training_list/08_turn_right.npz",
+      "input_sha256": "10d01f81a65cb48b64db1c9e3fff534b03b0c92fd5d4c159fbd3ab805b349b79",
+      "method": "preserve_static",
+      "source_end_frame": 660,
+      "source_transition_seconds": 0.0,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E1_-_Turn_around_right_stageii.npz",
+        "source_sha256": "4323bbbbe52134e1f7306f7d2abc1fe3b77736a930c6bd475381a5c1e7592199",
+        "family": "turns"
+      }
+    },
+    {
+      "file": "09_front_kick.npz",
+      "input": "retargeted_motion/training_list/09_front_kick.npz",
+      "input_sha256": "17be89fe87d12b02823033dae34d6fe58b09f4071ede451a509222c4faaaf58e",
+      "method": "settle",
+      "source_end_frame": 114,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "eval_data/reference_planted_kick_20261016/g3_front_kick_t1_training.npz"
+      },
+      "active_time_scale": 2.0,
+      "speed_adjustment_reason": "Original active prefix reaches 1.4914 times a joint speed limit; double its duration while retaining a one-second hold."
+    },
+    {
+      "file": "10_turn_left.npz",
+      "input": "retargeted_motion/training_list/10_turn_left.npz",
+      "input_sha256": "b77ff6304a2102bb8de60b60e8c4acbb09a2041768f47f1ef3ede7a56b6681f8",
+      "method": "settle",
+      "source_end_frame": 653,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E2_-_Turn_around_left_stageii.npz",
+        "source_sha256": "ebcfba291ae20b070361108a52ed78e662a3be63508cb8d8c2cacc000fc7d580",
+        "family": "turns"
+      }
+    },
+    {
+      "file": "11_switch_stance.npz",
+      "input": "retargeted_motion/training_list/11_switch_stance.npz",
+      "input_sha256": "9fcad35e9366268307c08b946604d05985bbb54b34c78d893c257cb2b4424f52",
+      "method": "settle",
+      "source_end_frame": 151,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2MartialArtsStances_c3d/D15_-_switch_stance_stageii.npz",
+        "source_sha256": "eacbcd66a51bf650d43ff1731f4cab259075ba6fa935dba5e444e218129aba52",
+        "family": "stance_switch"
+      }
+    },
+    {
+      "file": "12_stand_to_ready.npz",
+      "input": "retargeted_motion/training_list/12_stand_to_ready.npz",
+      "input_sha256": "1d4a78db9eb60d59ff4db96bbaa219d78409ac4bf8418c3b49e32e21d7a9675b",
+      "method": "settle",
+      "source_end_frame": 146,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2MartialArtsStances_c3d/D1_-_stand_to_ready_stageii.npz",
+        "source_sha256": "5cdfdb0ed9a81684cc6970b725593c978789041f09b07c802d40cb1f2f6afa98",
+        "family": "stance_switch"
+      }
+    },
+    {
+      "file": "13_bounce.npz",
+      "input": "retargeted_motion/training_list/13_bounce.npz",
+      "input_sha256": "ba64178f90875cf8b51dfaaf3b0f3e28bb6f30a49f1e90b4fc109d2007da9f40",
+      "method": "settle",
+      "source_end_frame": 376,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E8_-_bounce_stageii.npz",
+        "source_sha256": "b1338f7ba7e3a057f8cee7a00d7d59ec790b82c609daddaaf98d07b967e525e5",
+        "family": "bounce"
+      }
+    },
+    {
+      "file": "14_cross_punch_left.npz",
+      "input": "retargeted_motion/training_list/14_cross_punch_left.npz",
+      "input_sha256": "db9fd222421ef2641ebb8d87ab14b8be6eafeb32aa32ca8c58d90d58699567ef",
+      "method": "settle",
+      "source_end_frame": 161,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2MartialArtsPunches_c3d/E3_-__cross_left_stageii.npz",
+        "source_sha256": "33a1fa9a6c5007706e0a78417c589f369b97723a234f4a2590359194aca4b64c",
+        "family": "cross_punch"
+      }
+    },
+    {
+      "file": "15_cross_punch_right.npz",
+      "input": "retargeted_motion/training_list/15_cross_punch_right.npz",
+      "input_sha256": "37e512f1098bfb34200486810d109b0e859ab9d98850b6a243b8e4e6efb1a437",
+      "method": "settle",
+      "source_end_frame": 121,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2MartialArtsPunches_c3d/E4_-__cross_right_stageii.npz",
+        "source_sha256": "617bee0b276c3ac6b3bd50905aa83242cb4221ebdb61798bd7c8de35a1cb45b7",
+        "family": "cross_punch"
+      }
+    },
+    {
+      "file": "16_natural_sway_female.npz",
+      "input": "retargeted_motion/training_list/16_natural_sway_female.npz",
+      "input_sha256": "6a4d87a69792ce2b832ae04c4d70d483e7aa6b5bbce2d2048dd987b75f2273b4",
+      "method": "settle",
+      "source_end_frame": 600,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Female1General_c3d/A2_-_Sway_stageii.npz",
+        "source_sha256": "97d9de1054bf167106a827e14c41a4a12db4cb3a9e82a1bbbbb1eeac54064ab1",
+        "family": "natural_sway"
+      }
+    },
+    {
+      "file": "17_natural_sway_male.npz",
+      "input": "retargeted_motion/training_list/17_natural_sway_male.npz",
+      "input_sha256": "d97a29bfd3195e0e3934397370f35690e6a73bfc4cfe049fe4a272b82cbd7e7e",
+      "method": "settle",
+      "source_end_frame": 466,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2General_c3d/A2-_Sway_stageii.npz",
+        "source_sha256": "1a79af3a36408173297dd412fe95ca786212d6f2bb8327da3095ddc4198f8d15",
+        "family": "natural_sway"
+      }
+    },
+    {
+      "file": "19_walk_to_stand.npz",
+      "input": "retargeted_motion/static_end_sources/walk_stop_female_t2.npz",
+      "input_sha256": "6495bd93df14ab7acaddc5ce39441166674bb2600b3495f78dbfccc105dc462e",
+      "method": "settle",
+      "source_end_frame": 243,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "file": "walk_stop_female_t2.npz",
+        "source": "ACCAD/Female1Walking_c3d/B2_-_walk_to_stand_t2_stageii.npz",
+        "source_sha256": "d4c974a1f01075613aaa6a1f96281cf583dc2cde3e18f397e28de019b219b54a",
+        "family": "walk_stop_female_t2",
+        "contact_focus": "Candidate replacement for deliberately settled training references",
+        "preparation": {
+          "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+          "timing_scale": 1.0,
+          "raw_retarget_sha256": "9177e1c8adbcc61e21db279a6cb61b806a2b61a81155ed96206be3f42581a91f",
+          "preparation": {
+            "version": 1,
+            "joint_values_clamped": 0,
+            "max_joint_correction_rad": 1.333384769744365e-18,
+            "max_root_lift_m": 0.05505607945053681,
+            "initial_root_lift_m": 0.023650883410414776
+          },
+          "max_joint_speed_limit_fraction": 0.4351139939006724
+        }
+      },
+      "replacement_for": "19_walk_to_stand.npz"
+    },
+    {
+      "file": "20_side_step_left.npz",
+      "input": "retargeted_motion/training_list/20_side_step_left.npz",
+      "input_sha256": "25ea143f046f2a8f9bb32d20cfac11d7d59131d3ae3c7a5eab3a6ea3fbd1862c",
+      "method": "settle",
+      "source_end_frame": 231,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Female1Walking_c3d/B22_-_side_step_left_stageii.npz",
+        "source_sha256": "1cff42ab6dd1346e77ee65218c2555d5f09ace7a7bb5fd8e7d5169075c0fcc7e",
+        "family": "side_step"
+      }
+    },
+    {
+      "file": "21_side_step_right.npz",
+      "input": "retargeted_motion/static_end_sources/side_right_male2.npz",
+      "input_sha256": "a04b17045cb149ba185c31b8e9e905d7fbd6ca81bce499122ad5db88db394126",
+      "method": "settle",
+      "source_end_frame": 148,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "file": "side_right_male2.npz",
+        "source": "ACCAD/Male2Walking_c3d/B23_-__side_step_right_stageii.npz",
+        "source_sha256": "33e8c412c5b40052db10dfa9a4c959f9edd2847cab80eb3cd03034e760da27fd",
+        "family": "side_right_male2",
+        "contact_focus": "Candidate replacement for deliberately settled training references",
+        "preparation": {
+          "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+          "timing_scale": 1.0,
+          "raw_retarget_sha256": "6dc82c358f4547faab8a3d3c4f573f4a0500df239c4513c40bbf00e6099b0728",
+          "preparation": {
+            "version": 1,
+            "joint_values_clamped": 0,
+            "max_joint_correction_rad": 8.140179680619145e-18,
+            "max_root_lift_m": 0.06085774731253696,
+            "initial_root_lift_m": 0.0492712440292016
+          },
+          "max_joint_speed_limit_fraction": 0.2978282963456037
+        }
+      },
+      "replacement_for": "21_side_step_right.npz"
+    },
+    {
+      "file": "22_advance.npz",
+      "input": "retargeted_motion/training_list/22_advance.npz",
+      "input_sha256": "752102eb3859e55771369e740cc653ce2cec9c0a1e2202dbf35d3a1ffb204e98",
+      "method": "settle",
+      "source_end_frame": 316,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E3_-_advance_stageii.npz",
+        "source_sha256": "df2391022ea36bd4f6f7b920cb4ac83896849f328c88633db0f43262d1fd01a0",
+        "family": "advance_retreat"
+      }
+    },
+    {
+      "file": "23_retreat.npz",
+      "input": "retargeted_motion/training_list/23_retreat.npz",
+      "input_sha256": "738967c3f62fda255a22bf1a6f84063f9fe5bf5b6833d724fdb02cfc122eca83",
+      "method": "settle",
+      "source_end_frame": 385,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E5_-_retreat_stageii.npz",
+        "source_sha256": "89f79051ac85417d51c175f71cd4a5fe11c6eb581f2926d78960288eb1e68434",
+        "family": "advance_retreat"
+      }
+    },
+    {
+      "file": "24_dodge_left.npz",
+      "input": "retargeted_motion/training_list/24_dodge_left.npz",
+      "input_sha256": "ec3a33aee2655c3679ff2c67e8a59701196863396756ae112986b07faa3a24b7",
+      "method": "settle",
+      "source_end_frame": 110,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E19_-_dodge_left_stageii.npz",
+        "source_sha256": "881b36d7043e7d669264ec1e2cd808506fa7bf16c1dd114d494cabd136acbd5c",
+        "family": "dodge"
+      }
+    },
+    {
+      "file": "25_dodge_right.npz",
+      "input": "retargeted_motion/training_list/25_dodge_right.npz",
+      "input_sha256": "691c13fb74329a2aa0e39d22d2b6197629ef35d6514ce3c0d9c3fb74c5d65994",
+      "method": "settle",
+      "source_end_frame": 138,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/MartialArtsWalksTurns_c3d/E20_-_dodge_right_stageii.npz",
+        "source_sha256": "ecf9b122bbffa64a4f522acab547f6b40049de84f4af8a1493bd762a0276ac12",
+        "family": "dodge"
+      }
+    },
+    {
+      "file": "26_walk_to_crouch.npz",
+      "input": "retargeted_motion/static_end_sources/walk_crouch_male2.npz",
+      "input_sha256": "fddd6741c85e041ceaedbd4883229e9fc748522438dd0890f97aafb67b8af975",
+      "method": "settle",
+      "source_end_frame": 250,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "file": "walk_crouch_male2.npz",
+        "source": "ACCAD/Male2Walking_c3d/B24_-__walk_to_crouch_stageii.npz",
+        "source_sha256": "7c6d077c14062af511fc3133dd1b052677d356a814f631bdd4f31702c45f22d9",
+        "family": "walk_crouch_male2",
+        "contact_focus": "Candidate replacement for deliberately settled training references",
+        "preparation": {
+          "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+          "timing_scale": 1.0,
+          "raw_retarget_sha256": "7ef2c5f5597246c47734d18eddd720a94761a56fec692b9e3b1e4dc3136b89c6",
+          "preparation": {
+            "version": 1,
+            "joint_values_clamped": 0,
+            "max_joint_correction_rad": 4.768371586472142e-08,
+            "max_root_lift_m": 0.10567432892861683,
+            "initial_root_lift_m": 0.06448619234707738
+          },
+          "max_joint_speed_limit_fraction": 0.5567257970978255
+        }
+      },
+      "replacement_for": "26_walk_to_crouch.npz"
+    },
+    {
+      "file": "28_stand_to_walk_back.npz",
+      "input": "retargeted_motion/training_list/28_stand_to_walk_back.npz",
+      "input_sha256": "68a1717ec9ec496e9a27d853dc165130e0c589456289bf4925cdfaf7ac5c12bc",
+      "method": "settle",
+      "source_end_frame": 201,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Female1Walking_c3d/B4_-_stand_to_walk_back_stageii.npz",
+        "source_sha256": "4d67d5a5d98042a8706a22ad5249d254af488a3fcf6fa25f8cc554a9ddd6bafb",
+        "family": "backward_start_stop"
+      }
+    },
+    {
+      "file": "29_walk_back_to_stand.npz",
+      "input": "retargeted_motion/training_list/29_walk_back_to_stand.npz",
+      "input_sha256": "9617caae18455179faeaf905b16bc7daa534ab3ba8fd06b2c327ccdb7920a5e7",
+      "method": "settle",
+      "source_end_frame": 263,
+      "source_transition_seconds": 1.2,
+      "source_provenance": {
+        "source": "ACCAD/Female1Walking_c3d/B6_-_walk_backwards_to_stand_stageii.npz",
+        "source_sha256": "206bc3bf8311ea1626797cc8c3c05cb1d4ff9935c3126b17af73050412127611",
+        "family": "backward_start_stop"
+      }
+    },
+    {
+      "file": "30_push_kick_left.npz",
+      "input": "retargeted_motion/training_list/30_push_kick_left.npz",
+      "input_sha256": "57483b69a0932cc8ae3b2fe3cdc1a52f1aaccf0d884294e191672d5acf74486d",
+      "method": "settle",
+      "source_end_frame": 226,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2MartialArtsKicks_c3d/G17-__push_kick_left_stageii.npz",
+        "source_sha256": "2cbe0c3b62dd8ca7796628d8284d23559db437672b21a534228ff39544a10b62",
+        "family": "push_kick"
+      }
+    },
+    {
+      "file": "31_push_kick_right.npz",
+      "input": "retargeted_motion/training_list/31_push_kick_right.npz",
+      "input_sha256": "cee09547d14eae0f35c0fb87162ef34dae1e44757473fb476915510867611c05",
+      "method": "settle",
+      "source_end_frame": 141,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Male2MartialArtsKicks_c3d/G18-__push_kick_right_stageii.npz",
+        "source_sha256": "53543b1b1676ebb74713644eda91d5a9801825ef4312cd25615d4129e012f521",
+        "family": "push_kick"
+      }
+    },
+    {
+      "file": "32_forward_walk_bk.npz",
+      "input": "retargeted_motion/training_list/32_forward_walk_bk.npz",
+      "input_sha256": "0e8f2fd1027027133a4c411ecdad68b6baa310564e6aef831720493d9d2c8bed",
+      "method": "settle",
+      "source_end_frame": 248,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "HDM05/bk/HDM_bk_01-01_01_120_stageii.npz",
+        "source_sha256": "9d201e3c6220ec3a850e94f1282f3961672d753c4f8b309e1c0d166405bb2b59",
+        "family": "walking_take"
+      }
+    },
+    {
+      "file": "33_walk_dg.npz",
+      "input": "retargeted_motion/training_list/33_walk_dg.npz",
+      "input_sha256": "6da9f60f16062264cb4165c6f17cedd7d9880dc9385f201b0145055dac688aa3",
+      "method": "settle",
+      "source_end_frame": 213,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "HDM05/dg/HDM_dg_01-01_01_120_stageii.npz",
+        "source_sha256": "84f8e7d3568883562a53779956ce0ee22a469830059c7e76fd985cfc7f5bfbaf",
+        "source_crop_seconds": [
+          12,
+          20
+        ],
+        "family": "walking_take"
+      }
+    },
+    {
+      "file": "34_dance_mm.npz",
+      "input": "retargeted_motion/training_list/34_dance_mm.npz",
+      "input_sha256": "3d7e6b8f72513c847b28ee3795ed52c76ee2d0774fd0880abf5859dc27498504",
+      "method": "settle",
+      "source_end_frame": 383,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "HDM05/mm/HDM_mm_03-01_01_120_stageii.npz",
+        "source_sha256": "4cffecaee55bff3bf4132fa8869f90fd546b598713025c9d4dcf3639fc53b6ce",
+        "source_crop_seconds": [
+          50,
+          58
+        ],
+        "family": "dance_take"
+      }
+    },
+    {
+      "file": "35_dance_tr.npz",
+      "input": "retargeted_motion/training_list/35_dance_tr.npz",
+      "input_sha256": "e75bf42246d7bc48393293317896548cc5007deea31c9e4d7e02969c5efa288f",
+      "method": "settle",
+      "source_end_frame": 223,
+      "source_transition_seconds": 1.2,
+      "source_provenance": {
+        "source": "HDM05/tr/HDM_tr_03-01_01_120_stageii.npz",
+        "source_sha256": "42b3610d51b6f926ff4dccde84ed6e3aa6cd2daa701b3d439ea395120abbbc3a",
+        "source_crop_seconds": [
+          58,
+          66
+        ],
+        "family": "dance_take"
+      }
+    },
+    {
+      "file": "36_natural_standing.npz",
+      "input": "retargeted_motion/training_list/36_natural_standing.npz",
+      "input_sha256": "92301295991a4c4473a5568855495005fa7266d43060ab00a5d1e82bfc29aea9",
+      "method": "settle",
+      "source_end_frame": 148,
+      "source_transition_seconds": 0.8,
+      "source_provenance": {
+        "source": "ACCAD/Female1General_c3d/A1_-_Stand_stageii.npz",
+        "source_sha256": "e807da291efd5081c585f9b1286a969f7b170583cd94bda0de911ef2e145a32a",
+        "family": "standing_baseline"
+      }
+    }
+  ],
+  "excluded": [
+    {
+      "file": "18_stand_to_walk.npz",
+      "also_exclude_mirror": true,
+      "reason": "Foot-foot collisions start at source frame 75 (1.50 s); no tested crop preserved a usable collision-free start-to-walk action and supported ending. No validated local replacement."
+    },
+    {
+      "file": "27_crouch_to_walk.npz",
+      "also_exclude_mirror": true,
+      "reason": "Hands intersect hips/shanks from the initial crouch; endpoint editing cannot repair the retained prefix. No alternate crouch-to-walk take found in local ACCAD; running/general crouch clips are different actions."
+    }
+  ],
+  "replacements": [
+    {
+      "file": "19_walk_to_stand.npz",
+      "candidate": "walk_stop_female_t2.npz",
+      "source": "ACCAD/Female1Walking_c3d/B2_-_walk_to_stand_t2_stageii.npz"
+    },
+    {
+      "file": "21_side_step_right.npz",
+      "candidate": "side_right_male2.npz",
+      "source": "ACCAD/Male2Walking_c3d/B23_-__side_step_right_stageii.npz"
+    },
+    {
+      "file": "26_walk_to_crouch.npz",
+      "candidate": "walk_crouch_male2.npz",
+      "source": "ACCAD/Male2Walking_c3d/B24_-__walk_to_crouch_stageii.npz"
+    }
+  ],
+  "replacement_search": {
+    "local_source_counts": {
+      "ACCAD": 272,
+      "HDM05": 219
+    },
+    "retargeted_candidates": [
+      {
+        "name": "side_right_male1",
+        "source": "ACCAD/Male1Walking_c3d/Walk_B23_-_Side_step_right_stageii.npz",
+        "source_sha256": "a99cd96201de793d26e0e5e505ec3605367a9a027edc4a212d30af8f9a27b67e"
+      },
+      {
+        "name": "side_right_male2",
+        "source": "ACCAD/Male2Walking_c3d/B23_-__side_step_right_stageii.npz",
+        "source_sha256": "33e8c412c5b40052db10dfa9a4c959f9edd2847cab80eb3cd03034e760da27fd"
+      },
+      {
+        "name": "side_left_male1",
+        "source": "ACCAD/Male1Walking_c3d/Walk_B22_-_Side_step_left_stageii.npz",
+        "source_sha256": "526c321fd42dd0db5c691f5e5848e120fa8bc0463ea1195616c59383fc0ef3df"
+      },
+      {
+        "name": "walk_crouch_male2",
+        "source": "ACCAD/Male2Walking_c3d/B24_-__walk_to_crouch_stageii.npz",
+        "source_sha256": "7c6d077c14062af511fc3133dd1b052677d356a814f631bdd4f31702c45f22d9"
+      },
+      {
+        "name": "walk_stop_female_t2",
+        "source": "ACCAD/Female1Walking_c3d/B2_-_walk_to_stand_t2_stageii.npz",
+        "source_sha256": "d4c974a1f01075613aaa6a1f96281cf583dc2cde3e18f397e28de019b219b54a"
+      },
+      {
+        "name": "walk_back_male2",
+        "source": "ACCAD/Male2Walking_c3d/B4_-_Stand_to_Walk_backwards_stageii.npz",
+        "source_sha256": "f78512e5255e422341e3309e90b30396b70612e87e5572f283a2b00373a01e6d"
+      }
+    ],
+    "candidate_screening": [
+      {
+        "file": "side_right_male1.npz",
+        "status": "excluded_pending_replacement"
+      },
+      {
+        "file": "side_right_male2.npz",
+        "status": "included"
+      },
+      {
+        "file": "walk_back_male2.npz",
+        "status": "included"
+      },
+      {
+        "file": "walk_crouch_male2.npz",
+        "status": "included"
+      },
+      {
+        "file": "walk_stop_female_t2.npz",
+        "status": "included"
+      }
+    ]
+  }
+}

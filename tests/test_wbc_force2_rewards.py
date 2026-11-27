@@ -242,12 +242,17 @@ def test_tracking_rejects_invalid_error_scale(rewards, name, scale):
         getattr(rewards, name)(term_cfg(scale), make_env())
 
 
-def test_force2_reward_configuration_replaces_joint_tracking(rewards):
+@pytest.fixture
+def reward_config(rewards):
     tree = ast.parse((SOURCE/'tasks/tracking/config/t1_wbc_force2/flat_env_cfg.py').read_text())
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'WBCForceRewardsCfg')
     namespace = dict(vars(rewards), configclass=lambda cls: cls, RewardTermCfg=NS)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), '<force2_rewards_cfg>', 'exec'), namespace)
-    config = namespace['WBCForceRewardsCfg']()
+    return namespace['WBCForceRewardsCfg']()
+
+
+def test_force2_reward_configuration_replaces_joint_tracking(rewards, reward_config):
+    config = reward_config
     assert not hasattr(config, 'joint_tracking') and not hasattr(rewards, 'JointTrackingPenalty')
     assert config.sole_point_tracking.func is rewards.SolePointTrackingPenalty
     assert config.com_tracking.func is rewards.COMTrackingPenalty

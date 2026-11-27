@@ -1,0 +1,77 @@
+{
+  "purpose": "Prepared replacement sources for reproducible static-ending edits; these are not the final training library.",
+  "motions": [
+    {
+      "file": "walk_stop_female_t2.npz",
+      "sha256": "6495bd93df14ab7acaddc5ce39441166674bb2600b3495f78dbfccc105dc462e",
+      "provenance": {
+        "file": "walk_stop_female_t2.npz",
+        "source": "ACCAD/Female1Walking_c3d/B2_-_walk_to_stand_t2_stageii.npz",
+        "source_sha256": "d4c974a1f01075613aaa6a1f96281cf583dc2cde3e18f397e28de019b219b54a",
+        "family": "walk_stop_female_t2",
+        "contact_focus": "Candidate replacement for deliberately settled training references",
+        "preparation": {
+          "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+          "timing_scale": 1.0,
+          "raw_retarget_sha256": "9177e1c8adbcc61e21db279a6cb61b806a2b61a81155ed96206be3f42581a91f",
+          "preparation": {
+            "version": 1,
+            "joint_values_clamped": 0,
+            "max_joint_correction_rad": 1.333384769744365e-18,
+            "max_root_lift_m": 0.05505607945053681,
+            "initial_root_lift_m": 0.023650883410414776
+          },
+          "max_joint_speed_limit_fraction": 0.4351139939006724
+        }
+      }
+    },
+    {
+      "file": "side_right_male2.npz",
+      "sha256": "a04b17045cb149ba185c31b8e9e905d7fbd6ca81bce499122ad5db88db394126",
+      "provenance": {
+        "file": "side_right_male2.npz",
+        "source": "ACCAD/Male2Walking_c3d/B23_-__side_step_right_stageii.npz",
+        "source_sha256": "33e8c412c5b40052db10dfa9a4c959f9edd2847cab80eb3cd03034e760da27fd",
+        "family": "side_right_male2",
+        "contact_focus": "Candidate replacement for deliberately settled training references",
+        "preparation": {
+          "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+          "timing_scale": 1.0,
+          "raw_retarget_sha256": "6dc82c358f4547faab8a3d3c4f573f4a0500df239c4513c40bbf00e6099b0728",
+          "preparation": {
+            "version": 1,
+            "joint_values_clamped": 0,
+            "max_joint_correction_rad": 8.140179680619145e-18,
+            "max_root_lift_m": 0.06085774731253696,
+            "initial_root_lift_m": 0.0492712440292016
+          },
+          "max_joint_speed_limit_fraction": 0.2978282963456037
+        }
+      }
+    },
+    {
+      "file": "walk_crouch_male2.npz",
+      "sha256": "fddd6741c85e041ceaedbd4883229e9fc748522438dd0890f97aafb67b8af975",
+      "provenance": {
+        "file": "walk_crouch_male2.npz",
+        "source": "ACCAD/Male2Walking_c3d/B24_-__walk_to_crouch_stageii.npz",
+        "source_sha256": "7c6d077c14062af511fc3133dd1b052677d356a814f631bdd4f31702c45f22d9",
+        "family": "walk_crouch_male2",
+        "contact_focus": "Candidate replacement for deliberately settled training references",
+        "preparation": {
+          "method": "GMR at 30 Hz; 30 ms Gaussian smoothing; interpolate to 50 Hz; standard WBC limit/floor preparation",
+          "timing_scale": 1.0,
+          "raw_retarget_sha256": "7ef2c5f5597246c47734d18eddd720a94761a56fec692b9e3b1e4dc3136b89c6",
+          "preparation": {
+            "version": 1,
+            "joint_values_clamped": 0,
+            "max_joint_correction_rad": 4.768371586472142e-08,
+            "max_root_lift_m": 0.10567432892861683,
+            "initial_root_lift_m": 0.06448619234707738
+          },
+          "max_joint_speed_limit_fraction": 0.5567257970978255
+        }
+      }
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import torch
 
 from test_wbc_acc_gpu import cfg, threads, standing_state, action_modules, DEVICES
 from test_wbc_force_rewards import point_env, rewards as force_rewards
-from test_wbc_force2_rewards import rewards
+from test_wbc_force2_rewards import rewards, reward_config
 from wbc_acc_torch_model import WBCACCTorchModel
 from wbc_acc_gpu_control import select_state
 from wbc_force_gpu_control import WBCCornerForceGPUQP, WBCCornerForcePDGPUQP, encode_force_capacities
@@ -87,17 +87,24 @@ def test_gain_actions_reach_physical_qp_and_match_independent_fixed_gain_solves(
 
 
 @pytest.mark.parametrize('frames,dt', [(10, .02), (200, .01)])
-def test_gain_penalty_is_relative_quadratic_and_clip_normalized(rewards, gain_cfg, frames, dt):
+def test_gain_penalty_is_relative_quadratic_and_clip_normalized(rewards, reward_config, gain_cfg, frames, dt):
     env = point_env(frames=frames, count=4, dt=dt)
     env.action_manager.get_term('wbc_force').cfg.controller = gain_cfg
     env.action_manager.action = torch.zeros(4, 10, dtype=torch.float64)
-    term = rewards.TrackingGainDeviationPenalty(NS(params={}, weight=-.2), env)
+    term = rewards.TrackingGainDeviationPenalty(
+        NS(params={}, weight=reward_config.tracking_gain_deviation.weight), env)
     assert term(env).count_nonzero() == 0
     # Half the maximum deviation has one quarter the cost, for either sign.
     env.action_manager.action[:, 8:] = torch.tensor([[100., 100.], [.5, .5], [-.5, -.5], [100., 0.]])
     env.action_manager.action[1:3, 8:] = torch.atanh(torch.tensor([[.5, .5], [-.5, -.5]]))
     total = term(env)*dt*frames*term.cfg.weight
-    torch.testing.assert_close(total, total.new_tensor([-5., -1.25, -1.25, -2.5]), atol=1e-6, rtol=1e-7)
+    torch.testing.assert_close(total, total.new_tensor([-.5, -.125, -.125, -.25]), atol=1e-6, rtol=1e-7)
+    # Even maximum gain deviation leaves at least 99.5% of a surviving frame's
+    # completion credit before the separate contact/tracking penalties.
+    completion = rewards.MotionCompletionReward(NS(params={}, weight=reward_config.motion_completion.weight), env)
+    alive = (completion(env)*dt*completion.cfg.weight).to(total)
+    assert (alive > 0).all()
+    assert ((alive+total/frames) >= alive*.995-1e-8).all()
     # Relative penalty is unchanged by different configured nominal gains.
     gain_cfg.posture_position_gain *= 2
     gain_cfg.posture_velocity_gain *= 3

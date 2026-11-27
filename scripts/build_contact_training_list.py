@@ -152,6 +152,8 @@ def assemble(config, work):
             rate_ratio = float((np.abs(np.gradient(joints, 1/source_fps, axis=0))/speeds).max())
             timing_scale = max(1., rate_ratio/.9)
             sample_times = np.arange(0, times[-1]+1e-9, 1/fps/timing_scale)
+            # Roundoff can put the inclusive final sample just beyond Slerp's domain.
+            sample_times = np.minimum(sample_times, times[-1])
             jp = np.column_stack([np.interp(sample_times, times, joints[:, j]) for j in range(23)])
             rp = np.column_stack([np.interp(sample_times, times, pos[:, j]) for j in range(3)])
             rq = Slerp(times, rot)(sample_times).as_quat()[:, [3, 0, 1, 2]]

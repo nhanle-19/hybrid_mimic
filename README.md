@@ -520,11 +520,16 @@ The defaults come from `posture_position_gain` and `posture_velocity_gain`, and
 range (default `0.5`, strictly between zero and one).
 
 `tracking_gain_deviation` penalizes
-`mean(((Kp/Kp_default)-1)^2, ((Kd/Kd_default)-1)^2)` with weight **-0.2** and the
+`mean(((Kp/Kp_default)-1)^2, ((Kd/Kd_default)-1)^2)` with weight **-0.02** and the
 same `100 / clip_frame_count` per-step scaling as the other FORCE2 rewards.
-Holding both gains at a 50% deviation for a full clip costs 5 completion points;
-25% costs 1.25 points. Override `env.rewards.tracking_gain_deviation.weight` to
-adjust this preference. Logs report Kp, Kd, relative deviations and penalty points;
+This is a small preference for nominal PD that grows quadratically with relative
+deviation. Holding both gains at a 50% deviation for a full clip costs **0.5**
+points; 25% costs **0.125** points; staying at the defaults costs zero. At the
+default +/-50% gain bounds, this penalty consumes at most **0.5%** of the positive
+completion credit on each newly executed, non-failing frame (100 points across
+a full clip). Other reward penalties are accounted for separately. Override
+`env.rewards.tracking_gain_deviation.weight` to adjust this preference.
+Logs report Kp, Kd, relative deviations and penalty points;
 diagnostics and ONNX metadata include the decoded gains or their mapping.
 
 Train a **fresh policy**: the actor output and critic previous-action input have
